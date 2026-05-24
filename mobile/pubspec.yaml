@@ -1,0 +1,49 @@
+name: lamhoai_rms
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+
+  # Firebase - add new firebase packages below this line
+  firebase_core: ^3.13.1
+  firebase_auth: ^5.5.2
+  cloud_firestore: ^5.6.6
+  firebase_storage: ^12.4.5
+  firebase_messaging: ^15.2.5
+
+  # Navigation - add routing packages here
+  # go_router: ^x.x.x
+
+  # State Management - add state packages here
+  # provider: ^x.x.x
+
+  # Utilities - add helper packages here
+  # intl: ^x.x.x
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Add image/font assets below
+  # assets:
+  #   - images/
+
+  # Add custom fonts below
+  # fonts:
+  #   - family: YourFont
+  #     fonts:
+  #       - asset: fonts/YourFont-Regular.ttf

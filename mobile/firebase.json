@@ -1,0 +1,1 @@
+{"flutter":{"platforms":{"android":{"default":{"projectId":"lamhoai-rms","appId":"1:422975265:android:5bf04fcaf1f991604a5060","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"lamhoai-rms","configurations":{"android":"1:422975265:android:5bf04fcaf1f991604a5060","web":"1:422975265:web:40a11b23f3c1e2d44a5060"}}}}}}
