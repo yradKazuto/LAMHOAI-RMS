@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ─────────────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      return isAuthenticated() && currentUserDoc().role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isAccountant() {
+      return hasRole('accountant');
+    }
+
+    function isOfficer() {
+      return hasRole('officer');
+    }
+
+    function isMember() {
+      return hasRole('member');
+    }
+
+    function isStaff() {
+      return isAdmin() || isAccountant() || isOfficer();
+    }
+
+    function isAnyUser() {
+      return isStaff() || isMember();
+    }
+
+    // ── users collection ─────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isAuthenticated() &&
+                    (request.auth.uid == uid || isAdmin());
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ── homeowners collection ────────────────────────────────────────────────
+    match /homeowners/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isAdmin() || isOfficer();
+      allow delete: if isAdmin();
+    }
+
+    // ── finance / dues collection ────────────────────────────────────────────
+    match /dues/{docId} {
+      allow read: if isAdmin() || isAccountant();
+      allow create, update: if isAdmin() || isAccountant();
+      allow delete: if isAdmin();
+    }
+
+    match /payments/{docId} {
+      allow read: if isAdmin() || isAccountant();
+      allow create, update: if isAdmin() || isAccountant();
+      allow delete: if isAdmin();
+    }
+
+    // ── announcements ────────────────────────────────────────────────────────
+    match /announcements/{docId} {
+      allow read: if isAnyUser();
+      allow create, update: if isAdmin() || isOfficer();
+      allow delete: if isAdmin();
+    }
+
+    // ── documents / files metadata ───────────────────────────────────────────
+    match /documents/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isAdmin() || isOfficer();
+      allow delete: if isAdmin();
+    }
+
+    // ── Deny everything else ─────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
