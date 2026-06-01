@@ -3,6 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── Helper functions ─────────────────────────────────────────────────────
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -40,6 +41,7 @@ service cloud.firestore {
     }
 
     // ── users collection ─────────────────────────────────────────────────────
+
     match /users/{uid} {
       allow read: if isAuthenticated() &&
                     (request.auth.uid == uid || isAdmin());
@@ -48,6 +50,7 @@ service cloud.firestore {
     }
 
     // ── homeowners collection ────────────────────────────────────────────────
+
     match /homeowners/{docId} {
       allow read: if isStaff();
       allow create, update: if isAdmin() || isOfficer();
@@ -55,19 +58,25 @@ service cloud.firestore {
     }
 
     // ── finance / dues collection ────────────────────────────────────────────
+
     match /dues/{docId} {
       allow read: if isAdmin() || isAccountant();
       allow create, update: if isAdmin() || isAccountant();
       allow delete: if isAdmin();
     }
 
+    // ── payments collection ──────────────────────────────────────────────────
+
     match /payments/{docId} {
-      allow read: if isAdmin() || isAccountant();
+      // Members can read their own payments only
+      allow read: if (isMember() && resource.data.uid == request.auth.uid)
+                  || isAdmin() || isAccountant();
       allow create, update: if isAdmin() || isAccountant();
       allow delete: if isAdmin();
     }
 
     // ── announcements ────────────────────────────────────────────────────────
+
     match /announcements/{docId} {
       allow read: if isAnyUser();
       allow create, update: if isAdmin() || isOfficer();
@@ -75,13 +84,44 @@ service cloud.firestore {
     }
 
     // ── documents / files metadata ───────────────────────────────────────────
+
     match /documents/{docId} {
       allow read: if isStaff();
       allow create, update: if isAdmin() || isOfficer();
       allow delete: if isAdmin();
     }
 
+    // ── notifications collection ─────────────────────────────────────────────
+    // Members read their own notifications only.
+    // Staff (admin/officer) write notifications to members.
+
+    match /notifications/{docId} {
+      allow read: if (isMember() && resource.data.uid == request.auth.uid)
+                  || isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ── complaints collection ────────────────────────────────────────────────
+    // Members submit and read their own complaints only.
+    // Members cannot update or delete — only staff can.
+
+    match /complaints/{docId} {
+      // Read: member reads own, staff reads all
+      allow read: if (isMember() && resource.data.uid == request.auth.uid)
+                  || isStaff();
+
+      // Create: member can submit, uid field must match their own uid
+      allow create: if isMember() &&
+                       request.resource.data.uid == request.auth.uid;
+
+      // Update/delete: staff only
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
     // ── Deny everything else ─────────────────────────────────────────────────
+
     match /{document=**} {
       allow read, write: if false;
     }

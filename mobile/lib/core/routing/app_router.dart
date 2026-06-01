@@ -1,8 +1,4 @@
 // lib/core/routing/app_router.dart
-//
-// Dependencies (pubspec.yaml):
-//   go_router: ^14.x
-//   provider: ^6.x
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -13,34 +9,31 @@ import '../providers/auth_provider.dart' as ap;
 import '../../features/home/home_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
-// ── Route names (use these constants everywhere — no magic strings) ─────────
+import '../../features/payments/payments_screen.dart';
+import '../../features/payments/payment_detail_screen.dart';
+import '../../features/notifications/notifications_screen.dart';
+import '../../features/complaints/complaints_screen.dart';
+import '../../features/complaints/submit_complaint_screen.dart';
+import '../../features/profile/profile_screen.dart';
+
+// ── Route names ───────────────────────────────────────────────────────────────
 
 class Routes {
   Routes._();
 
-  static const login        = '/login';
-  static const memberHome   = '/home';
-  static const payments     = '/home/payments';
-  static const notifications = '/home/notifications';
-  static const complaints   = '/home/complaints';
-  static const profile      = '/home/profile';
-  static const adminHome    = '/admin';
-  static const splash       = '/splash';
-  static const forgotPassword = '/forgot-password';
+  static const splash          = '/splash';
+  static const login           = '/login';
+  static const forgotPassword  = '/forgot-password';
+  static const memberHome      = '/home';
+  static const payments        = '/home/payments';
+  static const notifications   = '/home/notifications';
+  static const complaints      = '/home/complaints';
+  static const submitComplaint = '/home/complaints/submit';
+  static const profile         = '/home/profile';
+  static const adminHome       = '/admin';
 }
 
-// ── Router factory ──────────────────────────────────────────────────────────
-//
-// Usage in main.dart:
-//
-//   ChangeNotifierProvider(
-//     create: (_) => AuthProvider(),
-//     child: Consumer<AuthProvider>(
-//       builder: (context, auth, _) => MaterialApp.router(
-//         routerConfig: AppRouter.create(auth),
-//       ),
-//     ),
-//   );
+// ── Router factory ────────────────────────────────────────────────────────────
 
 class AppRouter {
   AppRouter._();
@@ -51,7 +44,7 @@ class AppRouter {
       initialLocation: Routes.splash,
       refreshListenable: authProvider,
       redirect: (BuildContext context, GoRouterState state) {
-        final status = authProvider.status;
+        final status   = authProvider.status;
         final location = state.matchedLocation;
 
         // Still initialising — stay on splash
@@ -60,16 +53,17 @@ class AppRouter {
           return location == Routes.splash ? null : Routes.splash;
         }
 
-        final authed = authProvider.isAuthenticated;
-        final onLogin = location == Routes.login;
-        final onSplash = location == Routes.splash;
+        final authed           = authProvider.isAuthenticated;
+        final onLogin          = location == Routes.login;
+        final onSplash         = location == Routes.splash;
         final onForgotPassword = location == Routes.forgotPassword;
-        // Not authenticated → send to login
+
+        // Not authenticated — only allow login and forgot password
         if (!authed) {
           return (onLogin || onForgotPassword) ? null : Routes.login;
         }
 
-        // Authenticated — redirect splash/login to the right home
+        // Authenticated — redirect splash/login to role home
         if (onLogin || onSplash) {
           return _homeForRole(authProvider.user?.role);
         }
@@ -86,66 +80,86 @@ class AppRouter {
           return Routes.adminHome;
         }
 
-        return null; // no redirect needed
+        return null;
       },
       routes: [
-        // ── Splash ──────────────────────────────────────────────────────
+        // ── Splash ────────────────────────────────────────────────────────
         GoRoute(
           path: Routes.splash,
           builder: (_, __) => const _SplashScreen(),
         ),
 
-        // ── Auth ─────────────────────────────────────────────────────────
-        // In app_router.dart, replace the login GoRoute builder:
+        // ── Auth ──────────────────────────────────────────────────────────
         GoRoute(
           path: Routes.login,
-          builder: (_, __) => const LoginScreen(), // ← import login_screen.dart
+          builder: (_, __) => const LoginScreen(),
         ),
-
         GoRoute(
-           path: Routes.forgotPassword,
+          path: Routes.forgotPassword,
           builder: (_, __) => const ForgotPasswordScreen(),
         ),
 
-        // ── Member shell (StatefulShellRoute for bottom nav) ─────────────
+        // ── Member shell ──────────────────────────────────────────────────
         StatefulShellRoute.indexedStack(
           builder: (context, state, shell) => _MemberShell(shell: shell),
           branches: [
+            // Home
             StatefulShellBranch(routes: [
               GoRoute(
                 path: Routes.memberHome,
                 builder: (_, __) => const HomeScreen(),
               ),
             ]),
+
+            // Payments + detail
             StatefulShellBranch(routes: [
               GoRoute(
                 path: Routes.payments,
-                builder: (_, __) => const _Placeholder(label: 'Payments'),
+                builder: (_, __) => const PaymentsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':paymentId',
+                    builder: (_, state) => PaymentDetailScreen(
+                      paymentId: state.pathParameters['paymentId']!,
+                    ),
+                  ),
+                ],
               ),
             ]),
+
+            // Notifications
             StatefulShellBranch(routes: [
               GoRoute(
                 path: Routes.notifications,
-                builder: (_, __) =>
-                    const _Placeholder(label: 'Notifications'),
+                builder: (_, __) => const NotificationsScreen(),
               ),
             ]),
+
+            // Complaints + submit
             StatefulShellBranch(routes: [
               GoRoute(
                 path: Routes.complaints,
-                builder: (_, __) => const _Placeholder(label: 'Complaints'),
+                builder: (_, __) => const ComplaintsScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'submit',
+                    builder: (_, __) => const SubmitComplaintScreen(),
+                  ),
+                ],
               ),
             ]),
+
+            // Profile
             StatefulShellBranch(routes: [
               GoRoute(
                 path: Routes.profile,
-                builder: (_, __) => const _Placeholder(label: 'Profile'),
+                builder: (_, __) => const ProfileScreen(),
               ),
             ]),
           ],
         ),
 
-        // ── Admin ────────────────────────────────────────────────────────
+        // ── Admin ─────────────────────────────────────────────────────────
         GoRoute(
           path: Routes.adminHome,
           builder: (_, __) => const _Placeholder(label: 'Admin dashboard'),
@@ -168,7 +182,7 @@ class AppRouter {
       location.startsWith('/home');
 }
 
-// ── Scaffolding — replace each with your real screen widgets ───────────────
+// ── Shared widgets ────────────────────────────────────────────────────────────
 
 class _SplashScreen extends StatelessWidget {
   const _SplashScreen();
@@ -181,33 +195,16 @@ class _SplashScreen extends StatelessWidget {
   }
 }
 
-class _LoginPlaceholder extends StatelessWidget {
-  const _LoginPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () =>
-              context.read<ap.AuthProvider>().signIn('test@test.com', 'pass'),
-          child: const Text('Sign in (placeholder)'),
-        ),
-      ),
-    );
-  }
-}
-
 class _MemberShell extends StatelessWidget {
   final StatefulNavigationShell shell;
   const _MemberShell({required this.shell});
 
   static const _tabs = [
-    (icon: Icons.home_outlined,         label: 'Home'),
-    (icon: Icons.receipt_long_outlined, label: 'Payments'),
-    (icon: Icons.notifications_outlined,label: 'Alerts'),
-    (icon: Icons.feedback_outlined,     label: 'Complaints'),
-    (icon: Icons.person_outlined,       label: 'Profile'),
+    (icon: Icons.home_outlined,          label: 'Home'),
+    (icon: Icons.receipt_long_outlined,  label: 'Payments'),
+    (icon: Icons.notifications_outlined, label: 'Alerts'),
+    (icon: Icons.feedback_outlined,      label: 'Complaints'),
+    (icon: Icons.person_outlined,        label: 'Profile'),
   ];
 
   @override
