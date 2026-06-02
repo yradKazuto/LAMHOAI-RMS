@@ -43,8 +43,8 @@ service cloud.firestore {
     // ── users collection ─────────────────────────────────────────────────────
 
     match /users/{uid} {
-      allow read: if isAuthenticated() &&
-                    (request.auth.uid == uid || isAdmin());
+  allow read: if isAuthenticated() &&
+                (request.auth.uid == uid || isAdmin() || isOfficer());
       allow create, update: if isAdmin();
       allow delete: if false;
     }
