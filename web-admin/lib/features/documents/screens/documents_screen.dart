@@ -1,12 +1,7 @@
 // features/documents/screens/documents_screen.dart
-// UPDATED — uses Cloudinary for file uploads instead of Firebase Storage.
-//
-// Upload flow:
-//   1. Admin picks a file via file_picker
-//   2. Upload dialog collects member + document type
-//   3. CloudinaryService.uploadFile() uploads bytes → returns secure_url
-//   4. FirestoreService.saveDocumentMetadata() saves url + metadata to Firestore
-//   5. Stream refreshes the grid automatically
+// UPDATED Phase 4 fixes:
+//   - canUpload excludes Accountant (Admin + Officer only)
+//   - canDelete is Admin only
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -34,16 +29,15 @@ class DocumentsScreen extends StatefulWidget {
 }
 
 class _DocumentsScreenState extends State<DocumentsScreen> {
-  final _fs           = FirestoreService();
-  final _cloudinary   = CloudinaryService();
-  final _searchCtrl   = TextEditingController();
+  final _fs         = FirestoreService();
+  final _cloudinary = CloudinaryService();
+  final _searchCtrl = TextEditingController();
 
-  String        _searchQuery  = '';
+  String        _searchQuery = '';
   DocumentType? _typeFilter;
-  bool          _uploading    = false;
+  bool          _uploading   = false;
   String?       _uploadError;
 
-  // ── Brand colours ──────────────────────────────────────────────────────────
   static const Color _navy   = Color(0xFF0D2A5C);
   static const Color _accent = Color(0xFF2E6BE6);
   static const Color _bg     = Color(0xFFF0F4FB);
@@ -55,7 +49,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     super.dispose();
   }
 
-  // ── Filter helper ──────────────────────────────────────────────────────────
   List<DocumentModel> _filtered(List<DocumentModel> all) {
     return all.where((d) {
       final q           = _searchQuery.toLowerCase();
@@ -68,7 +61,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     }).toList();
   }
 
-  // ── MIME type helper ───────────────────────────────────────────────────────
   String _mimeType(String ext) {
     switch (ext.toLowerCase()) {
       case 'pdf':  return 'application/pdf';
@@ -79,11 +71,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     }
   }
 
-  // ── Main upload flow ───────────────────────────────────────────────────────
   Future<void> _startUpload() async {
     setState(() { _uploadError = null; });
 
-    // 1. Pick file
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
@@ -93,11 +83,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     final file = result.files.first;
     if (file.bytes == null || file.bytes!.isEmpty) {
-      setState(() => _uploadError = 'Could not read file. Please try again.');
+      setState(() =>
+          _uploadError = 'Could not read file. Please try again.');
       return;
     }
 
-    // 2. Show upload dialog — collect member + doc type
     final auth      = context.read<AuthProvider>();
     final selection = await showDialog<_UploadSelection>(
       context: context,
@@ -111,7 +101,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     );
     if (selection == null) return;
 
-    // 3. Upload to Cloudinary
     setState(() { _uploading = true; _uploadError = null; });
     try {
       final fileUrl = await _cloudinary.uploadFile(
@@ -121,7 +110,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         mimeType:  _mimeType(file.extension ?? ''),
       );
 
-      // 4. Save metadata to Firestore
       await _fs.saveDocumentMetadata(
         memberUid:  selection.memberId,
         memberName: selection.memberName,
@@ -150,8 +138,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth      = context.watch<AuthProvider>();
+    final auth = context.watch<AuthProvider>();
+
+    // Fix 3: canUpload — Admin + Officer only (Accountant excluded)
     final canUpload = auth.isAdmin || auth.isOfficer;
+
+    // Fix 4: canDelete — Admin only
+    final canDelete = auth.isAdmin;
+
     final isFiltered = widget.filterMemberId != null;
 
     return Scaffold(
@@ -179,20 +173,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // ── Page header (full page only) ──────────────────────────────
             if (!isFiltered) ...[
               Row(
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Documents',
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: _navy),
-                      ),
+                      const Text('Documents',
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: _navy)),
                       const SizedBox(height: 2),
                       Text(
                         'Property titles, IDs, and uploaded files',
@@ -202,16 +193,15 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     ],
                   ),
                   const Spacer(),
-                  if (canUpload) _UploadButton(
-                    uploading: _uploading,
-                    onTap: _startUpload,
-                  ),
+                  if (canUpload)
+                    _UploadButton(
+                        uploading: _uploading,
+                        onTap: _startUpload),
                 ],
               ),
               const SizedBox(height: 16),
             ],
 
-            // ── Upload button (member-filtered view) ──────────────────────
             if (isFiltered && canUpload)
               Align(
                 alignment: Alignment.centerRight,
@@ -222,7 +212,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 ),
               ),
 
-            // ── Upload progress bar ────────────────────────────────────────
             if (_uploading) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
@@ -233,14 +222,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                'Uploading to Cloudinary…',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
+              Text('Uploading to Cloudinary…',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.grey[500])),
               const SizedBox(height: 12),
             ],
 
-            // ── Error banner ───────────────────────────────────────────────
             if (_uploadError != null) ...[
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -262,7 +249,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                               fontSize: 13, color: _red)),
                     ),
                     InkWell(
-                      onTap: () => setState(() => _uploadError = null),
+                      onTap: () =>
+                          setState(() => _uploadError = null),
                       child: const Icon(Icons.close,
                           size: 15, color: _red),
                     ),
@@ -272,14 +260,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               const SizedBox(height: 14),
             ],
 
-            // ── Filters ───────────────────────────────────────────────────
             Row(
               children: [
                 SizedBox(
                   width: 260,
                   child: TextField(
                     controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _searchQuery = v),
+                    onChanged: (v) =>
+                        setState(() => _searchQuery = v),
                     decoration: InputDecoration(
                       hintText: 'Search member or file name…',
                       hintStyle: TextStyle(
@@ -308,9 +296,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 const SizedBox(width: 12),
                 _TypeFilterDropdown(
                   value: _typeFilter,
-                  onChanged: (v) => setState(() => _typeFilter = v),
+                  onChanged: (v) =>
+                      setState(() => _typeFilter = v),
                 ),
-                if (_searchQuery.isNotEmpty || _typeFilter != null) ...[
+                if (_searchQuery.isNotEmpty ||
+                    _typeFilter != null) ...[
                   const SizedBox(width: 10),
                   TextButton.icon(
                     onPressed: () => setState(() {
@@ -328,7 +318,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ── Document grid ─────────────────────────────────────────────
             Expanded(
               child: StreamBuilder<List<DocumentModel>>(
                 stream: widget.filterMemberId != null
@@ -350,14 +339,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.folder_open_outlined,
-                              size: 52, color: Colors.grey[300]),
+                              size: 52,
+                              color: Colors.grey[300]),
                           const SizedBox(height: 14),
-                          Text(
-                            'No documents found.',
-                            style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[500]),
-                          ),
+                          Text('No documents found.',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[500])),
                           if (canUpload) ...[
                             const SizedBox(height: 8),
                             Text(
@@ -382,10 +370,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     ),
                     itemCount: docs.length,
                     itemBuilder: (_, i) => _DocumentCard(
-                      doc:       docs[i],
-                      fs:        _fs,
+                      doc:        docs[i],
+                      fs:         _fs,
                       cloudinary: _cloudinary,
-                      canDelete: canUpload,
+                      canDelete:  canDelete,   // Fix 4: Admin only
                     ),
                   );
                 },
@@ -402,9 +390,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 class _UploadButton extends StatelessWidget {
   final bool uploading;
   final VoidCallback onTap;
-
   static const Color _navy = Color(0xFF0D2A5C);
-
   const _UploadButton({required this.uploading, required this.onTap});
 
   @override
@@ -433,7 +419,6 @@ class _UploadButton extends StatelessWidget {
 class _TypeFilterDropdown extends StatelessWidget {
   final DocumentType? value;
   final void Function(DocumentType?) onChanged;
-
   const _TypeFilterDropdown(
       {required this.value, required this.onChanged});
 
@@ -450,8 +435,8 @@ class _TypeFilterDropdown extends StatelessWidget {
       child: DropdownButton<DocumentType?>(
         value: value,
         hint: Text('All Types',
-            style: TextStyle(
-                fontSize: 13, color: Colors.grey[500])),
+            style:
+                TextStyle(fontSize: 13, color: Colors.grey[500])),
         style: const TextStyle(
             fontSize: 13, color: Color(0xFF1A2B4A)),
         icon: const Icon(Icons.expand_more, size: 18),
@@ -470,10 +455,10 @@ class _TypeFilterDropdown extends StatelessWidget {
 
 // ── Document card ─────────────────────────────────────────────────────────────
 class _DocumentCard extends StatelessWidget {
-  final DocumentModel    doc;
-  final FirestoreService fs;
+  final DocumentModel     doc;
+  final FirestoreService  fs;
   final CloudinaryService cloudinary;
-  final bool canDelete;
+  final bool              canDelete;
 
   const _DocumentCard({
     required this.doc,
@@ -500,9 +485,9 @@ class _DocumentCard extends StatelessWidget {
     }
   }
 
-  String _ext(String fileName) {
-    final parts = fileName.split('.');
-    return parts.length > 1 ? parts.last.toUpperCase() : 'FILE';
+  String _ext(String f) {
+    final p = f.split('.');
+    return p.length > 1 ? p.last.toUpperCase() : 'FILE';
   }
 
   String _fmt(DateTime d) =>
@@ -512,7 +497,6 @@ class _DocumentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _color(doc.type);
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -521,16 +505,14 @@ class _DocumentCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE0E8F4)),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
+              color: color.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Card top row ────────────────────────────────────────────────
           Row(
             children: [
               Container(
@@ -542,7 +524,6 @@ class _DocumentCard extends StatelessWidget {
                 child: Icon(_icon(doc.type), size: 20, color: color),
               ),
               const Spacer(),
-              // Extension badge
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 7, vertical: 3),
@@ -550,15 +531,12 @@ class _DocumentCard extends StatelessWidget {
                   color: const Color(0xFFF0F4FB),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(
-                  _ext(doc.fileName),
-                  style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF5A7099)),
-                ),
+                child: Text(_ext(doc.fileName),
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF5A7099))),
               ),
-              // Cloudinary badge
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -567,14 +545,13 @@ class _DocumentCard extends StatelessWidget {
                   color: const Color(0xFFE8F4FF),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text(
-                  'CDN',
-                  style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF2E6BE6)),
-                ),
+                child: const Text('CDN',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF2E6BE6))),
               ),
+              // Fix 4: Only show delete icon for Admin
               if (canDelete) ...[
                 const SizedBox(width: 6),
                 InkWell(
@@ -586,45 +563,30 @@ class _DocumentCard extends StatelessWidget {
             ],
           ),
           const Spacer(),
-
-          // ── Doc type label ───────────────────────────────────────────────
-          Text(
-            doc.type.label,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF5A7099),
-                letterSpacing: 0.3),
-          ),
+          Text(doc.type.label,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF5A7099),
+                  letterSpacing: 0.3)),
           const SizedBox(height: 3),
-
-          // ── File name ────────────────────────────────────────────────────
-          Text(
-            doc.fileName,
-            style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1A2B4A)),
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(doc.fileName,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A2B4A)),
+              overflow: TextOverflow.ellipsis),
           const SizedBox(height: 3),
-
-          // ── Member name ──────────────────────────────────────────────────
-          Text(
-            doc.memberName,
-            style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(doc.memberName,
+              style: TextStyle(
+                  fontSize: 11.5, color: Colors.grey[500]),
+              overflow: TextOverflow.ellipsis),
           const SizedBox(height: 8),
-
-          // ── Footer ───────────────────────────────────────────────────────
           Row(
             children: [
-              Text(
-                _fmt(doc.createdAt),
-                style: TextStyle(
-                    fontSize: 11, color: Colors.grey[400]),
-              ),
+              Text(_fmt(doc.createdAt),
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.grey[400])),
               const Spacer(),
               InkWell(
                 onTap: () async {
@@ -634,13 +596,11 @@ class _DocumentCard extends StatelessWidget {
                         mode: LaunchMode.externalApplication);
                   }
                 },
-                child: const Text(
-                  'View',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2E6BE6)),
-                ),
+                child: const Text('View',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2E6BE6))),
               ),
             ],
           ),
@@ -655,13 +615,11 @@ class _DocumentCard extends StatelessWidget {
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12)),
-        title: const Text(
-          'Delete Document',
-          style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0D2A5C)),
-        ),
+        title: const Text('Delete Document',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0D2A5C))),
         content: Text(
           'Are you sure you want to delete "${doc.fileName}"?\n'
           'This will remove it from Cloudinary and Firestore.',
@@ -686,21 +644,18 @@ class _DocumentCard extends StatelessWidget {
         ],
       ),
     );
-
     if (confirm == true) {
-      // Delete from Cloudinary first, then Firestore metadata
       await cloudinary.deleteFile(doc.fileUrl);
       await fs.deleteDocumentMetadata(doc.id);
     }
   }
 }
 
-// ── Upload selection model ────────────────────────────────────────────────────
+// ── Upload selection ──────────────────────────────────────────────────────────
 class _UploadSelection {
   final String memberId;
   final String memberName;
   final DocumentType docType;
-
   _UploadSelection({
     required this.memberId,
     required this.memberName,
@@ -756,7 +711,8 @@ class _UploadDialogState extends State<_UploadDialog> {
         borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _accent, width: 1.5)),
+        borderSide:
+            const BorderSide(color: _accent, width: 1.5)),
   );
 
   @override
@@ -772,16 +728,12 @@ class _UploadDialogState extends State<_UploadDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              const Text(
-                'Upload Document',
-                style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: _navy),
-              ),
+              const Text('Upload Document',
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: _navy)),
               const SizedBox(height: 4),
-              // File name chip
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 5),
@@ -796,19 +748,16 @@ class _UploadDialogState extends State<_UploadDialog> {
                         size: 14, color: Color(0xFF5A7099)),
                     const SizedBox(width: 5),
                     Flexible(
-                      child: Text(
-                        widget.fileName,
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF5A7099)),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(widget.fileName,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF5A7099)),
+                          overflow: TextOverflow.ellipsis),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Member selector
               const Text('Member',
                   style: TextStyle(
                       fontSize: 12.5,
@@ -826,12 +775,10 @@ class _UploadDialogState extends State<_UploadDialog> {
                     border: Border.all(
                         color: const Color(0xFFD0DBEE)),
                   ),
-                  child: Text(
-                    _memberName ?? '',
-                    style: const TextStyle(
-                        fontSize: 13.5,
-                        color: Color(0xFF1A2B4A)),
-                  ),
+                  child: Text(_memberName ?? '',
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          color: Color(0xFF1A2B4A))),
                 )
               else
                 StreamBuilder<List<MemberModel>>(
@@ -868,8 +815,6 @@ class _UploadDialogState extends State<_UploadDialog> {
                   },
                 ),
               const SizedBox(height: 16),
-
-              // Document type
               const Text('Document Type',
                   style: TextStyle(
                       fontSize: 12.5,
@@ -883,31 +828,28 @@ class _UploadDialogState extends State<_UploadDialog> {
                 decoration: _dec(),
                 items: DocumentType.values
                     .map((t) => DropdownMenuItem<DocumentType>(
-                          value: t,
-                          child: Text(t.label),
-                        ))
+                        value: t, child: Text(t.label)))
                     .toList(),
                 onChanged: (v) {
                   if (v != null) setState(() => _docType = v);
                 },
               ),
               const SizedBox(height: 24),
-
-              // Cloudinary notice
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8F4FF),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: const Color(0xFF2E6BE6).withOpacity(0.2)),
+                      color: const Color(0xFF2E6BE6)
+                          .withOpacity(0.2)),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(Icons.cloud_upload_outlined,
+                    Icon(Icons.cloud_upload_outlined,
                         size: 15, color: Color(0xFF2E6BE6)),
-                    const SizedBox(width: 8),
-                    const Expanded(
+                    SizedBox(width: 8),
+                    Expanded(
                       child: Text(
                         'File will be uploaded to Cloudinary CDN.',
                         style: TextStyle(
@@ -919,8 +861,6 @@ class _UploadDialogState extends State<_UploadDialog> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Actions
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [

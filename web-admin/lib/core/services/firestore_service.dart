@@ -1,27 +1,35 @@
 // core/services/firestore_service.dart
-// UPDATED — uses uid instead of memberId, and displayName instead of name
-// to stay compatible with mobile app field naming
+// UPDATED Phase 4 — adds staff, announcements, complaints
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/member_model.dart';
 import '../models/payment_model.dart';
 import '../models/document_model.dart';
+import '../models/staff_model.dart';
+import '../models/announcement_model.dart';
+import '../models/complaint_model.dart';
+import '../models/user_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  CollectionReference get _members  => _db.collection('users');
-  CollectionReference get _payments => _db.collection('payments');
-  CollectionReference get _docs     => _db.collection('documents');
+  // Expose db for generating doc IDs externally
+  FirebaseFirestore get db => _db;
+
+  CollectionReference get _users         => _db.collection('users');
+  CollectionReference get _payments      => _db.collection('payments');
+  CollectionReference get _docs          => _db.collection('documents');
+  CollectionReference get _announcements => _db.collection('announcements');
+  CollectionReference get _complaints    => _db.collection('complaints');
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MEMBERS
+  // MEMBERS (role == 'member')
   // ════════════════════════════════════════════════════════════════════════════
 
   Stream<List<MemberModel>> streamMembers() {
-    return _members
+    return _users
         .where('role', isEqualTo: 'member')
-        .orderBy('displayName')        // ← matches mobile field name
+        .orderBy('displayName')
         .snapshots()
         .map((snap) => snap.docs
             .map((d) => MemberModel.fromMap(
@@ -30,26 +38,54 @@ class FirestoreService {
   }
 
   Future<MemberModel?> getMember(String uid) async {
-    final doc = await _members.doc(uid).get();
+    final doc = await _users.doc(uid).get();
     if (!doc.exists) return null;
     return MemberModel.fromMap(
         doc.data() as Map<String, dynamic>, doc.id);
   }
 
   Future<void> addMember(MemberModel member) async {
-    await _members.doc(member.uid).set(member.toMap());
+    await _users.doc(member.uid).set(member.toMap());
   }
 
   Future<void> updateMember(MemberModel member) async {
-    await _members.doc(member.uid).update(member.toMap());
+    await _users.doc(member.uid).update(member.toMap());
   }
 
-  Future<void> updateMemberStatus(String uid, MemberStatus status) async {
-    await _members.doc(uid).update({'status': status.name});
+  Future<void> updateMemberStatus(
+      String uid, MemberStatus status) async {
+    await _users.doc(uid).update({'status': status.name});
   }
 
   Future<void> deleteMember(String uid) async {
-    await _members.doc(uid).delete();
+    await _users.doc(uid).delete();
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STAFF (role != 'member')
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Stream<List<StaffModel>> streamStaff() {
+    return _users
+        .where('role', whereNotIn: ['member'])
+        .orderBy('role')
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => StaffModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
+  }
+
+  Future<void> addStaff(StaffModel staff) async {
+    await _users.doc(staff.uid).set(staff.toMap());
+  }
+
+  Future<void> updateStaffRole(String uid, UserRole role) async {
+    await _users.doc(uid).update({'role': role.name});
+  }
+
+  Future<void> setStaffActive(String uid, bool isActive) async {
+    await _users.doc(uid).update({'isActive': isActive});
   }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -66,7 +102,8 @@ class FirestoreService {
             .toList());
   }
 
-  Stream<List<PaymentModel>> streamPaymentsForMember(String memberUid) {
+  Stream<List<PaymentModel>> streamPaymentsForMember(
+      String memberUid) {
     return _payments
         .where('uid', isEqualTo: memberUid)
         .orderBy('dueDate', descending: true)
@@ -110,7 +147,8 @@ class FirestoreService {
             .toList());
   }
 
-  Stream<List<DocumentModel>> streamDocumentsForMember(String memberUid) {
+  Stream<List<DocumentModel>> streamDocumentsForMember(
+      String memberUid) {
     return _docs
         .where('uid', isEqualTo: memberUid)
         .orderBy('createdAt', descending: true)
@@ -146,5 +184,70 @@ class FirestoreService {
 
   Future<void> deleteDocumentMetadata(String docId) async {
     await _docs.doc(docId).delete();
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ANNOUNCEMENTS
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Stream<List<AnnouncementModel>> streamAnnouncements() {
+    return _announcements
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => AnnouncementModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
+  }
+
+  Future<void> addAnnouncement(
+      AnnouncementModel announcement) async {
+    final ref = _announcements.doc();
+    await ref.set({...announcement.toMap()});
+  }
+
+  Future<void> updateAnnouncement(
+      String id, String title, String body) async {
+    await _announcements.doc(id).update({
+      'title': title,
+      'body':  body,
+    });
+  }
+
+  Future<void> toggleAnnouncementActive(
+      String id, bool isActive) async {
+    await _announcements.doc(id).update({'isActive': isActive});
+  }
+
+  Future<void> deleteAnnouncement(String id) async {
+    await _announcements.doc(id).delete();
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // COMPLAINTS
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Stream<List<ComplaintModel>> streamComplaints() {
+    return _complaints
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => ComplaintModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
+  }
+
+  Future<void> updateComplaintStatus({
+    required String          complaintId,
+    required ComplaintStatus status,
+    required String          resolvedBy,
+    required String          resolutionNote,
+  }) async {
+    await _complaints.doc(complaintId).update({
+      'status':         status.name,
+      'resolvedBy':     resolvedBy,
+      'resolutionNote': resolutionNote,
+      'updatedAt':      Timestamp.fromDate(DateTime.now()),
+    });
   }
 }

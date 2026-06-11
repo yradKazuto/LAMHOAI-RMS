@@ -12,6 +12,7 @@ import '../../features/auth/forgot_password_screen.dart';
 import '../../features/payments/payments_screen.dart';
 import '../../features/payments/payment_detail_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
+import '../../features/announcements/announcements_screen.dart';
 import '../../features/complaints/complaints_screen.dart';
 import '../../features/complaints/submit_complaint_screen.dart';
 import '../../features/profile/profile_screen.dart';
@@ -27,6 +28,7 @@ class Routes {
   static const memberHome      = '/home';
   static const payments        = '/home/payments';
   static const notifications   = '/home/notifications';
+  static const announcements   = '/home/announcements';
   static const complaints      = '/home/complaints';
   static const submitComplaint = '/home/complaints/submit';
   static const profile         = '/home/profile';
@@ -108,6 +110,13 @@ class AppRouter {
               GoRoute(
                 path: Routes.memberHome,
                 builder: (_, __) => const HomeScreen(),
+                routes: [
+                  // Announcements nested under home
+                  GoRoute(
+                    path: 'announcements',
+                    builder: (_, __) => const AnnouncementsScreen(),
+                  ),
+                ],
               ),
             ]),
 

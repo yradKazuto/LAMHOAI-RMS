@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/models/user_model.dart';
 import '../../core/providers/auth_provider.dart';
@@ -10,13 +11,11 @@ import '../../core/providers/auth_provider.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  // ── Design tokens ─────────────────────────────────────────────────────────
   static const _blue800   = Color(0xFF0F2547);
   static const _blue700   = Color(0xFF1A3D6B);
   static const _blue600   = Color(0xFF1E52A0);
   static const _blue500   = Color(0xFF2563EB);
   static const _blue200   = Color(0xFFBAD9FD);
-  static const _blue50    = Color(0xFFEFF6FF);
   static const _gray50    = Color(0xFFF8FAFC);
   static const _gray100   = Color(0xFFEEF2F7);
   static const _gray400   = Color(0xFF8A9BB0);
@@ -65,7 +64,6 @@ class ProfileScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
       child: Column(
         children: [
-          // Back button row
           Row(
             children: [
               GestureDetector(
@@ -85,7 +83,6 @@ class ProfileScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          // Avatar
           Container(
             width: 64,
             height: 64,
@@ -122,7 +119,6 @@ class ProfileScreen extends StatelessWidget {
             style: const TextStyle(fontSize: 11, color: _blue200),
           ),
           const SizedBox(height: 8),
-          // Role pill
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -131,7 +127,9 @@ class ProfileScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              user?.role == UserRole.admin ? 'Administrator' : 'HOA Member',
+              user?.role == UserRole.admin
+                  ? 'Administrator'
+                  : 'HOA Member',
               style: const TextStyle(
                 fontSize: 10,
                 color: Colors.white,
@@ -155,6 +153,8 @@ class ProfileScreen extends StatelessWidget {
           _buildAccountInfo(user),
           const SizedBox(height: 12),
           _buildLotInfo(user),
+          const SizedBox(height: 12),
+          _buildContactInfo(user),
           const SizedBox(height: 12),
           _buildSecuritySection(context),
           const SizedBox(height: 12),
@@ -180,38 +180,34 @@ class ProfileScreen extends StatelessWidget {
   }
 
   // ── Lot info card ─────────────────────────────────────────────────────────
-  // These fields (lotNumber, phase, status) are Phase 3 additions to
-  // the Firestore users doc. For now they show '—' until the admin
-  // web dashboard populates them.
 
   Widget _buildLotInfo(UserModel user) {
-    // Read extended fields from Firestore if present, else show placeholder
-    final extra = user.toFirestore();
-    final lot    = extra['lotNumber']    as String? ?? '—';
-    final phase  = extra['phase']        as String? ?? '—';
-    final status = extra['memberStatus'] as String? ?? 'Active';
-    final since  = extra['memberSince']  as String? ?? '—';
+    final isActive =
+        (user.status ?? 'active').toLowerCase() == 'active';
 
-    final isActive = status.toLowerCase() == 'active';
+    final memberSince = user.createdAt != null
+        ? DateFormat('MMMM d, yyyy').format(user.createdAt!)
+        : '—';
 
     return _card(
       icon: Icons.home_outlined,
       title: 'LOT INFORMATION',
       children: [
-        _infoRow('Lot Number', lot),
-        _infoRow('Phase', phase),
-        _infoRow('Member Since', since),
+        _infoRow('Lot Number', user.lotNumber ?? '—'),
+        _infoRow('Phase', user.phase ?? '—'),
+        _infoRow('Member Since', memberSince),
         _infoRowWidget(
           'Status',
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: 3),
             decoration: BoxDecoration(
               color: isActive ? _successBg : _dangerBg,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              status,
+              (user.status ?? 'Active')[0].toUpperCase() +
+                  (user.status ?? 'active').substring(1),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
@@ -221,6 +217,20 @@ class ProfileScreen extends StatelessWidget {
           ),
           isLast: true,
         ),
+      ],
+    );
+  }
+
+  // ── Contact info card ─────────────────────────────────────────────────────
+
+  Widget _buildContactInfo(UserModel user) {
+    return _card(
+      icon: Icons.contact_phone_outlined,
+      title: 'CONTACT INFORMATION',
+      children: [
+        _infoRow('Address', user.address ?? '—'),
+        _infoRow('Contact No.', user.contactNumber ?? '—',
+            isLast: true),
       ],
     );
   }
