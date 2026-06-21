@@ -1,5 +1,5 @@
 // core/routing/app_router.dart
-// UPDATED Phase 5 — adds /analytics and /reports routes
+// UPDATED Phase 6 — adds /settings, /audit, /preview routes
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +15,9 @@ import '../../features/announcements/screens/announcements_screen.dart';
 import '../../features/complaints/screens/complaints_screen.dart';
 import '../../features/analytics/screens/analytics_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
+import '../../features/settings/screens/settings_screen.dart';
+import '../../features/audit/screens/audit_screen.dart';
+import '../../features/preview/screens/member_preview_screen.dart';
 
 class AppRoutes {
   static const login         = '/login';
@@ -27,6 +30,9 @@ class AppRoutes {
   static const complaints    = '/complaints';
   static const analytics     = '/analytics';
   static const reports       = '/reports';
+  static const settings      = '/settings';
+  static const audit         = '/audit';
+  static const preview       = '/preview';
 }
 
 GoRouter createRouter(AuthProvider authProvider) {
@@ -55,8 +61,11 @@ GoRouter createRouter(AuthProvider authProvider) {
       final role = authProvider.role;
       final path = state.matchedLocation;
 
-      // Admin only
-      if (path.startsWith(AppRoutes.users) &&
+      // Admin only routes
+      if ((path.startsWith(AppRoutes.users) ||
+              path.startsWith(AppRoutes.audit) ||
+              path.startsWith(AppRoutes.settings) ||
+              path.startsWith(AppRoutes.preview)) &&
           role != UserRole.admin) {
         return AppRoutes.dashboard;
       }
@@ -70,6 +79,13 @@ GoRouter createRouter(AuthProvider authProvider) {
 
       // Reports — Admin + Accountant
       if (path.startsWith(AppRoutes.reports) &&
+          role != UserRole.admin &&
+          role != UserRole.accountant) {
+        return AppRoutes.dashboard;
+      }
+
+      // Analytics — Admin + Accountant
+      if (path.startsWith(AppRoutes.analytics) &&
           role != UserRole.admin &&
           role != UserRole.accountant) {
         return AppRoutes.dashboard;
@@ -93,13 +109,6 @@ GoRouter createRouter(AuthProvider authProvider) {
       if (path.startsWith(AppRoutes.complaints) &&
           role != UserRole.admin &&
           role != UserRole.officer) {
-        return AppRoutes.dashboard;
-      }
-
-      // Analytics — Admin + Accountant
-      if (path.startsWith(AppRoutes.analytics) &&
-          role != UserRole.admin &&
-          role != UserRole.accountant) {
         return AppRoutes.dashboard;
       }
 
@@ -134,12 +143,14 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.users,
         name: 'users',
-        builder: (_, __) => const UserManagementScreen(),
+        builder: (_, __) =>
+            const UserManagementScreen(),
       ),
       GoRoute(
         path: AppRoutes.announcements,
         name: 'announcements',
-        builder: (_, __) => const AnnouncementsScreen(),
+        builder: (_, __) =>
+            const AnnouncementsScreen(),
       ),
       GoRoute(
         path: AppRoutes.complaints,
@@ -155,6 +166,22 @@ GoRouter createRouter(AuthProvider authProvider) {
         path: AppRoutes.reports,
         name: 'reports',
         builder: (_, __) => const ReportsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        name: 'settings',
+        builder: (_, __) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.audit,
+        name: 'audit',
+        builder: (_, __) => const AuditScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.preview,
+        name: 'preview',
+        builder: (_, __) =>
+            const MemberPreviewScreen(),
       ),
     ],
     errorBuilder: (context, state) =>
@@ -188,7 +215,8 @@ class _ErrorScreen extends StatelessWidget {
             TextButton(
               onPressed: () =>
                   context.go(AppRoutes.dashboard),
-              child: const Text('Go to Dashboard'),
+              child:
+                  const Text('Go to Dashboard'),
             ),
           ],
         ),

@@ -1,5 +1,5 @@
 // features/dashboard/screens/dashboard_screen.dart
-// UPDATED Phase 5 — Analytics and Reports added to sidebar + quick access
+// UPDATED Phase 6 — Settings, Audit Log, Member Preview added
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -38,7 +38,8 @@ class DashboardScreen extends StatelessWidget {
                 _TopBar(user: user),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(32),
+                    padding:
+                        const EdgeInsets.all(32),
                     child: Column(
                       crossAxisAlignment:
                           CrossAxisAlignment.start,
@@ -47,7 +48,8 @@ class DashboardScreen extends StatelessWidget {
                           'Good day, ${user?.displayName ?? 'User'} 👋',
                           style: const TextStyle(
                               fontSize: 22,
-                              fontWeight: FontWeight.w700,
+                              fontWeight:
+                                  FontWeight.w700,
                               color: _navy),
                         ),
                         const SizedBox(height: 4),
@@ -55,7 +57,8 @@ class DashboardScreen extends StatelessWidget {
                           'You are logged in as ${user?.role.label ?? ''}.',
                           style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey[600]),
+                              color:
+                                  Colors.grey[600]),
                         ),
                         const SizedBox(height: 28),
                         _StatsRow(role: auth.role),
@@ -63,14 +66,15 @@ class DashboardScreen extends StatelessWidget {
                         const Text('Quick Access',
                             style: TextStyle(
                                 fontSize: 15,
-                                fontWeight: FontWeight.w700,
+                                fontWeight:
+                                    FontWeight.w700,
                                 color: _navy)),
                         const SizedBox(height: 14),
                         Wrap(
                           spacing: 14,
                           runSpacing: 14,
-                          children:
-                              _cards(context, auth.role),
+                          children: _cards(
+                              context, auth.role),
                         ),
                       ],
                     ),
@@ -85,84 +89,103 @@ class DashboardScreen extends StatelessWidget {
   }
 
   List<Widget> _cards(
-      BuildContext context, UserRole role) =>
-      [
-        if (role == UserRole.admin)
-          _DashCard(
-            icon:        Icons.manage_accounts_outlined,
-            label:       'User Management',
-            description: 'Manage staff accounts and roles',
-            color:       const Color(0xFF5A1A7A),
-            onTap:       () => context.go(AppRoutes.users),
-          ),
-        if (role == UserRole.admin ||
-            role == UserRole.officer)
-          _DashCard(
-            icon:        Icons.people_outline,
-            label:       'Homeowner Records',
-            description: 'View and manage member profiles',
-            color:       const Color(0xFF1A4A9C),
-            onTap:
-                () => context.go(AppRoutes.members),
-          ),
-        if (role == UserRole.admin ||
-            role == UserRole.accountant)
-          _DashCard(
-            icon:        Icons.account_balance_wallet_outlined,
-            label:       'Finance & Dues',
-            description: 'Billing, payments, and reports',
-            color:       const Color(0xFF1A7A4A),
-            onTap:
-                () => context.go(AppRoutes.payments),
-          ),
-        if (role == UserRole.admin ||
-            role == UserRole.officer)
-          _DashCard(
-            icon:        Icons.folder_outlined,
-            label:       'Documents',
-            description: 'Property titles and uploaded files',
-            color:       const Color(0xFF7A3A1A),
-            onTap: () =>
-                context.go(AppRoutes.documents),
-          ),
-        _DashCard(
-          icon:        Icons.campaign_outlined,
-          label:       'Announcements',
-          description: 'Post notices to homeowners',
-          color:       const Color(0xFF1A5A7A),
-          onTap: () =>
-              context.go(AppRoutes.announcements),
-        ),
-        if (role == UserRole.admin ||
-            role == UserRole.officer)
-          _DashCard(
-            icon:        Icons.report_problem_outlined,
-            label:       'Complaints',
-            description: 'Review and resolve complaints',
-            color:       const Color(0xFF7A1A1A),
-            onTap: () =>
-                context.go(AppRoutes.complaints),
-          ),
-        if (role == UserRole.admin ||
-            role == UserRole.accountant) ...[
-          _DashCard(
-            icon:        Icons.bar_chart_outlined,
-            label:       'Analytics',
-            description: 'Charts and financial overview',
-            color:       const Color(0xFF1A4A7A),
-            onTap: () =>
-                context.go(AppRoutes.analytics),
-          ),
-          _DashCard(
-            icon:        Icons.summarize_outlined,
-            label:       'Reports & Export',
-            description: 'Export payments to PDF or CSV',
-            color:       const Color(0xFF4A1A7A),
-            onTap: () =>
-                context.go(AppRoutes.reports),
-          ),
-        ],
-      ];
+      BuildContext context, UserRole role) => [
+    if (role == UserRole.admin)
+      _DashCard(
+        icon:        Icons.manage_accounts_outlined,
+        label:       'User Management',
+        description: 'Manage staff accounts and roles',
+        color:       const Color(0xFF5A1A7A),
+        onTap: () => context.go(AppRoutes.users),
+      ),
+    if (role == UserRole.admin ||
+        role == UserRole.officer)
+      _DashCard(
+        icon:        Icons.people_outline,
+        label:       'Homeowner Records',
+        description: 'View and manage member profiles',
+        color:       const Color(0xFF1A4A9C),
+        onTap: () => context.go(AppRoutes.members),
+      ),
+    if (role == UserRole.admin ||
+        role == UserRole.accountant)
+      _DashCard(
+        icon:        Icons.account_balance_wallet_outlined,
+        label:       'Finance & Dues',
+        description: 'Billing, payments, and reports',
+        color:       const Color(0xFF1A7A4A),
+        onTap: () => context.go(AppRoutes.payments),
+      ),
+    if (role == UserRole.admin ||
+        role == UserRole.officer)
+      _DashCard(
+        icon:        Icons.folder_outlined,
+        label:       'Documents',
+        description: 'Property titles and uploaded files',
+        color:       const Color(0xFF7A3A1A),
+        onTap: () => context.go(AppRoutes.documents),
+      ),
+    _DashCard(
+      icon:        Icons.campaign_outlined,
+      label:       'Announcements',
+      description: 'Post notices to homeowners',
+      color:       const Color(0xFF1A5A7A),
+      onTap: () =>
+          context.go(AppRoutes.announcements),
+    ),
+    if (role == UserRole.admin ||
+        role == UserRole.officer)
+      _DashCard(
+        icon:        Icons.report_problem_outlined,
+        label:       'Complaints',
+        description: 'Review and resolve complaints',
+        color:       const Color(0xFF7A1A1A),
+        onTap: () =>
+            context.go(AppRoutes.complaints),
+      ),
+    if (role == UserRole.admin ||
+        role == UserRole.accountant) ...[
+      _DashCard(
+        icon:        Icons.bar_chart_outlined,
+        label:       'Analytics',
+        description: 'Charts and financial overview',
+        color:       const Color(0xFF1A4A7A),
+        onTap: () =>
+            context.go(AppRoutes.analytics),
+      ),
+      _DashCard(
+        icon:        Icons.summarize_outlined,
+        label:       'Reports & Export',
+        description: 'Export payments to PDF or CSV',
+        color:       const Color(0xFF4A1A7A),
+        onTap: () => context.go(AppRoutes.reports),
+      ),
+    ],
+    if (role == UserRole.admin) ...[
+      _DashCard(
+        icon:        Icons.settings_outlined,
+        label:       'Settings',
+        description: 'HOA profile and dues config',
+        color:       const Color(0xFF1A5A4A),
+        onTap: () =>
+            context.go(AppRoutes.settings),
+      ),
+      _DashCard(
+        icon:        Icons.history_outlined,
+        label:       'Audit Log',
+        description: 'Track admin actions and changes',
+        color:       const Color(0xFF5A4A1A),
+        onTap: () => context.go(AppRoutes.audit),
+      ),
+      _DashCard(
+        icon:        Icons.phone_android_outlined,
+        label:       'Member Preview',
+        description: 'Preview member mobile experience',
+        color:       const Color(0xFF1A3A5A),
+        onTap: () => context.go(AppRoutes.preview),
+      ),
+    ],
+  ];
 }
 
 // ── Stats row ─────────────────────────────────────────────────────────────────
@@ -193,7 +216,8 @@ class _StatsRow extends StatelessWidget {
             final collectedTotal = payments
                 .where((p) =>
                     p.status == PaymentStatus.paid)
-                .fold(0.0, (sum, p) => sum + p.amount);
+                .fold(
+                    0.0, (sum, p) => sum + p.amount);
 
             return LayoutBuilder(
               builder: (context, constraints) {
@@ -204,7 +228,7 @@ class _StatsRow extends StatelessWidget {
                         label: 'Total Members',
                         value: '${members.length}',
                         sub:   '$activeMembers active',
-                        icon:  Icons.people_outline,
+                        icon: Icons.people_outline,
                         color: const Color(0xFF1A4A9C),
                       ),
                     ),
@@ -218,8 +242,7 @@ class _StatsRow extends StatelessWidget {
                           value:
                               '₱${collectedTotal.toStringAsFixed(0)}',
                           sub:   'all time',
-                          icon:
-                              Icons.payments_outlined,
+                          icon: Icons.payments_outlined,
                           color: const Color(
                               0xFF1A7A4A),
                         ),
@@ -230,7 +253,7 @@ class _StatsRow extends StatelessWidget {
                           label: 'Overdue Payments',
                           value: '$overdueCount',
                           sub:   'need attention',
-                          icon:  Icons
+                          icon: Icons
                               .warning_amber_outlined,
                           color: const Color(
                               0xFFCC2200),
@@ -249,7 +272,7 @@ class _StatsRow extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  final String   label, value, sub;
+  final String label, value, sub;
   final IconData icon;
   final Color    color;
 
@@ -276,7 +299,8 @@ class _StatCard extends StatelessWidget {
               color: color.withOpacity(0.1),
               borderRadius:
                   BorderRadius.circular(8)),
-          child: Icon(icon, color: color, size: 20),
+          child:
+              Icon(icon, color: color, size: 20),
         ),
         const SizedBox(width: 12),
         Column(
@@ -318,8 +342,8 @@ class _TopBar extends StatelessWidget {
     decoration: const BoxDecoration(
       color: Colors.white,
       border: Border(
-          bottom:
-              BorderSide(color: Color(0xFFE0E8F4))),
+          bottom: BorderSide(
+              color: Color(0xFFE0E8F4))),
     ),
     child: Row(
       children: [
@@ -364,7 +388,7 @@ class _DashCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _DashCard({
-    required this.icon,   required this.label,
+    required this.icon,        required this.label,
     required this.description, required this.color,
     required this.onTap,
   });
@@ -399,8 +423,8 @@ class _DashCard extends StatelessWidget {
               borderRadius:
                   BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color,
-                size: 22),
+            child:
+                Icon(icon, color: color, size: 22),
           ),
           const SizedBox(height: 14),
           Text(label,
@@ -477,7 +501,7 @@ class AppSidebar extends StatelessWidget {
               color: Color(0xFF1E3E7C), height: 1),
           const SizedBox(height: 8),
 
-          // Scrollable nav area
+          // Scrollable nav
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -497,8 +521,8 @@ class AppSidebar extends StatelessWidget {
                       label:    'Users',
                       selected: currentPath ==
                           AppRoutes.users,
-                      onTap: () =>
-                          context.go(AppRoutes.users),
+                      onTap: () => context
+                          .go(AppRoutes.users),
                     ),
                   if (role == UserRole.admin ||
                       role == UserRole.accountant)
@@ -514,7 +538,7 @@ class AppSidebar extends StatelessWidget {
                   if (role == UserRole.admin ||
                       role == UserRole.officer)
                     _NavItem(
-                      icon:     Icons.people_outline,
+                      icon: Icons.people_outline,
                       label:    'Homeowners',
                       selected: currentPath ==
                           AppRoutes.members,
@@ -553,7 +577,7 @@ class AppSidebar extends StatelessWidget {
                   if (role == UserRole.admin ||
                       role == UserRole.accountant) ...[
                     _NavItem(
-                      icon:     Icons.bar_chart_outlined,
+                      icon: Icons.bar_chart_outlined,
                       label:    'Analytics',
                       selected: currentPath ==
                           AppRoutes.analytics,
@@ -561,12 +585,47 @@ class AppSidebar extends StatelessWidget {
                           .go(AppRoutes.analytics),
                     ),
                     _NavItem(
-                      icon:     Icons.summarize_outlined,
+                      icon:
+                          Icons.summarize_outlined,
                       label:    'Reports',
                       selected: currentPath ==
                           AppRoutes.reports,
                       onTap: () => context
                           .go(AppRoutes.reports),
+                    ),
+                  ],
+                  if (role == UserRole.admin) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8),
+                      child: Divider(
+                          color: Color(0xFF1E3E7C),
+                          height: 1),
+                    ),
+                    _NavItem(
+                      icon:     Icons.settings_outlined,
+                      label:    'Settings',
+                      selected: currentPath ==
+                          AppRoutes.settings,
+                      onTap: () => context
+                          .go(AppRoutes.settings),
+                    ),
+                    _NavItem(
+                      icon:     Icons.history_outlined,
+                      label:    'Audit Log',
+                      selected: currentPath ==
+                          AppRoutes.audit,
+                      onTap: () =>
+                          context.go(AppRoutes.audit),
+                    ),
+                    _NavItem(
+                      icon: Icons.phone_android_outlined,
+                      label:    'Member Preview',
+                      selected: currentPath ==
+                          AppRoutes.preview,
+                      onTap: () => context
+                          .go(AppRoutes.preview),
                     ),
                   ],
                 ],
