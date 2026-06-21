@@ -1,5 +1,5 @@
 // core/routing/app_router.dart
-// UPDATED Phase 4 — adds /users, /announcements, /complaints routes
+// UPDATED Phase 5 — adds /analytics and /reports routes
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +13,8 @@ import '../../features/documents/screens/documents_screen.dart';
 import '../../features/users/screens/user_management_screen.dart';
 import '../../features/announcements/screens/announcements_screen.dart';
 import '../../features/complaints/screens/complaints_screen.dart';
+import '../../features/analytics/screens/analytics_screen.dart';
+import '../../features/reports/screens/reports_screen.dart';
 
 class AppRoutes {
   static const login         = '/login';
@@ -23,6 +25,8 @@ class AppRoutes {
   static const users         = '/users';
   static const announcements = '/announcements';
   static const complaints    = '/complaints';
+  static const analytics     = '/analytics';
+  static const reports       = '/reports';
 }
 
 GoRouter createRouter(AuthProvider authProvider) {
@@ -43,7 +47,8 @@ GoRouter createRouter(AuthProvider authProvider) {
         return isOnLogin ? null : AppRoutes.login;
       }
 
-      if (status == AuthStatus.authenticated && isOnLogin) {
+      if (status == AuthStatus.authenticated &&
+          isOnLogin) {
         return AppRoutes.dashboard;
       }
 
@@ -58,6 +63,13 @@ GoRouter createRouter(AuthProvider authProvider) {
 
       // Finance — Admin + Accountant
       if (path.startsWith(AppRoutes.payments) &&
+          role != UserRole.admin &&
+          role != UserRole.accountant) {
+        return AppRoutes.dashboard;
+      }
+
+      // Reports — Admin + Accountant
+      if (path.startsWith(AppRoutes.reports) &&
           role != UserRole.admin &&
           role != UserRole.accountant) {
         return AppRoutes.dashboard;
@@ -81,6 +93,13 @@ GoRouter createRouter(AuthProvider authProvider) {
       if (path.startsWith(AppRoutes.complaints) &&
           role != UserRole.admin &&
           role != UserRole.officer) {
+        return AppRoutes.dashboard;
+      }
+
+      // Analytics — Admin + Accountant
+      if (path.startsWith(AppRoutes.analytics) &&
+          role != UserRole.admin &&
+          role != UserRole.accountant) {
         return AppRoutes.dashboard;
       }
 
@@ -127,6 +146,16 @@ GoRouter createRouter(AuthProvider authProvider) {
         name: 'complaints',
         builder: (_, __) => const ComplaintsScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.analytics,
+        name: 'analytics',
+        builder: (_, __) => const AnalyticsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.reports,
+        name: 'reports',
+        builder: (_, __) => const ReportsScreen(),
+      ),
     ],
     errorBuilder: (context, state) =>
         _ErrorScreen(error: state.error),
@@ -153,7 +182,8 @@ class _ErrorScreen extends StatelessWidget {
                     .textTheme
                     .titleLarge
                     ?.copyWith(
-                        color: const Color(0xFF1A3A6B))),
+                        color:
+                            const Color(0xFF1A3A6B))),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () =>

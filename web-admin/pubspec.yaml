@@ -46,6 +46,10 @@ dependencies:
   url_launcher: ^6.3.0
   http: ^1.2.0
   crypto: ^3.0.3  
+  fl_chart: ^0.69.0
+  pdf: ^3.11.1
+  printing: ^5.13.2
+  csv: ^6.0.0
 
   # Navigation - add routing packages here
   # go_router: ^x.x.x
