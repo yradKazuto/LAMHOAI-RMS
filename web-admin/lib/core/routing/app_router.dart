@@ -1,5 +1,5 @@
 // core/routing/app_router.dart
-// UPDATED Phase 6 — adds /settings, /audit, /preview routes
+// UPDATED Phase 8 — adds /location route (Location Mapping)
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +18,7 @@ import '../../features/reports/screens/reports_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/audit/screens/audit_screen.dart';
 import '../../features/preview/screens/member_preview_screen.dart';
+import '../../features/location/screens/location_mapping_screen.dart';
 
 class AppRoutes {
   static const login         = '/login';
@@ -33,6 +34,7 @@ class AppRoutes {
   static const settings      = '/settings';
   static const audit         = '/audit';
   static const preview       = '/preview';
+  static const location      = '/location';
 }
 
 GoRouter createRouter(AuthProvider authProvider) {
@@ -112,6 +114,13 @@ GoRouter createRouter(AuthProvider authProvider) {
         return AppRoutes.dashboard;
       }
 
+      // Location Mapping — Admin + Officer
+      if (path.startsWith(AppRoutes.location) &&
+          role != UserRole.admin &&
+          role != UserRole.officer) {
+        return AppRoutes.dashboard;
+      }
+
       return null;
     },
     routes: [
@@ -182,6 +191,12 @@ GoRouter createRouter(AuthProvider authProvider) {
         name: 'preview',
         builder: (_, __) =>
             const MemberPreviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.location,
+        name: 'location',
+        builder: (_, __) =>
+            const LocationMappingScreen(),
       ),
     ],
     errorBuilder: (context, state) =>

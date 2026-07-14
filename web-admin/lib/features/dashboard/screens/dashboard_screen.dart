@@ -1,5 +1,5 @@
 // features/dashboard/screens/dashboard_screen.dart
-// UPDATED Phase 6 — Settings, Audit Log, Member Preview added
+// UPDATED Phase 8 — Location Mapping added
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -124,6 +124,15 @@ class DashboardScreen extends StatelessWidget {
         description: 'Property titles and uploaded files',
         color:       const Color(0xFF7A3A1A),
         onTap: () => context.go(AppRoutes.documents),
+      ),
+    if (role == UserRole.admin ||
+        role == UserRole.officer)
+      _DashCard(
+        icon:        Icons.map_outlined,
+        label:       'Location Mapping',
+        description: 'View lot occupancy and availability',
+        color:       const Color(0xFF0A6E6E),
+        onTap: () => context.go(AppRoutes.location),
       ),
     _DashCard(
       icon:        Icons.campaign_outlined,
@@ -554,6 +563,16 @@ class AppSidebar extends StatelessWidget {
                           AppRoutes.documents,
                       onTap: () => context
                           .go(AppRoutes.documents),
+                    ),
+                  if (role == UserRole.admin ||
+                      role == UserRole.officer)
+                    _NavItem(
+                      icon:     Icons.map_outlined,
+                      label:    'Location Mapping',
+                      selected: currentPath ==
+                          AppRoutes.location,
+                      onTap: () => context
+                          .go(AppRoutes.location),
                     ),
                   _NavItem(
                     icon:     Icons.campaign_outlined,

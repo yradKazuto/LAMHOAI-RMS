@@ -23,6 +23,7 @@ class _MemberPreviewScreenState
   final _fs = FirestoreService();
 
   MemberModel?   _selectedMember;
+  String?        _selectedUid;
   late TabController _tabs;
 
   static const Color _navy   = Color(0xFF0D2A5C);
@@ -97,8 +98,8 @@ class _MemberPreviewScreenState
                           );
                         }
                         return DropdownButtonHideUnderline(
-                          child: DropdownButton<MemberModel>(
-                            value: _selectedMember,
+                          child: DropdownButton<String>(
+                            value: _selectedUid,
                             hint: Text(
                               'Choose a member to preview',
                               style: TextStyle(
@@ -111,14 +112,21 @@ class _MemberPreviewScreenState
                                 color: Color(0xFF1A2B4A)),
                             items: members
                                 .map((m) =>
-                                    DropdownMenuItem(
-                                      value: m,
+                                    DropdownMenuItem<String>(
+                                      value: m.uid,
                                       child: Text(
                                           '${m.name} — Lot ${m.lotNumber}'),
                                     ))
                                 .toList(),
-                            onChanged: (m) => setState(
-                                () => _selectedMember = m),
+                            onChanged: (uid) {
+                              if (uid == null) return;
+                              final m = members.firstWhere(
+                                  (m) => m.uid == uid);
+                              setState(() {
+                                _selectedUid    = uid;
+                                _selectedMember = m;
+                              });
+                            },
                           ),
                         );
                       },
