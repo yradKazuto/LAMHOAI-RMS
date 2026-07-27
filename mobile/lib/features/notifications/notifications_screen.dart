@@ -18,8 +18,8 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String _filter = 'All';
 
-  // Track locally which IDs have been read this session
-  // so the UI doesn't flicker back to unread while Firestore syncs
+  // Tracks IDs marked read this session — prevents flicker when
+  // stream rebuilds before Firestore confirms the write
   final Set<String> _locallyRead = {};
 
   static const _blue700   = Color(0xFF1A3D6B);
@@ -63,16 +63,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
                   final docs = snap.data?.docs ?? [];
                   final all = docs.map((d) {
-                    final data = d.data() as Map<String, dynamic>;
-                    // Use locallyRead to prevent flicker —
-                    // once marked read in this session, keep it read
-                    final firestoreRead = data['isRead'] as bool? ?? false;
-                    final isRead = firestoreRead || _locallyRead.contains(d.id);
+                    final data    = d.data() as Map<String, dynamic>;
+                    final fsRead  = data['isRead'] as bool? ?? false;
+                    // Use local set to prevent flicker
+                    final isRead  = fsRead || _locallyRead.contains(d.id);
                     return _NotifItem(
                       id:        d.id,
-                      title:     data['title']   as String? ?? '',
-                      body:      data['body']    as String? ?? '',
-                      type:      data['type']    as String? ?? 'general',
+                      title:     data['title']     as String? ?? '',
+                      body:      data['body']      as String? ?? '',
+                      type:      data['type']      as String? ?? 'general',
                       isRead:    isRead,
                       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
                     );
@@ -158,8 +157,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onTap: () => setState(() => _filter = f),
             child: Container(
               margin: const EdgeInsets.only(right: 6),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
                 color: active ? _blue600 : Colors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -217,7 +215,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildNotifCard(_NotifItem item, String uid) {
-    final dateFmt = DateFormat('MMM d, yyyy · h:mm a');
+    final dateFmt  = DateFormat('MMM d, yyyy · h:mm a');
     final dotColor = _dotColor(item.type);
 
     return GestureDetector(
@@ -236,7 +234,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Dot
+            // Unread dot
             Padding(
               padding: const EdgeInsets.only(top: 5),
               child: Container(
@@ -249,7 +247,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,7 +285,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // Show preview of body — 2 lines max
                   Text(
                     item.body,
                     maxLines: 2,
@@ -305,8 +301,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         item.createdAt != null
                             ? dateFmt.format(item.createdAt!)
                             : '—',
-                        style: const TextStyle(
-                            fontSize: 10, color: _gray400),
+                        style: const TextStyle(fontSize: 10, color: _gray400),
                       ),
                       const Spacer(),
                       const Text(
@@ -327,7 +322,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // ── Open notification bottom sheet ────────────────────────────────────────
 
   void _openNotification(_NotifItem item) {
-    // Mark as read locally immediately — prevents flicker
+    // Mark locally first — no flicker
     if (!item.isRead) {
       setState(() => _locallyRead.add(item.id));
       // Write to Firestore in background
@@ -414,8 +409,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     item.createdAt != null
                         ? dateFmt.format(item.createdAt!)
                         : '—',
-                    style:
-                        const TextStyle(fontSize: 10, color: _gray400),
+                    style: const TextStyle(fontSize: 10, color: _gray400),
                   ),
                   const SizedBox(height: 16),
                   const Divider(color: _gray100),
@@ -445,8 +439,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                       child: const Text(
                         'Close',
-                        style:
-                            TextStyle(fontSize: 13, color: _gray600),
+                        style: TextStyle(fontSize: 13, color: _gray600),
                       ),
                     ),
                   ),

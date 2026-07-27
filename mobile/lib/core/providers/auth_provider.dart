@@ -6,28 +6,29 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/user_model.dart';
+import '../services/fcm_service.dart';
 
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
 class AuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth;
+  final FirebaseAuth      _auth;
   final FirebaseFirestore _firestore;
   final FirebaseMessaging _messaging;
 
   AuthStatus _status = AuthStatus.initial;
   UserModel? _user;
-  String? _errorMessage;
+  String?    _errorMessage;
 
-  AuthStatus get status => _status;
-  UserModel? get user => _user;
-  String? get errorMessage => _errorMessage;
-  bool get isAuthenticated => _status == AuthStatus.authenticated;
+  AuthStatus get status       => _status;
+  UserModel? get user         => _user;
+  String?    get errorMessage => _errorMessage;
+  bool get isAuthenticated    => _status == AuthStatus.authenticated;
 
   AuthProvider({
-    FirebaseAuth? auth,
+    FirebaseAuth?      auth,
     FirebaseFirestore? firestore,
     FirebaseMessaging? messaging,
-  })  : _auth = auth ?? FirebaseAuth.instance,
+  })  : _auth      = auth      ?? FirebaseAuth.instance,
         _firestore = firestore ?? FirebaseFirestore.instance,
         _messaging = messaging ?? FirebaseMessaging.instance {
     _init();
@@ -36,6 +37,16 @@ class AuthProvider extends ChangeNotifier {
   // ── Bootstrap ─────────────────────────────────────────────────────────────
 
   void _init() {
+    // Set a fallback timer — if auth state doesn't resolve in 15 seconds
+    // on slow internet, force unauthenticated so the app never stays on splash
+    Future.delayed(const Duration(seconds: 15), () {
+      if (_status == AuthStatus.initial || _status == AuthStatus.loading) {
+        debugPrint('Auth state timeout — forcing unauthenticated');
+        _user = null;
+        _setStatus(AuthStatus.unauthenticated);
+      }
+    });
+
     _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
@@ -48,12 +59,33 @@ class AuthProvider extends ChangeNotifier {
 
     _setStatus(AuthStatus.loading);
     try {
-      final userModel = await _fetchUserModel(firebaseUser.uid);
+      // Timeout Firestore fetch — slow internet should not block forever
+      final userModel = await _fetchUserModel(firebaseUser.uid)
+          .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timed out. Please check your internet.');
+        },
+      );
       _user = userModel;
 
-      // FCM token refresh — skip on web (requires VAPID key, Phase 3)
-      if (!kIsWeb) {
-        await _refreshFcmToken(firebaseUser.uid);
+      // FCM — best effort, never block auth
+      try {
+        if (!kIsWeb) {
+          await FCMService.instance
+              .saveTokenToFirestore(firebaseUser.uid)
+              .timeout(const Duration(seconds: 5));
+          FCMService.instance.listenToTokenRefresh(firebaseUser.uid);
+        } else {
+          const vapidKey = 'BCZQo4FNWMRofNJqJJ_Z8NrHyq7IVigdQ8WJd6ua_hR9LM73-2ysxdp_5oStC0swAAs6YmCszWMxYFOZT96lEPg';
+          if (vapidKey != 'YOUR_VAPID_KEY_HERE') {
+            await FCMService.instance
+                .saveTokenToFirestore(firebaseUser.uid, vapidKey: vapidKey)
+                .timeout(const Duration(seconds: 5));
+          }
+        }
+      } catch (e) {
+        debugPrint('FCM token save skipped: $e');
       }
 
       _setStatus(AuthStatus.authenticated);
@@ -69,10 +101,9 @@ class AuthProvider extends ChangeNotifier {
     _setStatus(AuthStatus.loading);
     try {
       await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
+        email:    email.trim(),
         password: password,
       );
-      // _onAuthStateChanged handles the rest
     } on FirebaseAuthException catch (e) {
       _errorMessage = _mapAuthError(e.code);
       _setStatus(AuthStatus.error);
@@ -81,7 +112,6 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     await _auth.signOut();
-    // _onAuthStateChanged sets unauthenticated
   }
 
   Future<void> resetPassword(String email) async {
@@ -97,25 +127,14 @@ class AuthProvider extends ChangeNotifier {
   // ── Firestore helpers ─────────────────────────────────────────────────────
 
   Future<UserModel> _fetchUserModel(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
+    final doc = await _firestore
+        .collection('users')
+        .doc(uid)
+        .get();
     if (!doc.exists || doc.data() == null) {
       throw Exception('User profile not found. Contact your HOA admin.');
     }
     return UserModel.fromFirestore(doc.data()!, uid);
-  }
-
-  Future<void> _refreshFcmToken(String uid) async {
-    try {
-      final token = await _messaging.getToken();
-      if (token != null && token != _user?.fcmToken) {
-        await _firestore.collection('users').doc(uid).update({
-          'fcmToken': token,
-        });
-        _user = _user?.copyWith(fcmToken: token);
-      }
-    } catch (_) {
-      // Best-effort — never block auth flow
-    }
   }
 
   // ── Utilities ─────────────────────────────────────────────────────────────
