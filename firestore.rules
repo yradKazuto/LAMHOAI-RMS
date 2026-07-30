@@ -1,5 +1,4 @@
 // firestore.rules
-// UPDATED Phase 4 — Officer can read users collection for dashboard stats
 
 rules_version = '2';
 service cloud.firestore {
@@ -33,11 +32,11 @@ service cloud.firestore {
 
     // ── users ─────────────────────────────────────────────────────────────────
     match /users/{uid} {
-  allow read: if isAuthenticated() &&
-                (request.auth.uid == uid ||
-                 isAdmin() ||
-                 isOfficer() ||
-                 isAccountant());
+      allow read: if isAuthenticated() &&
+                    (request.auth.uid == uid ||
+                     isAdmin() ||
+                     isOfficer() ||
+                     isAccountant());
       allow create, update: if isAdmin();
       allow delete: if false;
     }
@@ -51,15 +50,18 @@ service cloud.firestore {
 
     // ── payments ──────────────────────────────────────────────────────────────
     match /payments/{docId} {
-  allow read: if (isMember() && resource.data.uid == request.auth.uid)
-              || isAdmin() || isAccountant();
-  allow create, update: if isAdmin() || isAccountant();
-  allow delete: if isAdmin();
-}
+      allow read: if isAuthenticated() && (
+                    resource.data.uid == request.auth.uid
+                    || isAdmin()
+                    || isAccountant()
+                  );
+      allow create, update: if isAdmin() || isAccountant();
+      allow delete: if isAdmin();
+    }
+
     // ── documents ─────────────────────────────────────────────────────────────
     match /documents/{docId} {
       allow read: if isStaff();
-      // Fix 3+4: Officer can upload but only Admin can delete
       allow create, update: if isAdmin() || isOfficer();
       allow delete: if isAdmin();
     }
@@ -73,16 +75,37 @@ service cloud.firestore {
 
     // ── complaints ────────────────────────────────────────────────────────────
     match /complaints/{docId} {
-      allow read: if isStaff();
-      allow create: if isAnyUser();
+      allow read: if isAuthenticated() && (
+                    resource.data.uid == request.auth.uid
+                    || isStaff()
+                  );
+      allow create: if isAuthenticated() &&
+                       request.resource.data.uid == request.auth.uid;
       allow update: if isAdmin() || isOfficer();
       allow delete: if isAdmin();
     }
 
     // ── notifications ─────────────────────────────────────────────────────────
+    // Members can read their own and update isRead on their own only
+    // Staff can create, read all, and update all
     match /notifications/{docId} {
-      allow read: if isAnyUser();
-      allow create, update: if isStaff();
+      allow read: if isAuthenticated() && (
+                    resource.data.uid == request.auth.uid
+                    || isStaff()
+                  );
+      // Member can only update their own notification (for isRead)
+      // Staff can update any notification
+      allow update: if (isAuthenticated() &&
+                       resource.data.uid == request.auth.uid)
+                    || isStaff();
+      allow create: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ── lots (Location Mapping) ───────────────────────────────────────────────
+    match /lots/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isAdmin() || isOfficer();
       allow delete: if isAdmin();
     }
 
