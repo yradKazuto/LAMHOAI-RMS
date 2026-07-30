@@ -218,12 +218,10 @@ class _VacantLotDialogState extends State<VacantLotDialog> {
       );
 
   Future<void> _markForSale() async {
-    final price = double.tryParse(_priceCtrl.text.trim());
-    if (price == null || _contactCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Enter a valid price and contact number')));
-      return;
-    }
+    // Price is now optional — if left blank or not a valid number, we just
+    // default to 0 so this never blocks marking a lot as for sale. You can
+    // always edit the price again later once you have the real figure.
+    final price = double.tryParse(_priceCtrl.text.trim()) ?? 0;
     setState(() => _saving = true);
     await _service.markForSale(
       lotId: widget.lot.id,

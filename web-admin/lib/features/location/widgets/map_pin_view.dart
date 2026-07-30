@@ -9,17 +9,13 @@ const _navy = Color(0xFF0D2A52);
 const _blue = Color(0xFF1565C0);
 const _green = Color(0xFF2E7D32);
 const _orange = Color(0xFFEF6C00);
-const _grey = Color(0xFFBDBDBD);
+const _grey = Color(0xFF757575);
 
 const String kSubdivisionMapAsset = 'assets/images/subdivision_map.png';
 
-/// Logical width the map content is drawn at, before any zoom transform.
-/// A larger number gives more room to zoom in with less blur.
-const double _kContentWidth = 2000;
-
 /// Displays the subdivision map image with pins overlaid at each lot's
-/// normalized (mapX, mapY) position. Fills all available space and
-/// supports pinch-zoom/pan in every direction.
+/// normalized (mapX, mapY) position. Fills all available space; supports
+/// pinch-zoom/pan in every direction plus on-screen zoom buttons.
 /// Admin/Officer can tap empty space to place a new lot pin there.
 class MapPinView extends StatefulWidget {
   final List<LotModel> lots;
@@ -42,11 +38,12 @@ class MapPinView extends StatefulWidget {
 class _MapPinViewState extends State<MapPinView> {
   final _service = LotService();
   final _transformController = TransformationController();
-  final _contentKey = GlobalKey();
 
   double? _aspectRatio; // width / height of the actual image
   String? _loadError;
-  bool _initialFitDone = false;
+
+  static const double _minScale = 0.3;
+  static const double _maxScale = 8;
 
   @override
   void initState() {
@@ -69,35 +66,6 @@ class _MapPinViewState extends State<MapPinView> {
     }
   }
 
-  void _applyInitialFit(BoxConstraints viewportConstraints) {
-    if (_initialFitDone || _aspectRatio == null) return;
-    final contentWidth = _kContentWidth;
-    final contentHeight = _kContentWidth / _aspectRatio!;
-    final viewportW = viewportConstraints.maxWidth;
-    final viewportH = viewportConstraints.maxHeight;
-    if (viewportW <= 0 || viewportH <= 0) return;
-
-    final fitScale =
-        (viewportW / contentWidth < viewportH / contentHeight)
-            ? viewportW / contentWidth
-            : viewportH / contentHeight;
-
-    final scaledW = contentWidth * fitScale;
-    final scaledH = contentHeight * fitScale;
-    final dx = (viewportW - scaledW) / 2;
-    final dy = (viewportH - scaledH) / 2;
-
-    final matrix = Matrix4.identity()
-      ..translate(dx, dy)
-      ..scale(fitScale);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _transformController.value = matrix;
-      setState(() => _initialFitDone = true);
-    });
-  }
-
   Color _colorFor(LotStatus s) {
     switch (s) {
       case LotStatus.occupied:
@@ -109,6 +77,22 @@ class _MapPinViewState extends State<MapPinView> {
       case LotStatus.vacant:
         return _grey;
     }
+  }
+
+  void _zoomBy(double factor) {
+    final current = _transformController.value.clone();
+    final currentScale = current.getMaxScaleOnAxis();
+    final targetScale =
+        (currentScale * factor).clamp(_minScale, _maxScale);
+    final adjust = targetScale / currentScale;
+    // Scale around the center of the current matrix rather than the origin,
+    // so zoom buttons feel like they zoom "into the middle" of the view.
+    final matrix = current.clone()..scale(adjust);
+    _transformController.value = matrix;
+  }
+
+  void _resetZoom() {
+    _transformController.value = Matrix4.identity();
   }
 
   void _openLotDialog(LotModel lot) {
@@ -205,26 +189,6 @@ class _MapPinViewState extends State<MapPinView> {
     );
   }
 
-  void _handleTap(TapUpDetails details) {
-    // Use the content Stack's own RenderBox (not the outer viewport's) so
-    // the tap position is correctly translated through InteractiveViewer's
-    // current zoom/pan transform, no matter how far zoomed or panned.
-    final box =
-        _contentKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final local = box.globalToLocal(details.globalPosition);
-    final size = box.size;
-    if (local.dx < 0 ||
-        local.dy < 0 ||
-        local.dx > size.width ||
-        local.dy > size.height) {
-      return; // tapped outside the actual image content
-    }
-    final normX = (local.dx / size.width).clamp(0.0, 1.0);
-    final normY = (local.dy / size.height).clamp(0.0, 1.0);
-    _openAddPinDialog(normX, normY);
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loadError != null) {
@@ -249,74 +213,195 @@ class _MapPinViewState extends State<MapPinView> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final contentWidth = _kContentWidth;
-    final contentHeight = _kContentWidth / _aspectRatio!;
     final pinnedLots = widget.lots.where((l) => l.isPlottedOnMap).toList();
 
-    // SizedBox.expand forces this to fill all space the parent gives it
-    // (e.g. the Expanded in the screen above), so InteractiveViewer gets
-    // a real, non-zero viewport instead of collapsing to its content size.
     return SizedBox.expand(
-      child: LayoutBuilder(
-        builder: (context, viewportConstraints) {
-          _applyInitialFit(viewportConstraints);
-          return ClipRRect(
+      child: Stack(
+        children: [
+          ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Container(
               color: Colors.grey[100],
               child: InteractiveViewer(
                 transformationController: _transformController,
-                minScale: 0.2,
-                maxScale: 8,
-                boundaryMargin: const EdgeInsets.all(400),
-                constrained: false,
-                child: GestureDetector(
-                  onTapUp: widget.canEdit ? _handleTap : null,
-                  child: SizedBox(
-                    key: _contentKey,
-                    width: contentWidth,
-                    height: contentHeight,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Image.asset(
-                          kSubdivisionMapAsset,
-                          width: contentWidth,
-                          height: contentHeight,
-                          fit: BoxFit.fill,
-                        ),
-                        ...pinnedLots.map((lot) {
-                          return Positioned(
-                            left: (lot.mapX! * contentWidth) - 14,
-                            top: (lot.mapY! * contentHeight) - 28,
-                            child: GestureDetector(
-                              onTap: () => _openLotDialog(lot),
-                              child: Tooltip(
-                                message: lot.displayLabel,
-                                child: Icon(
-                                  Icons.location_on,
-                                  color: _colorFor(lot.status),
-                                  size: 32,
-                                  shadows: const [
-                                    Shadow(
-                                        color: Colors.black45,
-                                        blurRadius: 4,
-                                        offset: Offset(0, 1)),
-                                  ],
-                                ),
+                minScale: _minScale,
+                maxScale: _maxScale,
+                boundaryMargin: const EdgeInsets.all(120),
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: _aspectRatio!,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final w = constraints.maxWidth;
+                        final h = constraints.maxHeight;
+                        return GestureDetector(
+                          onTapUp: widget.canEdit
+                              ? (details) {
+                                  final box = context.findRenderObject()
+                                      as RenderBox?;
+                                  if (box == null) return;
+                                  final local = box
+                                      .globalToLocal(details.globalPosition);
+                                  final normX =
+                                      (local.dx / w).clamp(0.0, 1.0);
+                                  final normY =
+                                      (local.dy / h).clamp(0.0, 1.0);
+                                  _openAddPinDialog(normX, normY);
+                                }
+                              : null,
+                          child: Stack(
+                            children: [
+                              Image.asset(
+                                kSubdivisionMapAsset,
+                                width: w,
+                                height: h,
+                                fit: BoxFit.fill,
                               ),
-                            ),
-                          );
-                        }),
-                      ],
+                              ...pinnedLots.map((lot) {
+                                final color = _colorFor(lot.status);
+                                return Positioned(
+                                  left: (lot.mapX! * w) - 16,
+                                  top: (lot.mapY! * h) - 36,
+                                  child: GestureDetector(
+                                    onTap: () => _openLotDialog(lot),
+                                    child: Tooltip(
+                                      message: lot.displayLabel,
+                                      child: _MapPin(color: color),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
               ),
             ),
-          );
-        },
+          ),
+
+          // ── On-screen zoom controls ──────────────────────────────────
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: Column(
+              children: [
+                _ZoomButton(
+                  icon: Icons.add,
+                  tooltip: 'Zoom in',
+                  onPressed: () => _zoomBy(1.4),
+                ),
+                const SizedBox(height: 8),
+                _ZoomButton(
+                  icon: Icons.remove,
+                  tooltip: 'Zoom out',
+                  onPressed: () => _zoomBy(1 / 1.4),
+                ),
+                const SizedBox(height: 8),
+                _ZoomButton(
+                  icon: Icons.center_focus_strong,
+                  tooltip: 'Reset view',
+                  onPressed: _resetZoom,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+/// Small floating circular button used for the zoom controls.
+class _ZoomButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _ZoomButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white,
+        shape: const CircleBorder(),
+        elevation: 3,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(icon, size: 20, color: _navy),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Clearer pin marker: solid color circle with a white house icon and a
+/// pointed tip, plus a subtle white outline so it stands out against any
+/// background (roofs, roads, trees, etc.) on the satellite image.
+class _MapPin extends StatelessWidget {
+  final Color color;
+  const _MapPin({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 32,
+      height: 40,
+      child: CustomPaint(
+        painter: _PinPainter(color: color),
+        child: const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Icon(Icons.home, color: Colors.white, size: 16),
+        ),
+      ),
+    );
+  }
+}
+
+class _PinPainter extends CustomPainter {
+  final Color color;
+  _PinPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.width / 2);
+    final radius = size.width / 2 - 2;
+
+    final path = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius))
+      ..moveTo(center.dx - radius * 0.55, center.dy + radius * 0.6)
+      ..lineTo(center.dx, size.height)
+      ..lineTo(center.dx + radius * 0.55, center.dy + radius * 0.6)
+      ..close();
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    canvas.drawPath(path.shift(const Offset(0, 1.5)), shadowPaint);
+
+    final fillPaint = Paint()..color = color;
+    canvas.drawPath(path, fillPaint);
+
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawPath(path, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PinPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

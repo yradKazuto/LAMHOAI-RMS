@@ -1,8 +1,9 @@
 // features/members/screens/members_screen.dart
-// UPDATED Phase 4 — fixed status filter dropdown
+// UPDATED — Add Member dialog now creates Firebase Auth account + Firestore doc
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../../../core/models/member_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/auth_provider.dart';
@@ -19,9 +20,9 @@ class _MembersScreenState extends State<MembersScreen> {
   final _search = TextEditingController();
   final _fs     = FirestoreService();
 
-  String       _searchQuery  = '';
-  String?      _statusFilter; // stored as string to avoid null dropdown issues
-  String?      _phaseFilter;
+  String  _searchQuery  = '';
+  String? _statusFilter;
+  String? _phaseFilter;
 
   static const Color _navy   = Color(0xFF0D2A5C);
   static const Color _accent = Color(0xFF2E6BE6);
@@ -73,8 +74,9 @@ class _MembersScreenState extends State<MembersScreen> {
                             color: _navy)),
                     const SizedBox(height: 2),
                     Text('Manage and view all registered homeowners',
-                        style:
-                            TextStyle(fontSize: 13, color: Colors.grey[600])),
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600])),
                   ],
                 ),
                 const Spacer(),
@@ -90,7 +92,8 @@ class _MembersScreenState extends State<MembersScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 20, vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                          borderRadius:
+                              BorderRadius.circular(8)),
                     ),
                   ),
               ],
@@ -109,59 +112,75 @@ class _MembersScreenState extends State<MembersScreen> {
                     decoration: InputDecoration(
                       hintText: 'Search name, email, lot...',
                       hintStyle: TextStyle(
-                          fontSize: 13, color: Colors.grey[400]),
+                          fontSize: 13,
+                          color: Colors.grey[400]),
                       prefixIcon:
                           const Icon(Icons.search, size: 18),
                       filled: true,
                       fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
+                      contentPadding:
+                          const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius:
+                              BorderRadius.circular(8),
                           borderSide: const BorderSide(
                               color: Color(0xFFD0DBEE))),
                       enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius:
+                              BorderRadius.circular(8),
                           borderSide: const BorderSide(
                               color: Color(0xFFD0DBEE))),
                       focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius:
+                              BorderRadius.circular(8),
                           borderSide: const BorderSide(
                               color: _accent, width: 1.5)),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // ── Status filter ─────────────────────────────────────────
                 _DropdownFilter(
                   value: _statusFilter,
-                  hint: 'All Statuses',
+                  hint:  'All Statuses',
                   items: const [
-                    DropdownMenuItem(value: null,        child: Text('All Statuses')),
-                    DropdownMenuItem(value: 'active',     child: Text('Active')),
-                    DropdownMenuItem(value: 'inactive',   child: Text('Inactive')),
-                    DropdownMenuItem(value: 'delinquent', child: Text('Delinquent')),
+                    DropdownMenuItem(
+                        value: null,
+                        child: Text('All Statuses')),
+                    DropdownMenuItem(
+                        value: 'active',
+                        child: Text('Active')),
+                    DropdownMenuItem(
+                        value: 'inactive',
+                        child: Text('Inactive')),
+                    DropdownMenuItem(
+                        value: 'delinquent',
+                        child: Text('Delinquent')),
                   ],
                   onChanged: (v) =>
                       setState(() => _statusFilter = v),
                 ),
                 const SizedBox(width: 12),
-
-                // ── Phase filter ──────────────────────────────────────────
                 _DropdownFilter(
                   value: _phaseFilter,
-                  hint: 'All Phases',
+                  hint:  'All Phases',
                   items: const [
-                    DropdownMenuItem(value: null,      child: Text('All Phases')),
-                    DropdownMenuItem(value: 'Phase 1', child: Text('Phase 1')),
-                    DropdownMenuItem(value: 'Phase 2', child: Text('Phase 2')),
-                    DropdownMenuItem(value: 'Phase 3', child: Text('Phase 3')),
+                    DropdownMenuItem(
+                        value: null,
+                        child: Text('All Phases')),
+                    DropdownMenuItem(
+                        value: 'Phase 1',
+                        child: Text('Phase 1')),
+                    DropdownMenuItem(
+                        value: 'Phase 2',
+                        child: Text('Phase 2')),
+                    DropdownMenuItem(
+                        value: 'Phase 3',
+                        child: Text('Phase 3')),
                   ],
                   onChanged: (v) =>
                       setState(() => _phaseFilter = v),
                 ),
-
                 if (_searchQuery.isNotEmpty ||
                     _statusFilter != null ||
                     _phaseFilter != null) ...[
@@ -173,10 +192,12 @@ class _MembersScreenState extends State<MembersScreen> {
                       _statusFilter = null;
                       _phaseFilter  = null;
                     }),
-                    icon: const Icon(Icons.clear, size: 15),
+                    icon: const Icon(Icons.clear,
+                        size: 15),
                     label: const Text('Clear'),
                     style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[600]),
+                        foregroundColor:
+                            Colors.grey[600]),
                   ),
                 ],
               ],
@@ -191,23 +212,28 @@ class _MembersScreenState extends State<MembersScreen> {
                   if (snap.connectionState ==
                       ConnectionState.waiting) {
                     return const Center(
-                        child: CircularProgressIndicator());
+                        child:
+                            CircularProgressIndicator());
                   }
                   if (snap.hasError) {
                     return Center(
-                        child: Text('Error: ${snap.error}',
+                        child: Text(
+                            'Error: ${snap.error}',
                             style: const TextStyle(
                                 color: Colors.red)));
                   }
 
-                  final members = _filtered(snap.data ?? []);
+                  final members =
+                      _filtered(snap.data ?? []);
 
                   return Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius:
+                          BorderRadius.circular(12),
                       border: Border.all(
-                          color: const Color(0xFFE0E8F4)),
+                          color:
+                              const Color(0xFFE0E8F4)),
                     ),
                     child: Column(
                       children: [
@@ -218,29 +244,37 @@ class _MembersScreenState extends State<MembersScreen> {
                         if (members.isEmpty)
                           const Expanded(
                             child: Center(
-                              child: Text('No members found.',
+                              child: Text(
+                                  'No members found.',
                                   style: TextStyle(
-                                      color: Colors.grey)),
+                                      color:
+                                          Colors.grey)),
                             ),
                           )
                         else
                           Expanded(
                             child: ListView.separated(
                               itemCount: members.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(
-                                      height: 1,
-                                      color: Color(0xFFEEF2F9)),
-                              itemBuilder: (context, i) =>
-                                  _MemberRow(
-                                member: members[i],
-                                canEdit: canEdit,
-                                onTap: () => Navigator.push(
+                              separatorBuilder:
+                                  (_, __) =>
+                                      const Divider(
+                                          height: 1,
+                                          color: Color(
+                                              0xFFEEF2F9)),
+                              itemBuilder:
+                                  (context, i) =>
+                                      _MemberRow(
+                                member:   members[i],
+                                canEdit:  canEdit,
+                                onTap: () =>
+                                    Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) =>
                                         MemberDetailScreen(
-                                            member: members[i]),
+                                            member:
+                                                members[
+                                                    i]),
                                   ),
                                 ),
                               ),
@@ -261,17 +295,18 @@ class _MembersScreenState extends State<MembersScreen> {
   void _showAddMemberDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => _AddMemberDialog(fsService: _fs),
+      builder: (_) =>
+          _AddMemberDialog(fsService: _fs),
     );
   }
 }
 
-// ── Reusable dropdown filter ──────────────────────────────────────────────────
+// ── Dropdown filter ───────────────────────────────────────────────────────────
 class _DropdownFilter extends StatelessWidget {
-  final String? value;
-  final String hint;
-  final List<DropdownMenuItem<String?>> items;
-  final void Function(String?) onChanged;
+  final String?                            value;
+  final String                             hint;
+  final List<DropdownMenuItem<String?>>    items;
+  final void Function(String?)             onChanged;
 
   const _DropdownFilter({
     required this.value,
@@ -283,21 +318,26 @@ class _DropdownFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     height: 42,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
+    padding:
+        const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0xFFD0DBEE)),
+      border: Border.all(
+          color: const Color(0xFFD0DBEE)),
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String?>(
         value: value,
         hint: Text(hint,
             style: TextStyle(
-                fontSize: 13, color: Colors.grey[500])),
+                fontSize: 13,
+                color: Colors.grey[500])),
         style: const TextStyle(
-            fontSize: 13, color: Color(0xFF1A2B4A)),
-        icon: const Icon(Icons.expand_more, size: 18),
+            fontSize: 13,
+            color: Color(0xFF1A2B4A)),
+        icon: const Icon(Icons.expand_more,
+            size: 18),
         items: items,
         onChanged: onChanged,
       ),
@@ -313,8 +353,8 @@ class _TableHeader extends StatelessWidget {
         horizontal: 20, vertical: 14),
     decoration: const BoxDecoration(
       color: Color(0xFFF7F9FC),
-      borderRadius:
-          BorderRadius.vertical(top: Radius.circular(12)),
+      borderRadius: BorderRadius.vertical(
+          top: Radius.circular(12)),
     ),
     child: const Row(
       children: [
@@ -343,8 +383,8 @@ class _TH extends StatelessWidget {
 
 // ── Member row ────────────────────────────────────────────────────────────────
 class _MemberRow extends StatelessWidget {
-  final MemberModel member;
-  final bool canEdit;
+  final MemberModel  member;
+  final bool         canEdit;
   final VoidCallback onTap;
 
   const _MemberRow({
@@ -355,17 +395,23 @@ class _MemberRow extends StatelessWidget {
 
   Color _fg(MemberStatus s) {
     switch (s) {
-      case MemberStatus.active:     return const Color(0xFF1A7A4A);
-      case MemberStatus.inactive:   return const Color(0xFF7A6A1A);
-      case MemberStatus.delinquent: return const Color(0xFFCC2200);
+      case MemberStatus.active:
+        return const Color(0xFF1A7A4A);
+      case MemberStatus.inactive:
+        return const Color(0xFF7A6A1A);
+      case MemberStatus.delinquent:
+        return const Color(0xFFCC2200);
     }
   }
 
   Color _bg(MemberStatus s) {
     switch (s) {
-      case MemberStatus.active:     return const Color(0xFFEAF7F0);
-      case MemberStatus.inactive:   return const Color(0xFFFFF8E0);
-      case MemberStatus.delinquent: return const Color(0xFFFFF0EE);
+      case MemberStatus.active:
+        return const Color(0xFFEAF7F0);
+      case MemberStatus.inactive:
+        return const Color(0xFFFFF8E0);
+      case MemberStatus.delinquent:
+        return const Color(0xFFFFF0EE);
     }
   }
 
@@ -384,11 +430,13 @@ class _MemberRow extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 16,
-                  backgroundColor: const Color(0xFF2E6BE6)
-                      .withOpacity(0.12),
+                  backgroundColor:
+                      const Color(0xFF2E6BE6)
+                          .withOpacity(0.12),
                   child: Text(
                     member.name.isNotEmpty
-                        ? member.name[0].toUpperCase()
+                        ? member.name[0]
+                            .toUpperCase()
                         : '?',
                     style: const TextStyle(
                         fontSize: 13,
@@ -402,8 +450,10 @@ class _MemberRow extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF0D2A5C)),
-                      overflow: TextOverflow.ellipsis),
+                          color:
+                              Color(0xFF0D2A5C)),
+                      overflow:
+                          TextOverflow.ellipsis),
                 ),
               ],
             ),
@@ -412,7 +462,8 @@ class _MemberRow extends StatelessWidget {
             flex: 3,
             child: Text(member.email,
                 style: TextStyle(
-                    fontSize: 13, color: Colors.grey[600]),
+                    fontSize: 13,
+                    color: Colors.grey[600]),
                 overflow: TextOverflow.ellipsis),
           ),
           Expanded(
@@ -436,7 +487,8 @@ class _MemberRow extends StatelessWidget {
                   horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: _bg(member.status),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius:
+                    BorderRadius.circular(20),
               ),
               child: Text(
                 member.status.label,
@@ -451,7 +503,8 @@ class _MemberRow extends StatelessWidget {
           SizedBox(
             width: 48,
             child: Icon(Icons.chevron_right,
-                size: 18, color: Colors.grey[400]),
+                size: 18,
+                color: Colors.grey[400]),
           ),
         ],
       ),
@@ -459,43 +512,71 @@ class _MemberRow extends StatelessWidget {
   );
 }
 
-// ── Add Member dialog ─────────────────────────────────────────────────────────
+// ── Add Member dialog — creates Auth + Firestore ───────────────────────────────
 class _AddMemberDialog extends StatefulWidget {
   final FirestoreService fsService;
   const _AddMemberDialog({required this.fsService});
+
   @override
-  State<_AddMemberDialog> createState() => _AddMemberDialogState();
+  State<_AddMemberDialog> createState() =>
+      _AddMemberDialogState();
 }
 
-class _AddMemberDialogState extends State<_AddMemberDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _name    = TextEditingController();
-  final _email   = TextEditingController();
-  final _lot     = TextEditingController();
-  final _contact = TextEditingController();
-  final _address = TextEditingController();
-  String _phase  = 'Phase 1';
-  bool   _loading = false;
+class _AddMemberDialogState
+    extends State<_AddMemberDialog> {
+  final _formKey  = GlobalKey<FormState>();
+  final _name     = TextEditingController();
+  final _email    = TextEditingController();
+  final _password = TextEditingController();
+  final _lot      = TextEditingController();
+  final _contact  = TextEditingController();
+  final _address  = TextEditingController();
+  String  _phase   = 'Phase 1';
+  bool    _loading = false;
+  bool    _obscure = true;
+  String? _error;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy   = Color(0xFF0D2A5C);
+  static const Color _accent = Color(0xFF2E6BE6);
 
   @override
   void dispose() {
     _name.dispose();
     _email.dispose();
+    _password.dispose();
     _lot.dispose();
     _contact.dispose();
     _address.dispose();
     super.dispose();
   }
 
+  String _mapAuthError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'This email is already registered.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'invalid-email':
+        return 'Enter a valid email address.';
+      default:
+        return 'Error: $code';
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
-      final ref = FirestoreService().db.collection('users').doc();
+      // 1. Create Firebase Auth account
+      final cred = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+        email:    _email.text.trim(),
+        password: _password.text,
+      );
+
+      // 2. Save Firestore member document
       await widget.fsService.addMember(MemberModel(
-        uid:           ref.id,
+        uid:           cred.user!.uid,
         name:          _name.text.trim(),
         email:         _email.text.trim(),
         role:          'member',
@@ -506,35 +587,57 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
         address:       _address.text.trim(),
         createdAt:     DateTime.now(),
       ));
-      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Member account created successfully.'),
+            backgroundColor: Color(0xFF1A7A4A),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _loading = false;
+        _error   = _mapAuthError(e.code);
+      });
     } catch (e) {
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')));
+      setState(() {
+        _loading = false;
+        _error   = 'An unexpected error occurred.';
+      });
     }
   }
 
-  InputDecoration _dec(String hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-    filled: true,
-    fillColor: const Color(0xFFF7F9FC),
-    contentPadding: const EdgeInsets.symmetric(
-        horizontal: 12, vertical: 12),
-    border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
-    enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
-    focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(
-            color: Color(0xFF2E6BE6), width: 1.5)),
-    errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFCC2200))),
-  );
+  InputDecoration _dec(String hint,
+          {bool hasError = false}) =>
+      InputDecoration(
+        hintText:  hint,
+        hintStyle: TextStyle(
+            fontSize: 13, color: Colors.grey[400]),
+        filled:    true,
+        fillColor: const Color(0xFFF7F9FC),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(
+                color: Color(0xFFD0DBEE))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(
+                color: Color(0xFFD0DBEE))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(
+                color: _accent, width: 1.5)),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(
+                color: Color(0xFFCC2200))),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -542,120 +645,288 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14)),
       child: SizedBox(
-        width: 520,
+        width: 540,
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Form(
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
+                // ── Title ─────────────────────────────
                 const Text('Add New Member',
                     style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: _navy)),
+                const SizedBox(height: 4),
+                Text(
+                  'Creates a login account for the mobile app.',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      color: Colors.grey[500]),
+                ),
                 const SizedBox(height: 20),
+
+                // ── Error banner ──────────────────────
+                if (_error != null) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10),
+                    decoration: BoxDecoration(
+                      color:
+                          const Color(0xFFFFF0EE),
+                      borderRadius:
+                          BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(
+                                  0xFFCC2200)
+                              .withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                            Icons.error_outline,
+                            size: 15,
+                            color:
+                                Color(0xFFCC2200)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(_error!,
+                              style:
+                                  const TextStyle(
+                                fontSize: 12.5,
+                                color: Color(
+                                    0xFFCC2200),
+                              )),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // ── Name + Email ──────────────────────
                 Row(children: [
                   Expanded(
                     child: _Field(
-                        ctrl: _name,
-                        label: 'Full Name',
-                        hint: 'Juan dela Cruz',
-                        dec: _dec,
-                        validator: (v) =>
-                            v!.isEmpty ? 'Required' : null),
+                      ctrl:  _name,
+                      label: 'Full Name',
+                      hint:  'Juan dela Cruz',
+                      dec:   _dec,
+                      validator: (v) =>
+                          v!.isEmpty
+                              ? 'Required'
+                              : null,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: _Field(
-                        ctrl: _email,
-                        label: 'Email',
-                        hint: 'juan@email.com',
-                        dec: _dec,
-                        validator: (v) =>
-                            v!.isEmpty ? 'Required' : null),
+                      ctrl:  _email,
+                      label: 'Email Address',
+                      hint:  'juan@email.com',
+                      dec:   _dec,
+                      keyboardType:
+                          TextInputType.emailAddress,
+                      validator: (v) {
+                        if (v!.isEmpty)
+                          return 'Required';
+                        if (!v.contains('@'))
+                          return 'Invalid email';
+                        return null;
+                      },
+                    ),
                   ),
                 ]),
                 const SizedBox(height: 14),
+
+                // ── Password ──────────────────────────
+                _FieldLabel('Temporary Password'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller:  _password,
+                  obscureText: _obscure,
+                  validator: (v) {
+                    if (v == null || v.isEmpty)
+                      return 'Required';
+                    if (v.length < 6)
+                      return 'Minimum 6 characters';
+                    return null;
+                  },
+                  style: const TextStyle(
+                      fontSize: 13),
+                  decoration: _dec(
+                          'Min. 6 characters')
+                      .copyWith(
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscure
+                            ? Icons
+                                .visibility_outlined
+                            : Icons
+                                .visibility_off_outlined,
+                        size: 18,
+                        color: Colors.grey[500],
+                      ),
+                      onPressed: () => setState(
+                          () =>
+                              _obscure =
+                                  !_obscure),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // ── Lot + Phase ───────────────────────
                 Row(children: [
                   Expanded(
                     child: _Field(
-                        ctrl: _lot,
-                        label: 'Lot Number',
-                        hint: 'Lot 12 Blk 3',
-                        dec: _dec,
-                        validator: (v) =>
-                            v!.isEmpty ? 'Required' : null),
+                      ctrl:  _lot,
+                      label: 'Lot Number',
+                      hint:  'Lot 12 Blk 3',
+                      dec:   _dec,
+                      validator: (v) =>
+                          v!.isEmpty
+                              ? 'Required'
+                              : null,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
-                        const Text('Phase',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: _navy)),
+                        const _FieldLabel('Phase'),
                         const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
+                        DropdownButtonFormField<
+                            String>(
                           value: _phase,
-                          items: ['Phase 1', 'Phase 2', 'Phase 3']
-                              .map((p) => DropdownMenuItem(
-                                  value: p, child: Text(p)))
+                          items: [
+                            'Phase 1',
+                            'Phase 2',
+                            'Phase 3'
+                          ]
+                              .map((p) =>
+                                  DropdownMenuItem(
+                                    value: p,
+                                    child: Text(p),
+                                  ))
                               .toList(),
                           onChanged: (v) =>
-                              setState(() => _phase = v!),
-                          decoration: _dec('Select phase'),
+                              setState(
+                                  () => _phase =
+                                      v!),
+                          decoration:
+                              _dec('Select phase'),
                         ),
                       ],
                     ),
                   ),
                 ]),
                 const SizedBox(height: 14),
+
+                // ── Contact ───────────────────────────
                 _Field(
-                    ctrl: _contact,
-                    label: 'Contact Number',
-                    hint: '09XX-XXX-XXXX',
-                    dec: _dec),
+                  ctrl:  _contact,
+                  label: 'Contact Number',
+                  hint:  '09XX-XXX-XXXX',
+                  dec:   _dec,
+                ),
                 const SizedBox(height: 14),
+
+                // ── Address ───────────────────────────
                 _Field(
-                    ctrl: _address,
-                    label: 'Address',
-                    hint: 'House number, street...',
-                    dec: _dec),
-                const SizedBox(height: 24),
+                  ctrl:  _address,
+                  label: 'Address',
+                  hint:  'House number, street...',
+                  dec:   _dec,
+                ),
+                const SizedBox(height: 20),
+
+                // ── Info notice ───────────────────────
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        const Color(0xFFE8F4FF),
+                    borderRadius:
+                        BorderRadius.circular(8),
+                    border: Border.all(
+                        color: const Color(
+                                0xFF2E6BE6)
+                            .withOpacity(0.2)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          size: 15,
+                          color:
+                              Color(0xFF2E6BE6)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'The member will use this email and password to log in on the mobile app.',
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(
+                                  0xFF1A4A9C)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Actions ───────────────────────────
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment:
+                      MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () =>
+                          Navigator.pop(context),
                       child: const Text('Cancel',
-                          style:
-                              TextStyle(color: Colors.grey)),
+                          style: TextStyle(
+                              color: Colors.grey)),
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
-                      onPressed: _loading ? null : _submit,
-                      style: ElevatedButton.styleFrom(
+                      onPressed:
+                          _loading ? null : _submit,
+                      style:
+                          ElevatedButton.styleFrom(
                         backgroundColor: _navy,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
+                        foregroundColor:
+                            Colors.white,
+                        shape:
+                            RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius
+                                        .circular(
+                                            8)),
+                        padding: const EdgeInsets
+                            .symmetric(
+                            horizontal: 24,
+                            vertical: 12),
                       ),
                       child: _loading
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white))
-                          : const Text('Save Member'),
+                              child:
+                                  CircularProgressIndicator(
+                                      strokeWidth:
+                                          2,
+                                      color: Colors
+                                          .white))
+                          : const Text(
+                              'Create Member'),
                     ),
                   ],
                 ),
@@ -668,12 +939,24 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
   }
 }
 
+// ── Small shared widgets ──────────────────────────────────────────────────────
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+  @override
+  Widget build(BuildContext context) => Text(text,
+      style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF0D2A5C)));
+}
+
 class _Field extends StatelessWidget {
-  final TextEditingController ctrl;
-  final String label;
-  final String hint;
+  final TextEditingController           ctrl;
+  final String                          label, hint;
   final InputDecoration Function(String) dec;
-  final String? Function(String?)? validator;
+  final String? Function(String?)?       validator;
+  final TextInputType                    keyboardType;
 
   const _Field({
     required this.ctrl,
@@ -681,23 +964,22 @@ class _Field extends StatelessWidget {
     required this.hint,
     required this.dec,
     this.validator,
+    this.keyboardType = TextInputType.text,
   });
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label,
-          style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0D2A5C))),
+      _FieldLabel(label),
       const SizedBox(height: 6),
       TextFormField(
-          controller: ctrl,
-          validator: validator,
-          style: const TextStyle(fontSize: 13),
-          decoration: dec(hint)),
+        controller:   ctrl,
+        validator:    validator,
+        keyboardType: keyboardType,
+        style: const TextStyle(fontSize: 13),
+        decoration:   dec(hint),
+      ),
     ],
   );
 }
