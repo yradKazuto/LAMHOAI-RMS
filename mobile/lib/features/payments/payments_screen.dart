@@ -17,9 +17,8 @@ class PaymentsScreen extends StatefulWidget {
 }
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
-  PaymentStatus? _filter; // null = All
+  String? _filter;
 
-  // ── Design tokens ─────────────────────────────────────────────────────────
   static const _blue700   = Color(0xFF1A3D6B);
   static const _blue600   = Color(0xFF1E52A0);
   static const _blue200   = Color(0xFFBAD9FD);
@@ -38,75 +37,79 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth    = context.watch<AuthProvider>();
-    final uid     = auth.user?.uid ?? '';
-    final lotInfo = '${auth.user?.displayName ?? ''}';
+    final uid  = context.watch<AuthProvider>().user?.uid ?? '';
+    final name = context.watch<AuthProvider>().user?.displayName ?? '';
 
     return Scaffold(
       backgroundColor: _gray50,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(context, auth),
-            Expanded(
-              child: StreamBuilder<List<PaymentModel>>(
-                stream: FirestoreService().paymentsStream(uid),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snap.hasError) {
-                    return _buildError(snap.error.toString());
-                  }
-                  final all = snap.data ?? [];
-                  return _buildBody(all);
-                },
-              ),
+      body: Column(
+        children: [
+          _buildHeader(context, name),
+          Expanded(
+            child: StreamBuilder<List<PaymentModel>>(
+              stream: FirestoreService().paymentsStream(uid),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snap.hasError) {
+                  return _buildError(snap.error.toString());
+                }
+                return _buildBody(snap.data ?? []);
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   // ── Header ────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(BuildContext context, AuthProvider auth) {
+  Widget _buildHeader(BuildContext context, String name) {
     return Container(
+      width: double.infinity,
       color: _blue700,
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Back button
-          GestureDetector(
-            onTap: () => context.canPop() ? context.pop() : context.go('/home'),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
-                SizedBox(width: 4),
-                Text('Back',
-                    style: TextStyle(fontSize: 10, color: _blue200)),
-              ],
-            ),
+      // Use SafeArea only on top so the color fills edge to edge
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Back button — left aligned
+              GestureDetector(
+                onTap: () => context.canPop() ? context.pop() : context.go('/home'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
+                    SizedBox(width: 4),
+                    Text('Back', style: TextStyle(fontSize: 10, color: _blue200)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Title — left aligned
+              const Text(
+                'Payment Records',
+                style: TextStyle(
+                  fontFamily: 'Georgia',
+                  fontSize: 20,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // Member name — left aligned
+              Text(
+                name,
+                style: const TextStyle(fontSize: 11, color: _blue200),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Payment Records',
-            style: TextStyle(
-              fontFamily: 'Georgia',
-              fontSize: 18,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            auth.user?.displayName ?? '',
-            style: const TextStyle(fontSize: 10, color: _blue200),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -114,37 +117,31 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   // ── Body ──────────────────────────────────────────────────────────────────
 
   Widget _buildBody(List<PaymentModel> all) {
-    // Summary totals
-    double totalPaid    = 0;
-    double totalPending = 0;
-    double totalOverdue = 0;
+    double paid = 0, pending = 0, overdue = 0;
     for (final p in all) {
-      if (p.status == PaymentStatus.paid)    totalPaid    += p.amount;
-      if (p.status == PaymentStatus.pending) totalPending += p.amount;
-      if (p.status == PaymentStatus.overdue) totalOverdue += p.amount;
+      if (p.status == PaymentStatus.paid)    paid    += p.amount;
+      if (p.status == PaymentStatus.pending ||
+          p.statusLabel.toLowerCase() == 'unpaid') pending += p.amount;
+      if (p.status == PaymentStatus.overdue) overdue += p.amount;
     }
 
-    // Filter
     final filtered = _filter == null
         ? all
-        : all.where((p) => p.status == _filter).toList();
+        : all.where((p) => p.statusLabel.toLowerCase() == _filter).toList();
 
     return SingleChildScrollView(
       child: Column(
         children: [
-          _buildSummary(totalPaid, totalPending, totalOverdue),
+          _buildSummary(paid, pending, overdue),
           _buildFilterRow(),
-          if (filtered.isEmpty)
-            _buildEmpty()
-          else
-            _buildList(filtered),
+          filtered.isEmpty ? _buildEmpty() : _buildList(filtered),
           const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  // ── Summary card ──────────────────────────────────────────────────────────
+  // ── Summary ───────────────────────────────────────────────────────────────
 
   Widget _buildSummary(double paid, double pending, double overdue) {
     final fmt = NumberFormat('#,##0.00', 'en_PH');
@@ -160,7 +157,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             color: const Color(0xFF1E2A3A).withOpacity(0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
-          ),
+          )
         ],
       ),
       child: Row(
@@ -179,38 +176,32 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(value,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
               style: TextStyle(
                 fontFamily: 'Georgia',
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: color,
-              )),
+              ),
+            ),
+          ),
           const SizedBox(height: 3),
           Text(label,
-              style: const TextStyle(
-                fontSize: 9,
-                color: _gray400,
-                letterSpacing: 0.5,
-              )),
+              style: const TextStyle(fontSize: 9, color: _gray400, letterSpacing: 0.5)),
         ],
       ),
     );
   }
 
-  Widget _divider() => Container(
-      width: 1, height: 32, color: _gray100);
+  Widget _divider() => Container(width: 1, height: 32, color: _gray100);
 
-  // ── Filter row ────────────────────────────────────────────────────────────
+  // ── Filters ───────────────────────────────────────────────────────────────
 
   Widget _buildFilterRow() {
-    final filters = <String, PaymentStatus?>{
-      'All': null,
-      'Paid': PaymentStatus.paid,
-      'Pending': PaymentStatus.pending,
-      'Overdue': PaymentStatus.overdue,
-    };
-
+    final filters = {'All': null, 'Paid': 'paid', 'Unpaid': 'unpaid', 'Overdue': 'overdue'};
     return SizedBox(
       height: 38,
       child: ListView(
@@ -226,10 +217,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               decoration: BoxDecoration(
                 color: active ? _blue600 : Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: active ? _blue600 : _gray200,
-                  width: 1.5,
-                ),
+                border: Border.all(color: active ? _blue600 : _gray200, width: 1.5),
               ),
               child: Text(
                 e.key,
@@ -246,7 +234,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
-  // ── Payment list ──────────────────────────────────────────────────────────
+  // ── List ──────────────────────────────────────────────────────────────────
 
   Widget _buildList(List<PaymentModel> payments) {
     return Container(
@@ -258,48 +246,29 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       ),
       child: Column(
         children: payments.asMap().entries.map((e) {
-          final isLast = e.key == payments.length - 1;
-          return _buildPaymentItem(e.value, isLast);
+          return _buildPaymentItem(e.value, e.key == payments.length - 1);
         }).toList(),
       ),
     );
   }
 
   Widget _buildPaymentItem(PaymentModel p, bool isLast) {
-    final fmt = NumberFormat('#,##0.00', 'en_PH');
-    final dateFmt = DateFormat('MMM d, yyyy');
+    final fmt      = NumberFormat('#,##0.00', 'en_PH');
+    final dateFmt  = DateFormat('MMM d, yyyy');
+    final statusS  = p.statusLabel.toLowerCase();
 
-    Color iconBg;
-    String emoji;
-    Color amountColor;
-    String dateLabel;
+    Color  iconBg, amountColor;
+    String emoji, dateLabel;
 
-    switch (p.status) {
-      case PaymentStatus.paid:
-        iconBg = _successBg;
-        emoji = '💳';
-        amountColor = _success;
-        dateLabel = p.paidDate != null
-            ? 'Paid on ${dateFmt.format(p.paidDate!)}'
-            : 'Paid';
-        break;
-      case PaymentStatus.pending:
-        iconBg = _warningBg;
-        emoji = '⏳';
-        amountColor = _warning;
-        dateLabel = 'Due ${dateFmt.format(p.dueDate)}';
-        break;
-      case PaymentStatus.overdue:
-        iconBg = _dangerBg;
-        emoji = '⚠️';
-        amountColor = _danger;
-        dateLabel = 'Overdue since ${dateFmt.format(p.dueDate)}';
-        break;
-      default:
-        iconBg = _gray100;
-        emoji = '📄';
-        amountColor = _gray600;
-        dateLabel = dateFmt.format(p.dueDate);
+    if (statusS == 'paid') {
+      iconBg = _successBg; emoji = '💳'; amountColor = _success;
+      dateLabel = p.paidDate != null ? 'Paid on ${dateFmt.format(p.paidDate!)}' : 'Paid';
+    } else if (statusS == 'overdue') {
+      iconBg = _dangerBg; emoji = '⚠️'; amountColor = _danger;
+      dateLabel = 'Overdue since ${dateFmt.format(p.dueDate)}';
+    } else {
+      iconBg = _warningBg; emoji = '⏳'; amountColor = _warning;
+      dateLabel = 'Due ${dateFmt.format(p.dueDate)}';
     }
 
     return GestureDetector(
@@ -309,25 +278,18 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         decoration: BoxDecoration(
           border: isLast
               ? null
-              : const Border(
-                  bottom: BorderSide(color: _gray100)),
+              : const Border(bottom: BorderSide(color: _gray100)),
         ),
         child: Row(
           children: [
-            // Icon
             Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Center(
-                  child: Text(emoji,
-                      style: const TextStyle(fontSize: 16))),
+              decoration:
+                  BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 16))),
             ),
             const SizedBox(width: 10),
-            // Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,19 +299,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         ? '${p.typeLabel} — ${DateFormat('MMMM yyyy').format(p.dueDate)}'
                         : p.typeLabel,
                     style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _gray800,
-                    ),
+                        fontSize: 12, fontWeight: FontWeight.w600, color: _gray800),
                   ),
                   const SizedBox(height: 2),
                   Text(dateLabel,
-                      style: const TextStyle(
-                          fontSize: 10, color: _gray400)),
+                      style: const TextStyle(fontSize: 10, color: _gray400)),
                 ],
               ),
             ),
-            // Amount
             Text(
               '₱${fmt.format(p.amount)}',
               style: TextStyle(
@@ -365,7 +322,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
-  // ── Empty state ───────────────────────────────────────────────────────────
+  // ── Empty / Error ─────────────────────────────────────────────────────────
 
   Widget _buildEmpty() {
     return Padding(
@@ -375,9 +332,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           const Text('📭', style: TextStyle(fontSize: 36)),
           const SizedBox(height: 12),
           Text(
-            _filter == null
-                ? 'No payment records found.'
-                : 'No ${_filter!.name} payments.',
+            _filter == null ? 'No payment records found.' : 'No $_filter payments.',
             style: const TextStyle(fontSize: 12, color: _gray400),
           ),
         ],
@@ -385,14 +340,20 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
-  // ── Error state ───────────────────────────────────────────────────────────
-
   Widget _buildError(String msg) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(msg,
-            style: const TextStyle(fontSize: 12, color: _danger)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 36, color: _danger),
+            const SizedBox(height: 12),
+            Text(msg,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: _danger)),
+          ],
+        ),
       ),
     );
   }

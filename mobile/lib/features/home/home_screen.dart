@@ -12,24 +12,23 @@ import '../../core/routing/app_router.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  static const _blue700  = Color(0xFF1A3D6B);
-  static const _blue600  = Color(0xFF1E52A0);
-  static const _blue500  = Color(0xFF2563EB);
-  static const _blue200  = Color(0xFFBAD9FD);
-  static const _gold     = Color(0xFFC9A84C);
-  static const _gray50   = Color(0xFFF8FAFC);
-  static const _gray100  = Color(0xFFEEF2F7);
-  static const _gray400  = Color(0xFF8A9BB0);
-  static const _gray600  = Color(0xFF4A5A6E);
-  static const _gray800  = Color(0xFF1E2A3A);
-  static const _danger   = Color(0xFFDC2626);
+  static const _blue700 = Color(0xFF1A3D6B);
+  static const _blue600 = Color(0xFF1E52A0);
+  static const _blue500 = Color(0xFF2563EB);
+  static const _blue200 = Color(0xFFBAD9FD);
+  static const _gold    = Color(0xFFC9A84C);
+  static const _gray50  = Color(0xFFF8FAFC);
+  static const _gray100 = Color(0xFFEEF2F7);
+  static const _gray400 = Color(0xFF8A9BB0);
+  static const _gray600 = Color(0xFF4A5A6E);
+  static const _gray800 = Color(0xFF1E2A3A);
+  static const _danger  = Color(0xFFDC2626);
 
   @override
   Widget build(BuildContext context) {
     final auth        = context.watch<AuthProvider>();
     final user        = auth.user;
     final displayName = user?.displayName ?? 'Member';
-    final initials    = _initials(displayName);
     final uid         = user?.uid ?? '';
 
     return Scaffold(
@@ -39,12 +38,12 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTopBar(context, displayName, initials),
+              _buildTopBar(context, displayName),
               _buildHeroCard(uid),
               _buildQuickAccess(context),
               _buildNotificationsPreview(context, uid),
               _buildAnnouncementsPreview(context),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -54,28 +53,21 @@ class HomeScreen extends StatelessWidget {
 
   // ── Top bar ───────────────────────────────────────────────────────────────
 
-  Widget _buildTopBar(
-      BuildContext context, String name, String initials) {
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? 'Good morning,'
-        : hour < 17
-            ? 'Good afternoon,'
-            : 'Good evening,';
+  Widget _buildTopBar(BuildContext context, String name) {
+    final hour     = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Good morning,' : hour < 17 ? 'Good afternoon,' : 'Good evening,';
+    final initials = _initials(name);
 
     return Container(
       color: _blue700,
-      padding:
-          const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(greeting,
-                  style:
-                      const TextStyle(fontSize: 10, color: _blue200)),
+              Text(greeting, style: const TextStyle(fontSize: 10, color: _blue200)),
               Text(
                 name,
                 style: const TextStyle(
@@ -95,17 +87,12 @@ class HomeScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: _blue500,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: Colors.white.withOpacity(0.2), width: 2),
+                border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
               ),
               child: Center(
                 child: Text(
                   initials,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
                 ),
               ),
             ),
@@ -115,7 +102,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // ── Hero card — real balance from Firestore ───────────────────────────────
+  // ── Hero card ─────────────────────────────────────────────────────────────
 
   Widget _buildHeroCard(String uid) {
     return StreamBuilder<QuerySnapshot>(
@@ -130,9 +117,9 @@ class HomeScreen extends StatelessWidget {
 
         if (snap.hasData) {
           for (final doc in snap.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            totalDue += (data['amount'] as num?)?.toDouble() ?? 0;
-            if (data['status'] == 'overdue') overdueCount++;
+            final d = doc.data() as Map<String, dynamic>;
+            totalDue += (d['amount'] as num?)?.toDouble() ?? 0;
+            if (d['status'] == 'overdue') overdueCount++;
           }
         }
 
@@ -145,7 +132,7 @@ class HomeScreen extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [_blue600, _blue500],
+              colors: [Color(0xFF1E52A0), Color(0xFF2563EB)],
             ),
             borderRadius: BorderRadius.circular(12),
           ),
@@ -169,11 +156,7 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   const Text(
                     'TOTAL BALANCE DUE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: _blue200,
-                      letterSpacing: 1,
-                    ),
+                    style: TextStyle(fontSize: 10, color: _blue200, letterSpacing: 1),
                   ),
                   const SizedBox(height: 4),
                   snap.connectionState == ConnectionState.waiting
@@ -183,10 +166,7 @@ class HomeScreen extends StatelessWidget {
                             child: SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             ),
                           ),
                         )
@@ -201,8 +181,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: hasOverdue
                           ? _danger.withOpacity(0.25)
@@ -216,9 +195,7 @@ class HomeScreen extends StatelessWidget {
                           width: 6,
                           height: 6,
                           decoration: BoxDecoration(
-                            color: hasOverdue
-                                ? const Color(0xFFFCA5A5)
-                                : const Color(0xFF4ADE80),
+                            color: hasOverdue ? const Color(0xFFFCA5A5) : const Color(0xFF4ADE80),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -229,8 +206,7 @@ class HomeScreen extends StatelessWidget {
                               : hasOverdue
                                   ? '$overdueCount overdue payment${overdueCount > 1 ? 's' : ''}'
                                   : 'Payments pending',
-                          style: const TextStyle(
-                              fontSize: 10, color: Colors.white),
+                          style: const TextStyle(fontSize: 10, color: Colors.white),
                         ),
                       ],
                     ),
@@ -244,22 +220,14 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // ── Quick Access grid ─────────────────────────────────────────────────────
+  // ── Quick Access ──────────────────────────────────────────────────────────
 
   Widget _buildQuickAccess(BuildContext context) {
     final items = [
-      _QuickItem(emoji: '💳', label: 'Payments',
-          sub: 'View records',   bg: _blue500.withOpacity(0.08),
-          route: Routes.payments),
-      _QuickItem(emoji: '📣', label: 'Complaints',
-          sub: 'Submit issue',   bg: _blue500.withOpacity(0.08),
-          route: Routes.complaints),
-      _QuickItem(emoji: '🔔', label: 'Notifications',
-          sub: 'View alerts',    bg: const Color(0xFFFEF9C3),
-          route: Routes.notifications),
-      _QuickItem(emoji: '👤', label: 'Profile',
-          sub: 'View info',      bg: _gray100,
-          route: Routes.profile),
+      _QuickItem(emoji: '💳', label: 'Payments',      sub: 'View records',  bg: const Color(0xFFEFF6FF), route: Routes.payments),
+      _QuickItem(emoji: '📣', label: 'Complaints',    sub: 'Submit issue',  bg: const Color(0xFFEFF6FF), route: Routes.complaints),
+      _QuickItem(emoji: '🔔', label: 'Notifications', sub: 'View alerts',   bg: const Color(0xFFFEF9C3), route: Routes.notifications),
+      _QuickItem(emoji: '👤', label: 'Profile',       sub: 'View info',     bg: const Color(0xFFEEF2F7), route: Routes.profile),
     ];
 
     return Padding(
@@ -267,11 +235,10 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Quick Access',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _gray800)),
+          const Text(
+            'Quick Access',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _gray800),
+          ),
           const SizedBox(height: 10),
           GridView.count(
             crossAxisCount: 2,
@@ -279,10 +246,8 @@ class HomeScreen extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
-            childAspectRatio: 1.8,
-            children: items
-                .map((item) => _buildQuickCard(context, item))
-                .toList(),
+            childAspectRatio: 2.2,
+            children: items.map((item) => _buildQuickCard(context, item)).toList(),
           ),
         ],
       ),
@@ -298,10 +263,8 @@ class HomeScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _gray100),
         ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        padding: const EdgeInsets.all(10),
+        child: Row(
           children: [
             Container(
               width: 32,
@@ -310,22 +273,20 @@ class HomeScreen extends StatelessWidget {
                 color: item.bg,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Center(
-                  child: Text(item.emoji,
-                      style: const TextStyle(fontSize: 14))),
+              child: Center(child: Text(item.emoji, style: const TextStyle(fontSize: 14))),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.label,
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _gray800)),
-                Text(item.sub,
-                    style: const TextStyle(
-                        fontSize: 10, color: _gray400)),
-              ],
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(item.label,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _gray800)),
+                  Text(item.sub,
+                      style: const TextStyle(fontSize: 9, color: _gray400)),
+                ],
+              ),
             ),
           ],
         ),
@@ -335,8 +296,7 @@ class HomeScreen extends StatelessWidget {
 
   // ── Notifications preview ─────────────────────────────────────────────────
 
-  Widget _buildNotificationsPreview(
-      BuildContext context, String uid) {
+  Widget _buildNotificationsPreview(BuildContext context, String uid) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Column(
@@ -345,17 +305,11 @@ class HomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Notifications',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _gray800)),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _gray800)),
               GestureDetector(
                 onTap: () => context.go(Routes.notifications),
                 child: const Text('See all',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: _blue500,
-                        fontWeight: FontWeight.w500)),
+                    style: TextStyle(fontSize: 11, color: _blue500, fontWeight: FontWeight.w500)),
               ),
             ],
           ),
@@ -370,30 +324,25 @@ class HomeScreen extends StatelessWidget {
             builder: (context, snap) {
               if (!snap.hasData || snap.data!.docs.isEmpty) {
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(
                     child: Text('No notifications yet.',
-                        style: TextStyle(
-                            fontSize: 11, color: _gray400)),
+                        style: TextStyle(fontSize: 11, color: _gray400)),
                   ),
                 );
               }
               return Column(
                 children: snap.data!.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final type   = data['type']   as String? ?? 'general';
-                  final isRead = data['isRead'] as bool?   ?? false;
-                  final createdAt =
-                      (data['createdAt'] as Timestamp?)?.toDate();
-                  final dotColor =
-                      type == 'announcement' ? _gold : _blue500;
+                  final data    = doc.data() as Map<String, dynamic>;
+                  final type    = data['type']   as String? ?? 'general';
+                  final isRead  = data['isRead'] as bool?   ?? false;
+                  final created = (data['createdAt'] as Timestamp?)?.toDate();
+                  final color   = type == 'announcement' ? _gold : _blue500;
 
                   return Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: const BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(color: _gray100)),
+                      border: Border(bottom: BorderSide(color: _gray100)),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -404,7 +353,7 @@ class HomeScreen extends StatelessWidget {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: isRead ? _gray400 : dotColor,
+                              color: isRead ? _gray400 : color,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -412,8 +361,7 @@ class HomeScreen extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 data['title'] as String? ?? '',
@@ -421,17 +369,12 @@ class HomeScreen extends StatelessWidget {
                                   fontSize: 11,
                                   color: _gray600,
                                   height: 1.5,
-                                  fontWeight: isRead
-                                      ? FontWeight.w400
-                                      : FontWeight.w600,
+                                  fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
                                 ),
                               ),
-                              if (createdAt != null)
-                                Text(
-                                  _timeAgo(createdAt),
-                                  style: const TextStyle(
-                                      fontSize: 10, color: _gray400),
-                                ),
+                              if (created != null)
+                                Text(_timeAgo(created),
+                                    style: const TextStyle(fontSize: 10, color: _gray400)),
                             ],
                           ),
                         ),
@@ -458,17 +401,11 @@ class HomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Announcements',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _gray800)),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _gray800)),
               GestureDetector(
                 onTap: () => context.go(Routes.announcements),
                 child: const Text('See all',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: _blue500,
-                        fontWeight: FontWeight.w500)),
+                    style: TextStyle(fontSize: 11, color: _blue500, fontWeight: FontWeight.w500)),
               ),
             ],
           ),
@@ -482,24 +419,21 @@ class HomeScreen extends StatelessWidget {
                 .snapshots(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(
-                    child: CircularProgressIndicator());
+                return const Center(child: CircularProgressIndicator());
               }
               if (!snap.hasData || snap.data!.docs.isEmpty) {
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(
                     child: Text('No announcements.',
-                        style: TextStyle(
-                            fontSize: 11, color: _gray400)),
+                        style: TextStyle(fontSize: 11, color: _gray400)),
                   ),
                 );
               }
               return Column(
                 children: snap.data!.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final createdAt =
-                      (data['createdAt'] as Timestamp?)?.toDate();
+                  final data    = doc.data() as Map<String, dynamic>;
+                  final created = (data['createdAt'] as Timestamp?)?.toDate();
 
                   return GestureDetector(
                     onTap: () => context.go(Routes.announcements),
@@ -512,28 +446,21 @@ class HomeScreen extends StatelessWidget {
                         border: Border.all(color: _gray100),
                       ),
                       child: Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
                               color: const Color(0xFFFEF9C3),
-                              borderRadius:
-                                  BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Center(
-                              child: Text('📢',
-                                  style:
-                                      TextStyle(fontSize: 14)),
-                            ),
+                            child: const Center(child: Text('📢', style: TextStyle(fontSize: 14))),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   data['title'] as String? ?? '',
@@ -548,24 +475,17 @@ class HomeScreen extends StatelessWidget {
                                   data['body'] as String? ?? '',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      color: _gray400),
+                                  style: const TextStyle(fontSize: 10, color: _gray400),
                                 ),
-                                if (createdAt != null) ...[
+                                if (created != null) ...[
                                   const SizedBox(height: 2),
-                                  Text(
-                                    _timeAgo(createdAt),
-                                    style: const TextStyle(
-                                        fontSize: 9,
-                                        color: _gray400),
-                                  ),
+                                  Text(_timeAgo(created),
+                                      style: const TextStyle(fontSize: 9, color: _gray400)),
                                 ],
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right,
-                              size: 14, color: _gray400),
+                          const Icon(Icons.chevron_right, size: 14, color: _gray400),
                         ],
                       ),
                     ),
@@ -583,9 +503,7 @@ class HomeScreen extends StatelessWidget {
 
   String _initials(String name) {
     final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-    }
+    if (parts.length >= 2) return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
     return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
@@ -599,16 +517,7 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _QuickItem {
-  final String emoji;
-  final String label;
-  final String sub;
+  final String emoji, label, sub, route;
   final Color  bg;
-  final String route;
-  const _QuickItem({
-    required this.emoji,
-    required this.label,
-    required this.sub,
-    required this.bg,
-    required this.route,
-  });
+  const _QuickItem({required this.emoji, required this.label, required this.sub, required this.bg, required this.route});
 }

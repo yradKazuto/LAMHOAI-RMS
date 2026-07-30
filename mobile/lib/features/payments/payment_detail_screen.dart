@@ -11,7 +11,6 @@ class PaymentDetailScreen extends StatelessWidget {
   final String paymentId;
   const PaymentDetailScreen({super.key, required this.paymentId});
 
-  // ── Design tokens ─────────────────────────────────────────────────────────
   static const _blue700   = Color(0xFF1A3D6B);
   static const _blue600   = Color(0xFF1E52A0);
   static const _blue200   = Color(0xFFBAD9FD);
@@ -40,7 +39,7 @@ class PaymentDetailScreen extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
             if (snap.hasError) {
-              return _buildError(context, snap.error.toString());
+              return _buildErrorState(context, snap.error.toString());
             }
             return _buildContent(context, snap.data!);
           },
@@ -49,15 +48,12 @@ class PaymentDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Content ───────────────────────────────────────────────────────────────
-
   Widget _buildContent(BuildContext context, PaymentModel p) {
     final fmt     = NumberFormat('#,##0.00', 'en_PH');
     final dateFmt = DateFormat('MMMM d, yyyy');
-
-    final statusColor = _statusColor(p.status);
-    final statusBg    = _statusBg(p.status);
-    final statusEmoji = _statusEmoji(p.status);
+    final color   = _statusColor(p);
+    final bg      = _statusBg(p);
+    final emoji   = _statusEmoji(p);
 
     return Column(
       children: [
@@ -81,41 +77,21 @@ class PaymentDetailScreen extends StatelessWidget {
                       Container(
                         width: 52,
                         height: 52,
-                        decoration: BoxDecoration(
-                          color: statusBg,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Center(
-                          child: Text(statusEmoji,
-                              style: const TextStyle(fontSize: 22)),
-                        ),
+                        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+                        child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
                       ),
                       const SizedBox(height: 12),
                       Text(
                         '₱${fmt.format(p.amount)}',
-                        style: TextStyle(
-                          fontFamily: 'Georgia',
-                          fontSize: 32,
-                          fontWeight: FontWeight.w700,
-                          color: statusColor,
-                        ),
+                        style: TextStyle(fontFamily: 'Georgia', fontSize: 32, fontWeight: FontWeight.w700, color: color),
                       ),
                       const SizedBox(height: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: statusBg,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
                         child: Text(
                           p.statusLabel.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: statusColor,
-                            letterSpacing: 0.5,
-                          ),
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color, letterSpacing: 0.5),
                         ),
                       ),
                     ],
@@ -138,46 +114,31 @@ class PaymentDetailScreen extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
                         child: Row(
                           children: const [
-                            Icon(Icons.receipt_long_outlined,
-                                size: 14, color: _blue600),
+                            Icon(Icons.receipt_long_outlined, size: 14, color: _blue600),
                             SizedBox(width: 6),
-                            Text(
-                              'PAYMENT DETAILS',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: _blue600,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
+                            Text('PAYMENT DETAILS',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _blue600, letterSpacing: 0.5)),
                           ],
                         ),
                       ),
                       const Divider(height: 1, color: _gray100),
-                      _detailRow('Type', p.typeLabel),
-                      _detailRow(
-                        'Period',
-                        p.type == PaymentType.monthly
-                            ? DateFormat('MMMM yyyy').format(p.dueDate)
-                            : DateFormat('yyyy').format(p.dueDate),
-                      ),
-                      _detailRow('Due Date', dateFmt.format(p.dueDate)),
-                      if (p.paidDate != null)
-                        _detailRow('Paid On', dateFmt.format(p.paidDate!)),
-                      _detailRow('Member', p.memberName),
-                      _detailRow('Reference ID', p.id,
-                          mono: true, isLast: p.recordedBy == null),
-                      if (p.recordedBy != null)
-                        _detailRow('Recorded By', p.recordedBy!,
-                            isLast: true),
+                      _row('Type', p.typeLabel),
+                      _row('Period',
+                          p.type == PaymentType.monthly
+                              ? DateFormat('MMMM yyyy').format(p.dueDate)
+                              : DateFormat('yyyy').format(p.dueDate)),
+                      _row('Due Date', dateFmt.format(p.dueDate)),
+                      if (p.paidDate != null) _row('Paid On', dateFmt.format(p.paidDate!)),
+                      _row('Member', p.memberName),
+                      _row('Reference ID', p.id, mono: true, isLast: p.recordedBy == null),
+                      if (p.recordedBy != null) _row('Recorded By', p.recordedBy!, isLast: true),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Info note for pending/overdue
-                if (p.status == PaymentStatus.pending ||
-                    p.status == PaymentStatus.overdue)
+                // Info note for unpaid/overdue
+                if (p.statusLabel.toLowerCase() != 'paid')
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -188,17 +149,12 @@ class PaymentDetailScreen extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Icon(Icons.info_outline,
-                            size: 15, color: _blue600),
+                        Icon(Icons.info_outline, size: 15, color: _blue600),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'To settle this payment, please visit the HOA office '
-                            'or contact your HOA administrator.',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: _gray600,
-                                height: 1.5),
+                            'To settle this payment, please visit the HOA office or contact your HOA administrator.',
+                            style: TextStyle(fontSize: 11, color: _gray600, height: 1.5),
                           ),
                         ),
                       ],
@@ -212,8 +168,6 @@ class PaymentDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Header ────────────────────────────────────────────────────────────────
-
   Widget _buildHeader(BuildContext context, PaymentModel p) {
     return Container(
       color: _blue700,
@@ -222,28 +176,19 @@ class PaymentDetailScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () =>
-                context.canPop() ? context.pop() : context.go('/home/payments'),
+            onTap: () => context.canPop() ? context.pop() : context.go('/home/payments'),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
                 Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
                 SizedBox(width: 4),
-                Text('Payments',
-                    style: TextStyle(fontSize: 10, color: _blue200)),
+                Text('Payments', style: TextStyle(fontSize: 10, color: _blue200)),
               ],
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Payment Detail',
-            style: TextStyle(
-              fontFamily: 'Georgia',
-              fontSize: 18,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          const Text('Payment Detail',
+              style: TextStyle(fontFamily: 'Georgia', fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
           Text(
             p.type == PaymentType.monthly
@@ -256,33 +201,22 @@ class PaymentDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Detail row ────────────────────────────────────────────────────────────
-
-  Widget _detailRow(String label, String value,
-      {bool mono = false, bool isLast = false}) {
+  Widget _row(String label, String value, {bool mono = false, bool isLast = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : const Border(bottom: BorderSide(color: _gray100)),
+        border: isLast ? null : const Border(bottom: BorderSide(color: _gray100)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: const TextStyle(fontSize: 11, color: _gray400)),
+          Text(label, style: const TextStyle(fontSize: 11, color: _gray400)),
           const SizedBox(width: 16),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: _gray800,
-                fontFamily: mono ? 'monospace' : null,
-              ),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: _gray800, fontFamily: mono ? 'monospace' : null),
             ),
           ),
         ],
@@ -290,36 +224,28 @@ class PaymentDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Status helpers ────────────────────────────────────────────────────────
-
-  Color _statusColor(PaymentStatus s) {
-    switch (s) {
-      case PaymentStatus.paid:    return _success;
-      case PaymentStatus.pending: return _warning;
-      case PaymentStatus.overdue: return _danger;
-      default:                    return _gray600;
-    }
+  Color _statusColor(PaymentModel p) {
+    final s = p.statusLabel.toLowerCase();
+    if (s == 'paid')    return _success;
+    if (s == 'overdue') return _danger;
+    return _warning;
   }
 
-  Color _statusBg(PaymentStatus s) {
-    switch (s) {
-      case PaymentStatus.paid:    return _successBg;
-      case PaymentStatus.pending: return _warningBg;
-      case PaymentStatus.overdue: return _dangerBg;
-      default:                    return _gray100;
-    }
+  Color _statusBg(PaymentModel p) {
+    final s = p.statusLabel.toLowerCase();
+    if (s == 'paid')    return _successBg;
+    if (s == 'overdue') return _dangerBg;
+    return _warningBg;
   }
 
-  String _statusEmoji(PaymentStatus s) {
-    switch (s) {
-      case PaymentStatus.paid:    return '💳';
-      case PaymentStatus.pending: return '⏳';
-      case PaymentStatus.overdue: return '⚠️';
-      default:                    return '📄';
-    }
+  String _statusEmoji(PaymentModel p) {
+    final s = p.statusLabel.toLowerCase();
+    if (s == 'paid')    return '💳';
+    if (s == 'overdue') return '⚠️';
+    return '⏳';
   }
 
-  Widget _buildError(BuildContext context, String msg) {
+  Widget _buildErrorState(BuildContext context, String msg) {
     return Column(
       children: [
         Container(
@@ -329,17 +255,13 @@ class PaymentDetailScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GestureDetector(
-                onTap: () => context.canPop()
-                    ? context.pop()
-                    : context.go('/home/payments'),
+                onTap: () => context.canPop() ? context.pop() : context.go('/home/payments'),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.arrow_back_ios_new,
-                        size: 12, color: _blue200),
+                    Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
                     SizedBox(width: 4),
-                    Text('Back',
-                        style: TextStyle(fontSize: 10, color: _blue200)),
+                    Text('Payments', style: TextStyle(fontSize: 10, color: _blue200)),
                   ],
                 ),
               ),
@@ -348,8 +270,17 @@ class PaymentDetailScreen extends StatelessWidget {
         ),
         Expanded(
           child: Center(
-            child: Text(msg,
-                style: const TextStyle(fontSize: 12, color: _danger)),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 36, color: _danger),
+                  const SizedBox(height: 12),
+                  Text(msg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: _danger)),
+                ],
+              ),
+            ),
           ),
         ),
       ],

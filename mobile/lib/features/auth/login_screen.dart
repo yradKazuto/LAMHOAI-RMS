@@ -15,15 +15,15 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  bool _obscurePass = true;
+  final _formKey    = GlobalKey<FormState>();
+  final _emailCtrl  = TextEditingController();
+  final _passCtrl   = TextEditingController();
+  bool  _obscure    = true;
 
-  // ── Design tokens (matches mockup CSS variables) ──────────────────────────
   static const _blue800  = Color(0xFF0F2547);
   static const _blue700  = Color(0xFF1A3D6B);
   static const _blue600  = Color(0xFF1E52A0);
+  static const _blue500  = Color(0xFF2563EB);
   static const _blue200  = Color(0xFFBAD9FD);
   static const _gray50   = Color(0xFFF8FAFC);
   static const _gray200  = Color(0xFFD4DCE8);
@@ -42,13 +42,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final auth = context.read<AuthProvider>();
-    await auth.signIn(_emailCtrl.text, _passCtrl.text);
+    await context.read<AuthProvider>().signIn(_emailCtrl.text, _passCtrl.text);
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final auth      = context.watch<AuthProvider>();
     final isLoading = auth.status == AuthStatus.loading;
 
     return Scaffold(
@@ -66,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ── Header — gradient with logo ───────────────────────────────────────────
+  // ── Header ────────────────────────────────────────────────────────────────
 
   Widget _buildHeader() {
     return Container(
@@ -76,12 +75,12 @@ class _LoginScreenState extends State<LoginScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [_blue800, _blue700],
-          stops: [0.0, 1.0],
         ),
       ),
       padding: const EdgeInsets.fromLTRB(28, 40, 28, 32),
       child: Column(
         children: [
+          // Logo
           Container(
             width: 56,
             height: 56,
@@ -90,9 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
-            child: const Center(
-              child: Text('🏠', style: TextStyle(fontSize: 24)),
-            ),
+            child: const Center(child: Text('🏘️', style: TextStyle(fontSize: 24))),
           ),
           const SizedBox(height: 14),
           const Text(
@@ -106,12 +103,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 3),
           const Text(
-            'RECORD MANAGEMENT SYSTEM',
-            style: TextStyle(
-              fontSize: 10,
-              color: _blue200,
-              letterSpacing: 1,
-            ),
+            'MEMBER PORTAL',
+            style: TextStyle(fontSize: 10, color: _blue200, letterSpacing: 1),
           ),
         ],
       ),
@@ -128,6 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Error banner
             if (auth.status == AuthStatus.error && auth.errorMessage != null)
               _buildErrorBanner(auth),
 
@@ -139,6 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
             _buildPasswordField(),
             const SizedBox(height: 8),
 
+            // Forgot password
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -151,10 +146,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: const Text(
-                  'Forgot password?',
+                  'Forgot Password?',
                   style: TextStyle(
                     fontSize: 11,
-                    color: _blue600,
+                    color: _blue500,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -167,9 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
             const Center(
               child: Text(
-                'Members only. Contact your HOA admin\nif you need access.',
+                'Need help? Contact LAMHOAI Office',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: _gray400, height: 1.5),
+                style: TextStyle(fontSize: 11, color: _gray400),
               ),
             ),
           ],
@@ -177,8 +172,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  // ── Field helpers ─────────────────────────────────────────────────────────
 
   Widget _fieldLabel(String text) {
     return Padding(
@@ -201,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
       style: const TextStyle(fontSize: 13, color: _gray800),
-      decoration: _inputDecoration('you@email.com'),
+      decoration: _inputDeco('juan.delacruz@email.com'),
       validator: (v) {
         if (v == null || v.trim().isEmpty) return 'Email is required';
         if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim())) {
@@ -215,38 +208,35 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildPasswordField() {
     return TextFormField(
       controller: _passCtrl,
-      obscureText: _obscurePass,
+      obscureText: _obscure,
       textInputAction: TextInputAction.done,
       onFieldSubmitted: (_) => _submit(),
       style: const TextStyle(fontSize: 13, color: _gray800),
-      decoration: _inputDecoration('••••••••').copyWith(
+      decoration: _inputDeco('••••••••••').copyWith(
         suffixIcon: IconButton(
           icon: Icon(
-            _obscurePass
-                ? Icons.visibility_off_outlined
-                : Icons.visibility_outlined,
+            _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             size: 18,
             color: _gray400,
           ),
-          onPressed: () => setState(() => _obscurePass = !_obscurePass),
+          onPressed: () => setState(() => _obscure = !_obscure),
         ),
       ),
       validator: (v) {
         if (v == null || v.isEmpty) return 'Password is required';
-        if (v.length < 6) return 'Password must be at least 6 characters';
+        if (v.length < 6) return 'Minimum 6 characters';
         return null;
       },
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
+  InputDecoration _inputDeco(String hint) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(fontSize: 13, color: _gray400),
       filled: true,
       fillColor: _gray50,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: _gray200, width: 1.5),
@@ -271,8 +261,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ── Sign in button ────────────────────────────────────────────────────────
-
   Widget _buildSignInButton(bool isLoading) {
     return SizedBox(
       width: double.infinity,
@@ -283,21 +271,17 @@ class _LoginScreenState extends State<LoginScreen> {
           disabledBackgroundColor: _blue600.withOpacity(0.6),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
         ),
         child: isLoading
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
               )
             : const Text(
-                'SIGN IN',
+                'Sign In to Portal',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -307,8 +291,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  // ── Error banner ──────────────────────────────────────────────────────────
 
   Widget _buildErrorBanner(AuthProvider auth) {
     return Container(

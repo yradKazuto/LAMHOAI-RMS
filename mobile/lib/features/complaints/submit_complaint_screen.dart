@@ -15,10 +15,10 @@ class SubmitComplaintScreen extends StatefulWidget {
 }
 
 class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
-  final _formKey     = GlobalKey<FormState>();
-  final _titleCtrl   = TextEditingController();
-  final _descCtrl    = TextEditingController();
-  String _category   = 'general';
+  final _formKey   = GlobalKey<FormState>();
+  final _titleCtrl = TextEditingController();
+  final _descCtrl  = TextEditingController();
+  String _category  = 'general';
   bool   _submitting = false;
   bool   _submitted  = false;
 
@@ -32,9 +32,9 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
   static const _gray400   = Color(0xFF8A9BB0);
   static const _gray600   = Color(0xFF4A5A6E);
   static const _gray800   = Color(0xFF1E2A3A);
-  static const _danger    = Color(0xFFDC2626);
   static const _success   = Color(0xFF16A34A);
   static const _successBg = Color(0xFFDCFCE7);
+  static const _danger    = Color(0xFFDC2626);
 
   static const _categories = [
     ('general',     'General'),
@@ -56,9 +56,7 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
 
-    final auth = context.read<AuthProvider>();
-    final user = auth.user!;
-
+    final user = context.read<AuthProvider>().user!;
     try {
       await FirebaseFirestore.instance.collection('complaints').add({
         'uid':         user.uid,
@@ -75,10 +73,7 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
       if (mounted) {
         setState(() => _submitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit: $e'),
-            backgroundColor: _danger,
-          ),
+          SnackBar(content: Text('Failed to submit: $e'), backgroundColor: _danger),
         );
       }
     }
@@ -92,18 +87,12 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
         child: Column(
           children: [
             _buildHeader(context),
-            Expanded(
-              child: _submitted
-                  ? _buildSuccessState(context)
-                  : _buildForm(),
-            ),
+            Expanded(child: _submitted ? _buildSuccess(context) : _buildForm()),
           ],
         ),
       ),
     );
   }
-
-  // ── Header ────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
     return Container(
@@ -119,16 +108,13 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () => context.canPop()
-                ? context.pop()
-                : context.go('/home/complaints'),
+            onTap: () => context.canPop() ? context.pop() : context.go('/home/complaints'),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
                 Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
                 SizedBox(width: 4),
-                Text('Back',
-                    style: TextStyle(fontSize: 10, color: _blue200)),
+                Text('Back', style: TextStyle(fontSize: 10, color: _blue200)),
               ],
             ),
           ),
@@ -141,32 +127,19 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
-            child: const Center(
-              child: Icon(Icons.feedback_outlined,
-                  size: 20, color: Colors.white),
-            ),
+            child: const Center(child: Icon(Icons.feedback_outlined, size: 20, color: Colors.white)),
           ),
           const SizedBox(height: 10),
           const Text(
             'Submit a Complaint',
-            style: TextStyle(
-              fontFamily: 'Georgia',
-              fontSize: 18,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(fontFamily: 'Georgia', fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 2),
-          const Text(
-            'We will review and respond to your concern.',
-            style: TextStyle(fontSize: 10, color: _blue200),
-          ),
+          const Text('We will review and respond within 3–5 business days.', style: TextStyle(fontSize: 10, color: _blue200)),
         ],
       ),
     );
   }
-
-  // ── Form ──────────────────────────────────────────────────────────────────
 
   Widget _buildForm() {
     return SingleChildScrollView(
@@ -185,10 +158,10 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
               controller: _titleCtrl,
               textInputAction: TextInputAction.next,
               style: const TextStyle(fontSize: 13, color: _gray800),
-              decoration: _inputDeco('Brief description of your concern'),
+              decoration: _inputDeco('Brief summary of your concern'),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Title is required';
-                if (v.trim().length < 5) return 'Title too short';
+                if (v.trim().length < 5) return 'Title is too short';
                 return null;
               },
             ),
@@ -200,8 +173,7 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
               maxLines: 5,
               textInputAction: TextInputAction.done,
               style: const TextStyle(fontSize: 13, color: _gray800),
-              decoration: _inputDeco(
-                  'Describe the issue in detail — location, date/time, people involved...'),
+              decoration: _inputDeco('Describe the issue — location, date/time, people involved...'),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Details are required';
                 if (v.trim().length < 20) return 'Please provide more detail (min 20 characters)';
@@ -219,33 +191,20 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
                   disabledBackgroundColor: _blue600.withOpacity(0.6),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
                 ),
                 child: _submitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Text(
-                        'SUBMIT COMPLAINT',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('SUBMIT COMPLAINT', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
               ),
             ),
             const SizedBox(height: 12),
             const Center(
               child: Text(
                 'Complaints are reviewed within 3–5 business days.',
-                style: TextStyle(fontSize: 10, color: _gray400),
                 textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10, color: _gray400),
               ),
             ),
           ],
@@ -253,8 +212,6 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
       ),
     );
   }
-
-  // ── Category picker ───────────────────────────────────────────────────────
 
   Widget _buildCategoryPicker() {
     return Wrap(
@@ -265,23 +222,15 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
         return GestureDetector(
           onTap: () => setState(() => _category = cat.$1),
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: active ? _blue600 : _gray50,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: active ? _blue600 : _gray200,
-                width: 1.5,
-              ),
+              border: Border.all(color: active ? _blue600 : _gray200, width: 1.5),
             ),
             child: Text(
               cat.$2,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: active ? Colors.white : _gray600,
-              ),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: active ? Colors.white : _gray600),
             ),
           ),
         );
@@ -289,9 +238,7 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
     );
   }
 
-  // ── Success state ─────────────────────────────────────────────────────────
-
-  Widget _buildSuccessState(BuildContext context) {
+  Widget _buildSuccess(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -300,24 +247,13 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
           Container(
             width: 72,
             height: 72,
-            decoration: const BoxDecoration(
-              color: _successBg,
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: Icon(Icons.check_circle_outline,
-                  size: 36, color: _success),
-            ),
+            decoration: const BoxDecoration(color: _successBg, shape: BoxShape.circle),
+            child: const Center(child: Icon(Icons.check_circle_outline, size: 36, color: _success)),
           ),
           const SizedBox(height: 20),
           const Text(
-            'Complaint Submitted',
-            style: TextStyle(
-              fontFamily: 'Georgia',
-              fontSize: 20,
-              color: _gray800,
-              fontWeight: FontWeight.w600,
-            ),
+            'Complaint Submitted!',
+            style: TextStyle(fontFamily: 'Georgia', fontSize: 20, color: _gray800, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -334,15 +270,10 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
                 backgroundColor: _blue600,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 elevation: 0,
               ),
-              child: const Text('VIEW MY COMPLAINTS',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5)),
+              child: const Text('VIEW MY COMPLAINTS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
             ),
           ),
           const SizedBox(height: 10),
@@ -353,28 +284,17 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
               _descCtrl.clear();
               _category = 'general';
             }),
-            child: const Text('Submit Another',
-                style: TextStyle(fontSize: 12, color: _blue600)),
+            child: const Text('Submit Another', style: TextStyle(fontSize: 12, color: _blue600)),
           ),
         ],
       ),
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
   Widget _fieldLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: _gray600,
-          letterSpacing: 0.5,
-        ),
-      ),
+      child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _gray600, letterSpacing: 0.5)),
     );
   }
 
@@ -384,28 +304,12 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
       hintStyle: const TextStyle(fontSize: 12, color: _gray400),
       filled: true,
       fillColor: _gray50,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _gray200, width: 1.5),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _gray200, width: 1.5),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _blue600, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _danger, width: 1.5),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _danger, width: 1.5),
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _gray200, width: 1.5)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _gray200, width: 1.5)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _blue600, width: 1.5)),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _danger, width: 1.5)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _danger, width: 1.5)),
       errorStyle: const TextStyle(fontSize: 10, color: _danger),
     );
   }
