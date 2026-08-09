@@ -35,7 +35,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = context.watch<AuthProvider>().user?.uid ?? '';
+    final auth = context.watch<AuthProvider>();
+    final uid  = auth.user?.uid ?? '';
+
+    // If uid is empty don't even try to query
+    if (uid.isEmpty) {
+      return Scaffold(
+        backgroundColor: _gray50,
+        body: Column(
+          children: [
+            _buildHeader(context),
+            const Expanded(child: Center(child: CircularProgressIndicator())),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: _gray50,
@@ -44,6 +58,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _buildHeader(context),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
+              // Key forces stream to rebuild when uid changes
+              key: ValueKey(uid),
               stream: FirebaseFirestore.instance
                   .collection('notifications')
                   .where('uid', isEqualTo: uid)
@@ -84,7 +100,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   children: [
                     _buildFilterRow(unreadCount),
                     Expanded(
-                      child: filtered.isEmpty ? _buildEmpty() : _buildList(filtered),
+                      child: filtered.isEmpty
+                          ? _buildEmpty()
+                          : _buildList(filtered),
                     ),
                   ],
                 );
@@ -110,7 +128,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GestureDetector(
-                onTap: () => context.canPop() ? context.pop() : context.go('/home'),
+                onTap: () =>
+                    context.canPop() ? context.pop() : context.go('/home'),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
@@ -154,38 +173,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onTap: () => setState(() => _filter = f),
             child: Container(
               margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
                 color: active ? _blue600 : Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: active ? _blue600 : _gray200, width: 1.5),
+                border: Border.all(
+                    color: active ? _blue600 : _gray200, width: 1.5),
               ),
               child: Row(
                 children: [
-                  Text(
-                    f,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: active ? Colors.white : _gray600,
-                    ),
-                  ),
+                  Text(f,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: active ? Colors.white : _gray600)),
                   if (f == 'Unread' && unreadCount > 0) ...[
                     const SizedBox(width: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(
                         color: active ? Colors.white : _blue500,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text(
-                        '$unreadCount',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: active ? _blue600 : Colors.white,
-                        ),
-                      ),
+                      child: Text('$unreadCount',
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color:
+                                  active ? _blue600 : Colors.white)),
                     ),
                   ],
                 ],
@@ -246,37 +263,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          item.title,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w600,
-                            color: _gray800,
-                          ),
-                        ),
+                        child: Text(item.title,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: item.isRead
+                                    ? FontWeight.w400
+                                    : FontWeight.w600,
+                                color: _gray800)),
                       ),
                       if (!item.isRead)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: _blue500, borderRadius: BorderRadius.circular(8)),
-                          child: const Text('NEW', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: Colors.white)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                              color: _blue500,
+                              borderRadius: BorderRadius.circular(8)),
+                          child: const Text('NEW',
+                              style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white)),
                         ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(item.body, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: _gray600, height: 1.5)),
+                  Text(item.body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 11, color: _gray600, height: 1.5)),
                   const SizedBox(height: 6),
                   Row(
                     children: [
                       Icon(_typeIcon(item.type), size: 10, color: _gray400),
                       const SizedBox(width: 4),
                       Text(
-                        item.createdAt != null ? dateFmt.format(item.createdAt!) : '—',
-                        style: const TextStyle(fontSize: 10, color: _gray400),
+                        item.createdAt != null
+                            ? dateFmt.format(item.createdAt!)
+                            : '—',
+                        style:
+                            const TextStyle(fontSize: 10, color: _gray400),
                       ),
                       const Spacer(),
-                      const Text('Tap to read', style: TextStyle(fontSize: 9, color: _gray400)),
+                      const Text('Tap to read',
+                          style:
+                              TextStyle(fontSize: 9, color: _gray400)),
                     ],
                   ),
                 ],
@@ -306,7 +337,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.6,
         minChildSize: 0.4,
@@ -320,13 +352,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             children: [
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(color: _gray200, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                      color: _gray200,
+                      borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: _blue50,
                   borderRadius: BorderRadius.circular(12),
@@ -338,31 +374,49 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     Icon(_typeIcon(item.type), size: 11, color: _blue600),
                     const SizedBox(width: 4),
                     Text(_typeLabel(item.type),
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: _blue600)),
+                        style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: _blue600)),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
               Text(item.title,
-                  style: const TextStyle(fontFamily: 'Georgia', fontSize: 18, fontWeight: FontWeight.w600, color: _gray800)),
+                  style: const TextStyle(
+                      fontFamily: 'Georgia',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: _gray800)),
               const SizedBox(height: 6),
-              Text(item.createdAt != null ? dateFmt.format(item.createdAt!) : '—',
-                  style: const TextStyle(fontSize: 10, color: _gray400)),
+              Text(
+                item.createdAt != null
+                    ? dateFmt.format(item.createdAt!)
+                    : '—',
+                style: const TextStyle(fontSize: 10, color: _gray400),
+              ),
               const SizedBox(height: 16),
               const Divider(color: _gray100),
               const SizedBox(height: 16),
-              Text(item.body, style: const TextStyle(fontSize: 13, color: _gray600, height: 1.7)),
+              Text(item.body,
+                  style: const TextStyle(
+                      fontSize: 13, color: _gray600, height: 1.7)),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(ctx),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    side: const BorderSide(color: _gray200, width: 1.5),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 13),
+                    side: const BorderSide(
+                        color: _gray200, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Close', style: TextStyle(fontSize: 13, color: _gray600)),
+                  child: const Text('Close',
+                      style: TextStyle(
+                          fontSize: 13, color: _gray600)),
                 ),
               ),
             ],
@@ -372,6 +426,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  // ── Empty / Error ─────────────────────────────────────────────────────────
+
   Widget _buildEmpty() {
     return Center(
       child: Column(
@@ -380,7 +436,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           const Text('🔔', style: TextStyle(fontSize: 36)),
           const SizedBox(height: 12),
           Text(
-            _filter == 'All' ? 'No notifications yet.' : 'No ${_filter.toLowerCase()} notifications.',
+            _filter == 'All'
+                ? 'No notifications yet.'
+                : 'No ${_filter.toLowerCase()} notifications.',
             style: const TextStyle(fontSize: 12, color: _gray400),
           ),
         ],
@@ -397,12 +455,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           children: [
             const Icon(Icons.error_outline, size: 36, color: _danger),
             const SizedBox(height: 12),
-            Text(msg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: _danger)),
+            Text(msg,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: _danger)),
           ],
         ),
       ),
     );
   }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   Color _dotColor(String type) {
     switch (type) {
@@ -433,8 +495,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 }
 
 class _NotifItem {
-  final String id, title, body, type;
-  final bool isRead;
+  final String    id, title, body, type;
+  final bool      isRead;
   final DateTime? createdAt;
   const _NotifItem({
     required this.id, required this.title, required this.body,

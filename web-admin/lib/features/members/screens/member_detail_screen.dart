@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/document_model.dart';
@@ -64,6 +65,88 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     super.dispose();
   }
 
+  // ── Send password reset email ──────────────────────────────────────────────
+  Future<void> _sendPasswordReset(
+      BuildContext context) async {
+    final email = widget.member.email;
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'No email address found for this member.')),
+      );
+      return;
+    }
+
+    // Confirm before sending
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
+        title: const Text('Reset Password',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0D2A5C))),
+        content: Text(
+          'Send a password reset email to:\n$email',
+          style: const TextStyle(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, false),
+            child: const Text('Cancel',
+                style:
+                    TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  const Color(0xFF0D2A5C),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(8)),
+            ),
+            child: const Text('Send Reset Email'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Password reset email sent to $email'),
+            backgroundColor:
+                const Color(0xFF1A7A4A),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Failed to send reset email: ${e.message}'),
+            backgroundColor:
+                const Color(0xFFCC2200),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _saveEdits() async {
     setState(() => _saving = true);
     try {
@@ -113,36 +196,62 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
               color: _navy, fontWeight: FontWeight.w700, fontSize: 17),
         ),
         actions: [
-          if (canEdit && !_editMode)
+          if (canEdit && !_editMode) ...[
+            // Reset Password button
             TextButton.icon(
-              onPressed: () => setState(() => _editMode = true),
-              icon: const Icon(Icons.edit_outlined, size: 16, color: _accent),
-              label: const Text('Edit',
-                  style: TextStyle(color: _accent, fontWeight: FontWeight.w600)),
+              onPressed: () => _sendPasswordReset(context),
+              icon: const Icon(Icons.lock_reset_outlined,
+                  size: 16, color: _accent),
+              label: const Text('Reset Password',
+                  style: TextStyle(
+                      color: _accent,
+                      fontWeight: FontWeight.w600)),
             ),
+            TextButton.icon(
+              onPressed: () =>
+                  setState(() => _editMode = true),
+              icon: const Icon(Icons.edit_outlined,
+                  size: 16, color: _accent),
+              label: const Text('Edit',
+                  style: TextStyle(
+                      color: _accent,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ],
           if (_editMode) ...[
             TextButton(
-              onPressed: () =>
-                  setState(() { _editMode = false; _initControllers(widget.member); }),
+              onPressed: () => setState(() {
+                _editMode = false;
+                _initControllers(widget.member);
+              }),
               child: const Text('Cancel',
                   style: TextStyle(color: Colors.grey)),
             ),
             Padding(
-              padding: const EdgeInsets.only(right: 12),
+              padding:
+                  const EdgeInsets.only(right: 12),
               child: ElevatedButton(
-                onPressed: _saving ? null : _saveEdits,
+                onPressed:
+                    _saving ? null : _saveEdits,
                 style: ElevatedButton.styleFrom(
                     backgroundColor: _navy,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10)),
+                        borderRadius:
+                            BorderRadius.circular(
+                                8)),
+                    padding:
+                        const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10)),
                 child: _saving
                     ? const SizedBox(
-                        width: 14, height: 14,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
+                        width: 14,
+                        height: 14,
+                        child:
+                            CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white))
                     : const Text('Save'),
               ),
             ),

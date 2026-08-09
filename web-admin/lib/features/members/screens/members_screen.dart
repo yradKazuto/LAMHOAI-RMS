@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
+import 'package:firebase_core/firebase_core.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/auth_provider.dart';
@@ -567,16 +568,34 @@ class _AddMemberDialogState
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
-      // 1. Create Firebase Auth account
-      final cred = await FirebaseAuth.instance
+      // Use a secondary Firebase App instance so the
+      // admin session is NOT affected when creating a new user
+      final secondaryApp = await Firebase.initializeApp(
+        name:    'secondary',
+        options: Firebase.app().options,
+      );
+
+      final secondaryAuth =
+          FirebaseAuth.instanceFor(app: secondaryApp);
+
+      // 1. Create member Auth account in secondary app
+      final cred = await secondaryAuth
           .createUserWithEmailAndPassword(
         email:    _email.text.trim(),
         password: _password.text,
       );
+      final memberUid = cred.user!.uid;
 
-      // 2. Save Firestore member document
+      // 2. Send email verification to the new member
+      await cred.user!.sendEmailVerification();
+
+      // 3. Sign out from secondary app and delete it
+      await secondaryAuth.signOut();
+      await secondaryApp.delete();
+
+      // 3. Save Firestore document — admin session untouched
       await widget.fsService.addMember(MemberModel(
-        uid:           cred.user!.uid,
+        uid:           memberUid,
         name:          _name.text.trim(),
         email:         _email.text.trim(),
         role:          'member',
@@ -593,20 +612,27 @@ class _AddMemberDialogState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Member account created successfully.'),
+                'Member created. Verification email sent.'),
             backgroundColor: Color(0xFF1A7A4A),
           ),
         );
       }
     } on FirebaseAuthException catch (e) {
+      // Clean up secondary app if it exists
+      try {
+        await Firebase.app('secondary').delete();
+      } catch (_) {}
       setState(() {
         _loading = false;
         _error   = _mapAuthError(e.code);
       });
     } catch (e) {
+      try {
+        await Firebase.app('secondary').delete();
+      } catch (_) {}
       setState(() {
         _loading = false;
-        _error   = 'An unexpected error occurred.';
+        _error   = 'An unexpected error occurred: $e';
       });
     }
   }
