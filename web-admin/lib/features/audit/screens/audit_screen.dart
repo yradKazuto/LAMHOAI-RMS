@@ -221,8 +221,34 @@ class _AuditScreenState extends State<AuditScreen> {
                   if (snap.connectionState ==
                       ConnectionState.waiting) {
                     return const Center(
-                        child:
-                            CircularProgressIndicator());
+                        child: CircularProgressIndicator(
+                            color: Color(0xFF2E6BE6)));
+                  }
+
+                  if (snap.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.history_toggle_off_outlined,
+                              size: 48, color: Colors.grey[300]),
+                          const SizedBox(height: 14),
+                          const Text('Could not load audit logs.',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF0D2A5C))),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Check Firestore rules — audit_logs needs\n'
+                            'allow read: if isAdmin() and allow create: if isStaff()',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500])),
+                        ],
+                      ),
+                    );
                   }
 
                   final logs =

@@ -6,6 +6,8 @@ import '../../../core/models/payment_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import 'add_payment_screen.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/routing/app_router.dart';
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -69,8 +71,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           children: [
             // ── Header ───────────────────────────────────────────────────────
             Row(
-              children: [
-                Column(
+  children: [
+    IconButton(
+      icon: const Icon(Icons.arrow_back, color: _navy),
+      tooltip: 'Back to Dashboard',
+      onPressed: () => context.go(AppRoutes.dashboard),
+    ),
+    const SizedBox(width: 8),
+                  Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Payments',

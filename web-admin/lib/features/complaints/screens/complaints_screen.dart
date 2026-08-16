@@ -2,9 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/models/complaint_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/routing/app_router.dart';
 
 class ComplaintsScreen extends StatefulWidget {
   const ComplaintsScreen({super.key});
@@ -70,20 +72,30 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ───────────────────────────────────────────────────────
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                const Text('Complaints',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: _navy)),
-                const SizedBox(height: 2),
-                Text(
-                    'Review and resolve homeowner complaints',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600])),
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  tooltip: 'Back to Dashboard',
+                  onPressed: () => context.go(AppRoutes.dashboard),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Complaints',
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: _navy)),
+                    const SizedBox(height: 2),
+                    Text(
+                        'Review and resolve homeowner complaints',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600])),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 24),

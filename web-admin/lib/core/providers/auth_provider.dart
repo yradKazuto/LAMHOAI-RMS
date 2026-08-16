@@ -5,11 +5,16 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
-
+import '../services/settings_service.dart';
+import '../models/audit_log_model.dart';
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService;
+  final _settingsService = SettingsService(); // add this import too
+
+  bool _pendingLoginLog = false; // add this
+  
 
   AuthProvider({AuthService? authService})
       : _authService = authService ?? AuthService() {
@@ -53,32 +58,47 @@ class AuthProvider extends ChangeNotifier {
     // Subscribe to live user doc updates
     _userSub?.cancel();
     _userSub = _authService.userModelStream(firebaseUser.uid).listen(
-      (model) {
-        if (model == null || !model.isActive) {
-          _authService.signOut();
-          return;
-        }
-        _userModel = model;
-        _status = AuthStatus.authenticated;
-        _errorMessage = null;
-        notifyListeners();
-      },
-      onError: (_) {
-        _status = AuthStatus.error;
-        _errorMessage = 'Failed to load user profile.';
-        notifyListeners();
-      },
-    );
+  (model) {
+    if (model == null || !model.isActive) {
+      _authService.signOut();
+      return;
+    }
+    _userModel = model;
+    _status = AuthStatus.authenticated;
+    _errorMessage = null;
+
+    if (_pendingLoginLog) {
+      _pendingLoginLog = false;
+      _settingsService.logAction(
+        performedBy:      model.uid,
+        performedByName:  model.displayName,
+        action:           AuditAction.login,
+        targetCollection: 'users',
+        targetId:         model.uid,
+        description:      '${model.displayName} logged in',
+      );
+    }
+
+    notifyListeners();
+  },
+  onError: (_) {
+    _status = AuthStatus.error;
+    _errorMessage = 'Failed to load user profile.';
+    notifyListeners();
+  },
+);
   }
 
   // ── Sign in ────────────────────────────────────────────────────────────────
   Future<bool> signIn({
-    required String email,
-    required String password,
-  }) async {
-    _status = AuthStatus.loading;
-    _errorMessage = null;
-    notifyListeners();
+  required String email,
+  required String password,
+}) async {
+  _status = AuthStatus.loading;
+  _errorMessage = null;
+  _pendingLoginLog = true; // add this
+  notifyListeners();
+  
 
     try {
       await _authService.signInWithEmailAndPassword(

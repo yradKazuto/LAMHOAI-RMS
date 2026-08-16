@@ -5,6 +5,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:csv/csv.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -13,6 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/routing/app_router.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -286,15 +288,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ─────────────────────────────────────────────────────
-            const Text('Reports & Export',
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: _navy)),
-            const SizedBox(height: 2),
-            Text('Filter and export payment records',
-                style: TextStyle(
-                    fontSize: 13, color: Colors.grey[600])),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  tooltip: 'Back to Dashboard',
+                  onPressed: () => context.go(AppRoutes.dashboard),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Reports & Export',
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: _navy)),
+                    const SizedBox(height: 2),
+                    Text('Filter and export payment records',
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey[600])),
+                  ],
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // ── Filters ────────────────────────────────────────────────────

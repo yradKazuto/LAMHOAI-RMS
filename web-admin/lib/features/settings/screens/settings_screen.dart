@@ -27,8 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   final _contact       = TextEditingController();
   final _email         = TextEditingController();
   final _president     = TextEditingController();
-
-  // Dues controllers
+   // Dues controllers
   final _monthly       = TextEditingController();
   final _annual        = TextEditingController();
   final _assessment    = TextEditingController();
@@ -48,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _loadSettings() async {
+  try {
     final settings = await _svc.getSettings();
     setState(() {
       _name.text       = settings.name;
@@ -61,7 +61,15 @@ class _SettingsScreenState extends State<SettingsScreen>
       _penalty.text    = settings.dues.penalty.toStringAsFixed(0);
       _loaded = true;
     });
+  } catch (e) {
+    if (mounted) {
+      setState(() => _loaded = true); // stop the spinner either way
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load settings: $e')),
+      );
+    }
   }
+}
 
   @override
   void dispose() {
@@ -84,12 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         contactNumber: _contact.text.trim(),
         email:         _email.text.trim(),
         president:     _president.text.trim(),
-        dues:          DuesConfig(
-          monthly:           double.tryParse(_monthly.text) ?? 0,
-          annual:            double.tryParse(_annual.text) ?? 0,
-          specialAssessment: double.tryParse(_assessment.text) ?? 0,
-          penalty:           double.tryParse(_penalty.text) ?? 0,
-        ),
+        dues: DuesConfig(monthly: 0, annual: 0, specialAssessment: 0, penalty: 0),
       );
 
       await _svc.saveSettings(settings);

@@ -4,6 +4,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/routing/app_router.dart';
 import '../../../core/services/analytics_service.dart';
 
 class AnalyticsScreen extends StatelessWidget {
@@ -25,15 +27,30 @@ class AnalyticsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ─────────────────────────────────────────────────────
-            const Text('Analytics',
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: _navy)),
-            const SizedBox(height: 2),
-            Text('Financial and membership overview',
-                style:
-                    TextStyle(fontSize: 13, color: Colors.grey[600])),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  tooltip: 'Back to Dashboard',
+                  onPressed: () => context.go(AppRoutes.dashboard),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Analytics',
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: _navy)),
+                    const SizedBox(height: 2),
+                    Text('Financial and membership overview',
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey[600])),
+                  ],
+                ),
+              ],
+            ),
             const SizedBox(height: 28),
 
             // ── Row 1: Summary tiles ────────────────────────────────────────

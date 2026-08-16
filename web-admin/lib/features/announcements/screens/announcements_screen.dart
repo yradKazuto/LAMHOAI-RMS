@@ -7,6 +7,8 @@ import '../../../core/models/announcement_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/routing/app_router.dart';
 
 class AnnouncementsScreen extends StatelessWidget {
   const AnnouncementsScreen({super.key});
@@ -30,43 +32,50 @@ class AnnouncementsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ─────────────────────────────────────────────────────
-            Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Announcements',
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: _navy)),
-                    const SizedBox(height: 2),
-                    Text(
-                        'Post notices visible to all homeowners',
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600])),
-                  ],
-                ),
-                const Spacer(),
-                if (canPost)
-                  ElevatedButton.icon(
-                    onPressed: () => _showPostDialog(
-                        context, _fs, _notif, auth),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Post Announcement'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _navy,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(8)),
-                    ),
-                  ),
-              ],
-            ),
+            // ── Header ─────────────────────────────────────────────────────
+Row(
+  children: [
+    IconButton(
+      icon: const Icon(Icons.arrow_back, color: _navy),
+      tooltip: 'Back to Dashboard',
+      onPressed: () => context.go(AppRoutes.dashboard),
+    ),
+    const SizedBox(width: 8),
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Announcements',
+            style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: _navy)),
+        const SizedBox(height: 2),
+        Text(
+            'Post notices visible to all homeowners',
+            style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600])),
+      ],
+    ),
+    const Spacer(),
+    if (canPost)
+      ElevatedButton.icon(
+        onPressed: () => _showPostDialog(
+            context, _fs, _notif, auth),
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('Post Announcement'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _navy,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(
+              horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(8)),
+        ),
+      ),
+  ],
+),
             const SizedBox(height: 24),
 
             // ── List ───────────────────────────────────────────────────────

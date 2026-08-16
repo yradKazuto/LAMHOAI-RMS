@@ -12,7 +12,7 @@ import '../../../core/services/cloudinary_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../location/screens/location_mapping_screen.dart';
 import '../../payments/screens/add_payment_screen.dart';
-import '../../documents/screens/documents_screen.dart';
+import '../../documents/widgets/document_upload_flow.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final MemberModel member;
@@ -657,27 +657,44 @@ class _DocumentsTab extends StatelessWidget {
                       color: _navy)),
               const Spacer(),
               if (auth.isAdmin || auth.isOfficer)
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => DocumentsScreen(
-                        filterMemberId: memberId,
-                        filterMemberName: memberName,
-                      ),
-                    ),
-                  ),
-                  icon: const Icon(Icons.upload_file_outlined, size: 16),
-                  label: const Text('Upload Document'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _navy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                ),
+  ElevatedButton.icon(
+    onPressed: () async {
+      try {
+        final success = await runDocumentUploadFlow(
+          context: context,
+          fs: _fs,
+          cloudinary: _cloudinary,
+          uploadedByUid: auth.userModel?.uid ?? '',
+          preselectedMemberId: memberId,
+          preselectedMemberName: memberName,
+        );
+        if (success && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Document uploaded successfully.'),
+              backgroundColor: Color(0xFF1A7A4A),
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Upload failed: $e')),
+          );
+        }
+      }
+    },
+    icon: const Icon(Icons.upload_file_outlined, size: 16),
+    label: const Text('Upload Document'),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: _navy,
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 16, vertical: 12),
+    ),
+  ),
             ],
           ),
           const SizedBox(height: 16),

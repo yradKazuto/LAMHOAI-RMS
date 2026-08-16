@@ -12,6 +12,8 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../members/screens/members_screen.dart';
+import '../../audit/screens/audit_screen.dart';
+import '../../users/screens/user_management_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -94,12 +96,12 @@ class DashboardScreen extends StatelessWidget {
       BuildContext context, UserRole role) => [
     if (role == UserRole.admin)
       _DashCard(
-        icon:        Icons.manage_accounts_outlined,
-        label:       'User Management',
-        description: 'Manage staff accounts and roles',
-        color:       const Color(0xFF5A1A7A),
-        onTap: () => context.go(AppRoutes.users),
-      ),
+  icon:        Icons.manage_accounts_outlined,
+  label:       'User Management',
+  description: 'Manage staff accounts and roles',
+  color:       const Color(0xFF5A1A7A),
+  onTap: () => _openUserManagementDialog(context), // changed from context.go(AppRoutes.users)
+),
     if (role == UserRole.admin ||
         role == UserRole.officer)
       _DashCard(
@@ -113,20 +115,12 @@ class DashboardScreen extends StatelessWidget {
         role == UserRole.accountant)
       _DashCard(
         icon:        Icons.account_balance_wallet_outlined,
-        label:       'Finance & Dues',
+        label:       'Payments',
         description: 'Billing, payments, and reports',
         color:       const Color(0xFF1A7A4A),
         onTap: () => context.go(AppRoutes.payments),
       ),
-    if (role == UserRole.admin ||
-        role == UserRole.officer)
-      _DashCard(
-        icon:        Icons.folder_outlined,
-        label:       'Documents',
-        description: 'Property titles and uploaded files',
-        color:       const Color(0xFF7A3A1A),
-        onTap: () => context.go(AppRoutes.documents),
-      ),
+    
     if (role == UserRole.admin ||
         role == UserRole.officer)
       _DashCard(
@@ -182,12 +176,12 @@ class DashboardScreen extends StatelessWidget {
             context.go(AppRoutes.settings),
       ),
       _DashCard(
-        icon:        Icons.history_outlined,
-        label:       'Audit Log',
-        description: 'Track admin actions and changes',
-        color:       const Color(0xFF5A4A1A),
-        onTap: () => context.go(AppRoutes.audit),
-      ),
+  icon:        Icons.history_outlined,
+  label:       'Audit Log',
+  description: 'Track admin actions and changes',
+  color:       const Color(0xFF5A4A1A),
+  onTap: () => _openAuditLogDialog(context), // changed from context.go(AppRoutes.audit)
+),
       _DashCard(
         icon:        Icons.phone_android_outlined,
         label:       'Member Preview',
@@ -259,6 +253,86 @@ Future<void> _openHomeownersPanel(BuildContext context) {
         ),
       );
     },
+  );
+}
+// ── Audit Log dialog ─────────────────────────────────────────────────────────
+Future<void> _openAuditLogDialog(BuildContext context) {
+  final size = MediaQuery.of(context).size;
+  return showDialog(
+    context: context,
+    barrierColor: Colors.black.withOpacity(0.35),
+    builder: (context) => Dialog(
+      insetPadding: const EdgeInsets.all(40),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: SizedBox(
+        width:  size.width > 900 ? 820 : size.width * 0.92,
+        height: size.height * 0.82,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              const AuditScreen(),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  elevation: 3,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+// ── User Management dialog ───────────────────────────────────────────────────
+Future<void> _openUserManagementDialog(BuildContext context) {
+  final size = MediaQuery.of(context).size;
+  return showDialog(
+    context: context,
+    barrierColor: Colors.black.withOpacity(0.35),
+    builder: (context) => Dialog(
+      insetPadding: const EdgeInsets.all(40),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: SizedBox(
+        width:  size.width > 900 ? 820 : size.width * 0.92,
+        height: size.height * 0.82,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              const UserManagementScreen(),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  elevation: 3,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -619,16 +693,7 @@ class AppSidebar extends StatelessWidget {
                       onTap: () => context
                           .go(AppRoutes.members),
                     ),
-                  if (role == UserRole.admin ||
-                      role == UserRole.officer)
-                    _NavItem(
-                      icon:     Icons.folder_outlined,
-                      label:    'Documents',
-                      selected: currentPath ==
-                          AppRoutes.documents,
-                      onTap: () => context
-                          .go(AppRoutes.documents),
-                    ),
+                  
                   if (role == UserRole.admin ||
                       role == UserRole.officer)
                     _NavItem(

@@ -102,6 +102,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── audit_logs ────────────────────────────────────────────────────────────
+      match /audit_logs/{docId} {
+      allow read: if isAdmin();
+      allow create: if isStaff();
+      allow update, delete: if false; // audit logs are append-only
+    }
+
+// ── settings ──────────────────────────────────────────────────────────────
+      match /settings/{docId} {
+      allow read: if isAnyUser();
+      allow write: if isAdmin();
+    }
+
     // ── lots (Location Mapping) ───────────────────────────────────────────────
     match /lots/{docId} {
       allow read: if isStaff();
