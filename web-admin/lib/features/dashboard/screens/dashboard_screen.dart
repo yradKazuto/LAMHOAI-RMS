@@ -1,5 +1,6 @@
 // features/dashboard/screens/dashboard_screen.dart
 // UPDATED Phase 8 — Location Mapping added
+// UPDATED — Homeowner Records opens as a slide-over panel
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../../../core/routing/app_router.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
+import '../../members/screens/members_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -105,7 +107,7 @@ class DashboardScreen extends StatelessWidget {
         label:       'Homeowner Records',
         description: 'View and manage member profiles',
         color:       const Color(0xFF1A4A9C),
-        onTap: () => context.go(AppRoutes.members),
+        onTap: () => _openHomeownersPanel(context),
       ),
     if (role == UserRole.admin ||
         role == UserRole.accountant)
@@ -195,6 +197,69 @@ class DashboardScreen extends StatelessWidget {
       ),
     ],
   ];
+}
+
+// ── Homeowner Records slide-over panel ──────────────────────────────────────
+Future<void> _openHomeownersPanel(BuildContext context) {
+  return showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Homeowner Records',
+    barrierColor: Colors.black.withOpacity(0.35),
+    transitionDuration: const Duration(milliseconds: 280),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return const SizedBox.shrink();
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+
+      final screenWidth = MediaQuery.of(context).size.width;
+
+      final panelWidth =
+          screenWidth > 900 ? 760.0 : screenWidth * 0.92;
+
+      return Align(
+        alignment: Alignment.centerRight,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: Material(
+            elevation: 12,
+            child: SizedBox(
+              width: panelWidth,
+              height: double.infinity,
+              child: Stack(
+                children: [
+                  const MembersScreen(),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Material(
+                      color: Colors.white,
+                      shape: const CircleBorder(),
+                      elevation: 3,
+                      child: IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Close',
+                        onPressed: () =>
+                            Navigator.of(context).pop(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 // ── Stats row ─────────────────────────────────────────────────────────────────

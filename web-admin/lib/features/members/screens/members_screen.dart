@@ -23,7 +23,7 @@ class _MembersScreenState extends State<MembersScreen> {
 
   String  _searchQuery  = '';
   String? _statusFilter;
-  String? _phaseFilter;
+  String? _blockFilter;
 
   static const Color _navy   = Color(0xFF0D2A5C);
   static const Color _accent = Color(0xFF2E6BE6);
@@ -44,9 +44,9 @@ class _MembersScreenState extends State<MembersScreen> {
           m.lotNumber.toLowerCase().contains(q);
       final matchStatus = _statusFilter == null ||
           m.status.name == _statusFilter;
-      final matchPhase  = _phaseFilter == null ||
-          m.phase == _phaseFilter;
-      return matchSearch && matchStatus && matchPhase;
+      final matchBlock  = _blockFilter == null ||
+          m.phase == _blockFilter;
+      return matchSearch && matchStatus && matchBlock;
     }).toList();
   }
 
@@ -163,35 +163,53 @@ class _MembersScreenState extends State<MembersScreen> {
                 ),
                 const SizedBox(width: 12),
                 _DropdownFilter(
-                  value: _phaseFilter,
-                  hint:  'All Phases',
+                  value: _blockFilter,
+                  hint:  'All Blocks',
                   items: const [
                     DropdownMenuItem(
                         value: null,
-                        child: Text('All Phases')),
+                        child: Text('All Blocks')),
                     DropdownMenuItem(
-                        value: 'Phase 1',
-                        child: Text('Phase 1')),
+                        value: 'Block 1',
+                        child: Text('Block 1')),
                     DropdownMenuItem(
-                        value: 'Phase 2',
-                        child: Text('Phase 2')),
+                        value: 'Block 2',
+                        child: Text('Block 2')),
                     DropdownMenuItem(
-                        value: 'Phase 3',
-                        child: Text('Phase 3')),
+                        value: 'Block 3',
+                        child: Text('Block 3')),
+                    DropdownMenuItem(
+                        value: 'Block 4',
+                        child: Text('Block 4')),
+                    DropdownMenuItem(
+                        value: 'Block 5',
+                        child: Text('Block 5')),
+                    DropdownMenuItem(
+                        value: 'Block 6',
+                        child: Text('Block 6')),
+                    DropdownMenuItem(
+                        value: 'Block 7',
+                        child: Text('Block 7')),
+                    DropdownMenuItem(
+                        value: 'Block 8',
+                        child: Text('Block 8')),
+                    DropdownMenuItem(
+                        value: 'Block 9',
+                        child: Text('Block 9')),
                   ],
                   onChanged: (v) =>
-                      setState(() => _phaseFilter = v),
+                      setState(() => _blockFilter = v),
                 ),
                 if (_searchQuery.isNotEmpty ||
                     _statusFilter != null ||
-                    _phaseFilter != null) ...[
+                    _blockFilter != null) ...[
                   const SizedBox(width: 12),
                   TextButton.icon(
                     onPressed: () => setState(() {
                       _search.clear();
                       _searchQuery  = '';
                       _statusFilter = null;
-                      _phaseFilter  = null;
+                      _blockFilter  = null;
                     }),
                     icon: const Icon(Icons.clear,
                         size: 15),
@@ -362,7 +380,7 @@ class _TableHeader extends StatelessWidget {
         Expanded(flex: 3, child: _TH('Name')),
         Expanded(flex: 3, child: _TH('Email')),
         Expanded(flex: 2, child: _TH('Lot No.')),
-        Expanded(flex: 2, child: _TH('Phase')),
+        Expanded(flex: 2, child: _TH('Block')),
         Expanded(flex: 2, child: _TH('Status')),
         SizedBox(width: 48),
       ],
@@ -532,7 +550,7 @@ class _AddMemberDialogState
   final _lot      = TextEditingController();
   final _contact  = TextEditingController();
   final _address  = TextEditingController();
-  String  _phase   = 'Phase 1';
+  String  _block   = 'Block 1';
   bool    _loading = false;
   bool    _obscure = true;
   String? _error;
@@ -600,7 +618,7 @@ class _AddMemberDialogState
         email:         _email.text.trim(),
         role:          'member',
         lotNumber:     _lot.text.trim(),
-        phase:         _phase,
+        phase:         _block,
         status:        MemberStatus.active,
         contactNumber: _contact.text.trim(),
         address:       _address.text.trim(),
@@ -828,15 +846,21 @@ class _AddMemberDialogState
                       crossAxisAlignment:
                           CrossAxisAlignment.start,
                       children: [
-                        const _FieldLabel('Phase'),
+                        const _FieldLabel('Block'),
                         const SizedBox(height: 6),
                         DropdownButtonFormField<
                             String>(
-                          value: _phase,
+                          value: _block,
                           items: [
-                            'Phase 1',
-                            'Phase 2',
-                            'Phase 3'
+                            'Block 1',
+                            'Block 2',
+                            'Block 3',
+                            'Block 4',
+                            'Block 5',
+                            'Block 6',
+                            'Block 7',
+                            'Block 8',
+                            'Block 9',
                           ]
                               .map((p) =>
                                   DropdownMenuItem(
@@ -846,10 +870,10 @@ class _AddMemberDialogState
                               .toList(),
                           onChanged: (v) =>
                               setState(
-                                  () => _phase =
+                                  () => _block =
                                       v!),
                           decoration:
-                              _dec('Select phase'),
+                              _dec('Select block'),
                         ),
                       ],
                     ),

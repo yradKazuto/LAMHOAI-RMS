@@ -9,6 +9,8 @@ import '../../../core/models/document_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../location/screens/location_mapping_screen.dart';
 import '../../payments/screens/add_payment_screen.dart';
 import '../../documents/screens/documents_screen.dart';
 
@@ -176,6 +178,47 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     }
   }
 
+  // ── Open this member's assigned lot on the subdivision map ────────────────
+  Future<void> _viewLotOnMap() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('lots')
+          .where('uid', isEqualTo: widget.member.uid)
+          .limit(1)
+          .get();
+
+      if (!mounted) return;
+
+      if (snap.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This member is not currently assigned to a lot.'),
+          ),
+        );
+        return;
+      }
+
+      final lotId = snap.docs.first.id;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LocationMappingScreen(
+            targetLotId: lotId,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to open the lot on the map: $e'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth    = context.watch<AuthProvider>();
@@ -282,6 +325,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             phase: _phase, status: _status,
             onPhaseChanged: (v) => setState(() => _phase = v),
             onStatusChanged: (v) => setState(() => _status = v),
+            onViewLot: _viewLotOnMap,
           ),
           _PaymentsTab(memberId: widget.member.uid, memberName: widget.member.name, auth: auth),
           _DocumentsTab(memberId: widget.member.uid, memberName: widget.member.name, auth: auth),
@@ -300,6 +344,7 @@ class _ProfileTab extends StatelessWidget {
   final MemberStatus status;
   final void Function(String) onPhaseChanged;
   final void Function(MemberStatus) onStatusChanged;
+  final VoidCallback onViewLot;
 
   static const Color _navy = Color(0xFF0D2A5C);
 
@@ -309,6 +354,7 @@ class _ProfileTab extends StatelessWidget {
     required this.lot, required this.contact, required this.address,
     required this.phase, required this.status,
     required this.onPhaseChanged, required this.onStatusChanged,
+    required this.onViewLot,
   });
 
   @override
@@ -372,6 +418,27 @@ class _ProfileTab extends StatelessWidget {
                     Text(member.phase,
                         style: TextStyle(
                             fontSize: 13, color: Colors.grey[600])),
+                    if (member.lotNumber.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: editMode ? null : onViewLot,
+                        icon: const Icon(Icons.map_outlined, size: 16),
+                        label: const Text('View Lot on Map'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF2E6BE6),
+                          side: const BorderSide(
+                            color: Color(0xFF2E6BE6),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       'Member since ${_fmt(member.createdAt)}',
