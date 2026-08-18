@@ -26,7 +26,6 @@ class _LoginScreenState extends State<LoginScreen>
   static const Color _blue = Color(0xFF1A4A9C);
   static const Color _accent = Color(0xFF2E6BE6);
   static const Color _lightBg = Color(0xFFF0F4FB);
-  static const Color _white = Color(0xFFFFFFFF);
   static const Color _border = Color(0xFFD0DBEE);
   static const Color _error = Color(0xFFCC2200);
 
@@ -71,47 +70,61 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _lightBg,
-      body: Stack(
-        children: [
-          // ── Left decorative panel ──────────────────────────────────────────
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: MediaQuery.of(context).size.width * 0.42,
-            child: const _LeftPanel(),
-          ),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 900;
 
-          // ── Right: login form ──────────────────────────────────────────────
-          Positioned(
-            left: MediaQuery.of(context).size.width * 0.42,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: FadeTransition(
-                opacity: _fadeAnim,
-                child: SlideTransition(
-                  position: _slideAnim,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: _LoginCard(
-                      formKey: _formKey,
-                      emailController: _emailController,
-                      passwordController: _passwordController,
-                      obscurePassword: _obscurePassword,
-                      onTogglePassword: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                      onSubmit: _submit,
+    return Scaffold(
+      body: Container(
+        // Seamless Fullscreen Background Gradient
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0D2A5C), // _navy
+              Color(0xFF1A4A9C), // _blue
+              Color(0xFFE2EAF8), // soft tint to blend with light card
+            ],
+            stops: [0.0, 0.45, 1.0],
+          ),
+        ),
+        child: Row(
+          children: [
+            // ── Left Hero Panel (Desktop) ────────────────────────────────────
+            if (isDesktop)
+              const Expanded(
+                flex: 5,
+                child: _LeftPanel(),
+              ),
+
+            // ── Right Form Section ───────────────────────────────────────────
+            Expanded(
+              flex: 6,
+              child: Center(
+                child: SingleChildScrollView(
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: SlideTransition(
+                      position: _slideAnim,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 440),
+                        child: _LoginCard(
+                          formKey: _formKey,
+                          emailController: _emailController,
+                          passwordController: _passwordController,
+                          obscurePassword: _obscurePassword,
+                          onTogglePassword: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
+                          onSubmit: _submit,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -121,110 +134,104 @@ class _LoginScreenState extends State<LoginScreen>
 class _LeftPanel extends StatelessWidget {
   const _LeftPanel();
 
-  static const Color _navy = Color(0xFF0D2A5C);
-  static const Color _blue = Color(0xFF1A4A9C);
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_navy, _blue, Color(0xFF2D5FBF)],
-          stops: [0.0, 0.55, 1.0],
-        ),
-      ),
+    return SizedBox.expand(
       child: Stack(
         children: [
-          // Subtle geometric overlay
+          // Background Watermark & Geometry
           Positioned.fill(
             child: CustomPaint(painter: _GeoPainter()),
           ),
+
           // Content
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 56),
+            padding: const EdgeInsets.symmetric(horizontal: 56, vertical: 56),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo / seal placeholder
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.15),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.35),
-                      width: 1.5,
+                // Top Brand Badge
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.25),
+                          width: 1,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.account_balance,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
-                  ),
-                  child: const Icon(
-                    Icons.account_balance,
-                    color: Colors.white,
-                    size: 30,
+                    const SizedBox(width: 14),
+                    const Text(
+                      'LAMHOAI',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.5,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const Spacer(),
+
+                // Center Headline Block
+                Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E6BE6),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
                 const Text(
-                  'LAMHOAI',
+                  'La Milagrosa\nHomeowners\nAssociation',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 28,
+                    fontSize: 40,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 3,
+                    height: 1.15,
+                    letterSpacing: -0.5,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 16),
                 Text(
-                  'La Milagrosa Homeowners\nAssociation',
+                  'Record Management System',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Centralized administration dashboard for authorized personnel to manage community operations and records.',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.75),
                     fontSize: 13.5,
                     height: 1.5,
-                    letterSpacing: 0.3,
                   ),
                 ),
+
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.15),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Record Management System',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Administrative portal for authorized\nHOA personnel only.',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.55),
-                          fontSize: 12,
-                          height: 1.55,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+
+                // Footer Version Tag
                 Text(
                   '© ${DateTime.now().year} LAMHOAI · RMS v2.0',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.35),
-                    fontSize: 11,
+                    color: Colors.white.withOpacity(0.45),
+                    fontSize: 11.5,
                   ),
                 ),
               ],
@@ -241,20 +248,20 @@ class _GeoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.04)
+      ..color = Colors.white.withOpacity(0.05)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+      ..strokeWidth = 1.2;
 
-    // Large circle top-right
+    // Background watermark arc design
     canvas.drawCircle(
-      Offset(size.width * 1.1, size.height * 0.15),
-      size.width * 0.7,
+      Offset(size.width * 0.85, size.height * 0.7),
+      size.width * 0.6,
       paint,
     );
-    // Medium circle bottom-left
+
     canvas.drawCircle(
-      Offset(-size.width * 0.1, size.height * 0.85),
-      size.width * 0.5,
+      Offset(size.width * 0.1, size.height * 0.2),
+      size.width * 0.35,
       paint,
     );
   }
@@ -273,8 +280,6 @@ class _LoginCard extends StatelessWidget {
   final VoidCallback onSubmit;
 
   static const Color _navy = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _border = Color(0xFFD0DBEE);
   static const Color _error = Color(0xFFCC2200);
 
   const _LoginCard({
@@ -295,12 +300,12 @@ class _LoginCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 44),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1A4A9C).withOpacity(0.08),
-                blurRadius: 32,
-                offset: const Offset(0, 8),
+                color: const Color(0xFF0D2A5C).withOpacity(0.12),
+                blurRadius: 40,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
@@ -314,7 +319,7 @@ class _LoginCard extends StatelessWidget {
                 const Text(
                   'Welcome back',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 26,
                     fontWeight: FontWeight.w700,
                     color: _navy,
                     letterSpacing: -0.3,
@@ -363,7 +368,7 @@ class _LoginCard extends StatelessWidget {
                 ],
 
                 // ── Email ────────────────────────────────────────────────────
-                _FieldLabel(label: 'Email address'),
+                const _FieldLabel(label: 'Email address'),
                 const SizedBox(height: 6),
                 _AuthField(
                   controller: emailController,
@@ -383,7 +388,7 @@ class _LoginCard extends StatelessWidget {
                 const SizedBox(height: 20),
 
                 // ── Password ─────────────────────────────────────────────────
-                _FieldLabel(label: 'Password'),
+                const _FieldLabel(label: 'Password'),
                 const SizedBox(height: 6),
                 _AuthField(
                   controller: passwordController,
@@ -492,7 +497,6 @@ class _AuthField extends StatelessWidget {
   final String? Function(String?)? validator;
   final void Function(String)? onFieldSubmitted;
 
-  static const Color _navy = Color(0xFF0D2A5C);
   static const Color _accent = Color(0xFF2E6BE6);
   static const Color _border = Color(0xFFD0DBEE);
 
@@ -528,9 +532,10 @@ class _AuthField extends StatelessWidget {
         ),
         prefixIcon: Icon(prefixIcon, size: 18, color: Colors.grey[500]),
         suffixIcon: suffixIcon != null
-            ? GestureDetector(
-                onTap: onSuffixTap,
-                child: Icon(suffixIcon, size: 18, color: Colors.grey[500]),
+            ? IconButton(
+                icon: Icon(suffixIcon, size: 18, color: Colors.grey[500]),
+                onPressed: onSuffixTap,
+                splashRadius: 18,
               )
             : null,
         filled: true,

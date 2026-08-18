@@ -663,15 +663,12 @@ class AppSidebar extends StatelessWidget {
                         .go(AppRoutes.dashboard),
                   ),
                   if (role == UserRole.admin)
-                    _NavItem(
-                      icon:     Icons
-                          .manage_accounts_outlined,
-                      label:    'Users',
-                      selected: currentPath ==
-                          AppRoutes.users,
-                      onTap: () => context
-                          .go(AppRoutes.users),
-                    ),
+  _NavItem(
+    icon:     Icons.manage_accounts_outlined,
+    label:    'Users',
+    selected: currentPath == AppRoutes.users,
+    onTap: () => _openUserManagementDialog(context),
+  ),
                   if (role == UserRole.admin ||
                       role == UserRole.accountant)
                     _NavItem(
@@ -683,17 +680,14 @@ class AppSidebar extends StatelessWidget {
                       onTap: () => context
                           .go(AppRoutes.payments),
                     ),
-                  if (role == UserRole.admin ||
-                      role == UserRole.officer)
-                    _NavItem(
-                      icon: Icons.people_outline,
-                      label:    'Homeowners',
-                      selected: currentPath ==
-                          AppRoutes.members,
-                      onTap: () => context
-                          .go(AppRoutes.members),
-                    ),
-                  
+                 if (role == UserRole.admin ||
+    role == UserRole.officer)
+  _NavItem(
+    icon: Icons.people_outline,
+    label:    'Homeowners',
+    selected: currentPath == AppRoutes.members,
+    onTap: () => _openHomeownersPanel(context),
+  ),
                   if (role == UserRole.admin ||
                       role == UserRole.officer)
                     _NavItem(
@@ -761,13 +755,11 @@ class AppSidebar extends StatelessWidget {
                           .go(AppRoutes.settings),
                     ),
                     _NavItem(
-                      icon:     Icons.history_outlined,
-                      label:    'Audit Log',
-                      selected: currentPath ==
-                          AppRoutes.audit,
-                      onTap: () =>
-                          context.go(AppRoutes.audit),
-                    ),
+  icon:     Icons.history_outlined,
+  label:    'Audit Log',
+  selected: currentPath == AppRoutes.audit,
+  onTap: () => _openAuditLogDialog(context),
+),
                     _NavItem(
                       icon: Icons.phone_android_outlined,
                       label:    'Member Preview',

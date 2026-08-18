@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import '../services/onesignal_service.dart';
 
 import '../models/user_model.dart';
 import '../services/fcm_service.dart';
@@ -70,13 +71,16 @@ class AuthProvider extends ChangeNotifier {
       _user = userModel;
 
       // FCM — best effort, never block auth
+      // AFTER:
+      // Push notifications — best effort, never block auth
       try {
         if (!kIsWeb) {
-          await FCMService.instance
-              .saveTokenToFirestore(firebaseUser.uid)
+          // Mobile (Android/iOS) — OneSignal
+          await OneSignalService.instance
+              .login(firebaseUser.uid)
               .timeout(const Duration(seconds: 5));
-          FCMService.instance.listenToTokenRefresh(firebaseUser.uid);
         } else {
+          // Web — still FCM (OneSignal web not set up yet)
           const vapidKey = 'BCZQo4FNWMRofNJqJJ_Z8NrHyq7IVigdQ8WJd6ua_hR9LM73-2ysxdp_5oStC0swAAs6YmCszWMxYFOZT96lEPg';
           if (vapidKey != 'YOUR_VAPID_KEY_HERE') {
             await FCMService.instance
@@ -85,7 +89,7 @@ class AuthProvider extends ChangeNotifier {
           }
         }
       } catch (e) {
-        debugPrint('FCM token save skipped: $e');
+        debugPrint('Push token setup skipped: $e');
       }
 
       _setStatus(AuthStatus.authenticated);
@@ -111,6 +115,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    if (!kIsWeb) {
+      await OneSignalService.instance.logout();
+    }
     await _auth.signOut();
   }
 

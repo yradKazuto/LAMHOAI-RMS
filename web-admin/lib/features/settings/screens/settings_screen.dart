@@ -2,10 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/models/hoa_settings_model.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../core/routing/app_router.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,11 +17,9 @@ class SettingsScreen extends StatefulWidget {
       _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen>
-    with SingleTickerProviderStateMixin {
-  final _svc         = SettingsService();
-  late TabController _tabs;
-  bool               _saving = false;
+class _SettingsScreenState extends State<SettingsScreen> {
+  final _svc = SettingsService();
+  bool  _saving = false;
 
   // Profile controllers
   final _name          = TextEditingController();
@@ -27,7 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   final _contact       = TextEditingController();
   final _email         = TextEditingController();
   final _president     = TextEditingController();
-   // Dues controllers
+  // Dues controllers
   final _monthly       = TextEditingController();
   final _annual        = TextEditingController();
   final _assessment    = TextEditingController();
@@ -42,38 +42,36 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
     _loadSettings();
   }
 
   Future<void> _loadSettings() async {
-  try {
-    final settings = await _svc.getSettings();
-    setState(() {
-      _name.text       = settings.name;
-      _address.text    = settings.address;
-      _contact.text    = settings.contactNumber;
-      _email.text      = settings.email;
-      _president.text  = settings.president;
-      _monthly.text    = settings.dues.monthly.toStringAsFixed(0);
-      _annual.text     = settings.dues.annual.toStringAsFixed(0);
-      _assessment.text = settings.dues.specialAssessment.toStringAsFixed(0);
-      _penalty.text    = settings.dues.penalty.toStringAsFixed(0);
-      _loaded = true;
-    });
-  } catch (e) {
-    if (mounted) {
-      setState(() => _loaded = true); // stop the spinner either way
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not load settings: $e')),
-      );
+    try {
+      final settings = await _svc.getSettings();
+      setState(() {
+        _name.text       = settings.name;
+        _address.text    = settings.address;
+        _contact.text    = settings.contactNumber;
+        _email.text      = settings.email;
+        _president.text  = settings.president;
+        _monthly.text    = settings.dues.monthly.toStringAsFixed(0);
+        _annual.text     = settings.dues.annual.toStringAsFixed(0);
+        _assessment.text = settings.dues.specialAssessment.toStringAsFixed(0);
+        _penalty.text    = settings.dues.penalty.toStringAsFixed(0);
+        _loaded = true;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loaded = true); // stop the spinner either way
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load settings: $e')),
+        );
+      }
     }
   }
-}
 
   @override
   void dispose() {
-    _tabs.dispose();
     _name.dispose(); _address.dispose();
     _contact.dispose(); _email.dispose();
     _president.dispose(); _monthly.dispose();
@@ -125,6 +123,63 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  void _showDuesDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14)),
+        child: SizedBox(
+          width: 520,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('Dues Configuration',
+                        style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: _navy)),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _DuesTab(
+                  monthly:    _monthly,
+                  annual:     _annual,
+                  assessment: _assessment,
+                  penalty:    _penalty,
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _navy,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('Done'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -137,6 +192,18 @@ class _SettingsScreenState extends State<SettingsScreen>
             // ── Header ─────────────────────────────────────────────────────
             Row(
               children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  tooltip: 'Close',
+                  onPressed: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      context.go(AppRoutes.dashboard);
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
                 Column(
                   crossAxisAlignment:
                       CrossAxisAlignment.start,
@@ -177,56 +244,18 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             const SizedBox(height: 24),
 
-            // ── Tabs ───────────────────────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: const Color(0xFFE0E8F4)),
-              ),
-              child: TabBar(
-                controller: _tabs,
-                labelColor: _navy,
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: _accent,
-                dividerColor: Colors.transparent,
-                labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13.5),
-                tabs: const [
-                  Tab(text: 'HOA Profile'),
-                  Tab(text: 'Dues Configuration'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── Tab content ────────────────────────────────────────────────
+            // ── Content ────────────────────────────────────────────────────
             Expanded(
               child: !_loaded
                   ? const Center(
                       child: CircularProgressIndicator())
-                  : TabBarView(
-                      controller: _tabs,
-                      children: [
-                        // Tab 1 — HOA Profile
-                        _ProfileTab(
-                          name:      _name,
-                          address:   _address,
-                          contact:   _contact,
-                          email:     _email,
-                          president: _president,
-                        ),
-
-                        // Tab 2 — Dues Config
-                        _DuesTab(
-                          monthly:    _monthly,
-                          annual:     _annual,
-                          assessment: _assessment,
-                          penalty:    _penalty,
-                        ),
-                      ],
+                  : _ProfileTab(
+                      name:      _name,
+                      address:   _address,
+                      contact:   _contact,
+                      email:     _email,
+                      president: _president,
+                      onOpenDuesConfig: () => _showDuesDialog(context),
                     ),
             ),
           ],
@@ -240,6 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 class _ProfileTab extends StatelessWidget {
   final TextEditingController name, address, contact,
       email, president;
+  final VoidCallback onOpenDuesConfig;
 
   static const Color _navy = Color(0xFF0D2A5C);
 
@@ -249,6 +279,7 @@ class _ProfileTab extends StatelessWidget {
     required this.contact,
     required this.email,
     required this.president,
+    required this.onOpenDuesConfig,
   });
 
   @override
@@ -307,6 +338,20 @@ class _ProfileTab extends StatelessWidget {
               hint:  'Full name of current president',
               ctrl:  president,
             ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onOpenDuesConfig,
+              icon: const Icon(Icons.payments_outlined, size: 16),
+              label: const Text('Dues Configuration'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF2E6BE6),
+                side: const BorderSide(color: Color(0xFF2E6BE6)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
           ],
         ),
       ),
@@ -314,7 +359,7 @@ class _ProfileTab extends StatelessWidget {
   }
 }
 
-// ── Dues tab ──────────────────────────────────────────────────────────────────
+// ── Dues tab (now shown inside a dialog, triggered from the button above) ─────
 class _DuesTab extends StatelessWidget {
   final TextEditingController monthly, annual,
       assessment, penalty;
@@ -331,107 +376,92 @@ class _DuesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: const Color(0xFFE0E8F4)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Dues Amount Configuration',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: _navy)),
-            const SizedBox(height: 6),
-            Text(
-              'Set the default amounts for each payment type. '
-              'These are reference values for recording payments.',
-              style: TextStyle(
-                  fontSize: 13, color: Colors.grey[500]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Set the default amounts for each payment type. '
+            'These are reference values for recording payments.',
+            style: TextStyle(
+                fontSize: 13, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(
+              child: _DuesField(
+                label:       'Monthly Dues',
+                hint:        '200',
+                ctrl:        monthly,
+                icon:        Icons.calendar_today_outlined,
+                color:       const Color(0xFF1A4A9C),
+                description: 'Per month per household',
+              ),
             ),
-            const SizedBox(height: 24),
-            Row(children: [
-              Expanded(
-                child: _DuesField(
-                  label:       'Monthly Dues',
-                  hint:        '200',
-                  ctrl:        monthly,
-                  icon:        Icons.calendar_today_outlined,
-                  color:       const Color(0xFF1A4A9C),
-                  description: 'Per month per household',
-                ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _DuesField(
+                label:       'Annual Dues',
+                hint:        '2000',
+                ctrl:        annual,
+                icon:        Icons.calendar_month_outlined,
+                color:       const Color(0xFF1A7A4A),
+                description: 'Full year payment',
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _DuesField(
-                  label:       'Annual Dues',
-                  hint:        '2000',
-                  ctrl:        annual,
-                  icon:        Icons.calendar_month_outlined,
-                  color:       const Color(0xFF1A7A4A),
-                  description: 'Full year payment',
-                ),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+              child: _DuesField(
+                label:       'Special Assessment',
+                hint:        '500',
+                ctrl:        assessment,
+                icon:        Icons.assignment_outlined,
+                color:       const Color(0xFF7A3A1A),
+                description: 'One-time special charge',
               ),
-            ]),
-            const SizedBox(height: 16),
-            Row(children: [
-              Expanded(
-                child: _DuesField(
-                  label:       'Special Assessment',
-                  hint:        '500',
-                  ctrl:        assessment,
-                  icon:        Icons.assignment_outlined,
-                  color:       const Color(0xFF7A3A1A),
-                  description: 'One-time special charge',
-                ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _DuesField(
+                label:       'Penalty',
+                hint:        '50',
+                ctrl:        penalty,
+                icon:        Icons.warning_amber_outlined,
+                color:       const Color(0xFFCC2200),
+                description: 'Late payment penalty',
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _DuesField(
-                  label:       'Penalty',
-                  hint:        '50',
-                  ctrl:        penalty,
-                  icon:        Icons.warning_amber_outlined,
-                  color:       const Color(0xFFCC2200),
-                  description: 'Late payment penalty',
-                ),
-              ),
-            ]),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F4FF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFF2E6BE6)
-                        .withOpacity(0.2)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline,
-                      size: 16,
-                      color: Color(0xFF2E6BE6)),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'These amounts are used as default suggestions when recording payments. '
-                      'You can still enter a different amount per transaction.',
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          color: Color(0xFF1A4A9C)),
-                    ),
+            ),
+          ]),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F4FF),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: const Color(0xFF2E6BE6)
+                      .withOpacity(0.2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 16,
+                    color: Color(0xFF2E6BE6)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'These amounts are used as default suggestions when recording payments. '
+                    'You can still enter a different amount per transaction.',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF1A4A9C)),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

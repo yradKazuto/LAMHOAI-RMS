@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../core/models/document_model.dart';
 import '../../../core/models/member_model.dart';
+import '../../../core/models/audit_log_model.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
+import '../../../core/services/settings_service.dart';
 
 class UploadSelection {
   final String memberId;
@@ -29,14 +31,15 @@ String documentMimeType(String ext) {
 }
 
 /// Full upload flow: pick file -> collect member/type -> upload to
-/// Cloudinary -> save metadata. Returns true on success, false if the
-/// user cancelled at any step. Throws on upload/save failure — caller
-/// should wrap in try/catch.
+/// Cloudinary -> save metadata -> log the action. Returns true on
+/// success, false if the user cancelled at any step. Throws on
+/// upload/save failure — caller should wrap in try/catch.
 Future<bool> runDocumentUploadFlow({
   required BuildContext context,
   required FirestoreService fs,
   required CloudinaryService cloudinary,
   required String uploadedByUid,
+  required String uploadedByName,
   String? preselectedMemberId,
   String? preselectedMemberName,
 }) async {
@@ -81,10 +84,21 @@ Future<bool> runDocumentUploadFlow({
     fileUrl:    fileUrl,
   );
 
+  // ── Audit log ──────────────────────────────────────────────────────────
+  await SettingsService().logAction(
+    performedBy:      uploadedByUid,
+    performedByName:  uploadedByName,
+    action:           AuditAction.created,
+    targetCollection: 'documents',
+    targetId:         selection.memberId,
+    description:      'Uploaded ${selection.docType.label} "${file.name}" '
+                       'for ${selection.memberName}',
+  );
+
   return true;
 }
 
-// ── Upload dialog (moved from documents_screen.dart, now public) ──────────────
+// ── Upload dialog (public — shared by DocumentsScreen and MemberDetailScreen) ─
 class UploadDialog extends StatefulWidget {
   final FirestoreService fs;
   final String fileName;

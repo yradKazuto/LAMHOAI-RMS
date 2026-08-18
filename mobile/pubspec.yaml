@@ -23,6 +23,7 @@ dependencies:
   go_router: ^17.2.3
   provider: ^6.1.2
   flutter_local_notifications: ^18.0.0
+  onesignal_flutter: ^5.3.5
 
   intl: ^0.18.0
   # Navigation - add routing packages here

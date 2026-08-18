@@ -6,9 +6,11 @@ import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/document_model.dart';
+import '../../../core/models/audit_log_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
+import '../../../core/services/settings_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../location/screens/location_mapping_screen.dart';
 import '../../payments/screens/add_payment_screen.dart';
@@ -657,44 +659,47 @@ class _DocumentsTab extends StatelessWidget {
                       color: _navy)),
               const Spacer(),
               if (auth.isAdmin || auth.isOfficer)
-  ElevatedButton.icon(
-    onPressed: () async {
-      try {
-        final success = await runDocumentUploadFlow(
-          context: context,
-          fs: _fs,
-          cloudinary: _cloudinary,
-          uploadedByUid: auth.userModel?.uid ?? '',
-          preselectedMemberId: memberId,
-          preselectedMemberName: memberName,
-        );
-        if (success && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Document uploaded successfully.'),
-              backgroundColor: Color(0xFF1A7A4A),
-            ),
-          );
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Upload failed: $e')),
-          );
-        }
-      }
-    },
-    icon: const Icon(Icons.upload_file_outlined, size: 16),
-    label: const Text('Upload Document'),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: _navy,
-      foregroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8)),
-      padding: const EdgeInsets.symmetric(
-          horizontal: 16, vertical: 12),
-    ),
-  ),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final success = await runDocumentUploadFlow(
+                        context: context,
+                        fs: _fs,
+                        cloudinary: _cloudinary,
+                        uploadedByUid: auth.userModel?.uid ?? '',
+                        uploadedByName:
+                            auth.userModel?.displayName ?? '',
+                        preselectedMemberId: memberId,
+                        preselectedMemberName: memberName,
+                      );
+                      if (success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Document uploaded successfully.'),
+                            backgroundColor: Color(0xFF1A7A4A),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Upload failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.upload_file_outlined, size: 16),
+                  label: const Text('Upload Document'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _navy,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -959,7 +964,24 @@ class _PaymentRow extends StatelessWidget {
               payment.status == PaymentStatus.overdue) ...[
             const SizedBox(width: 10),
             TextButton(
-              onPressed: () => fs.markPaymentPaid(payment.id),
+              onPressed: () async {
+                await fs.markPaymentPaid(payment.id);
+
+                // ── Audit log ────────────────────────────────────────────
+                if (context.mounted) {
+                  final auth =
+                      Provider.of<AuthProvider>(context, listen: false);
+                  await SettingsService().logAction(
+                    performedBy:      auth.userModel?.uid ?? '',
+                    performedByName:  auth.userModel?.displayName ?? '',
+                    action:           AuditAction.updated,
+                    targetCollection: 'payments',
+                    targetId:         payment.id,
+                    description:
+                        'Marked payment for ${payment.memberName} as paid',
+                  );
+                }
+              },
               style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF1A7A4A)),
               child: const Text('Mark Paid',
@@ -1010,6 +1032,22 @@ class _DocCard extends StatelessWidget {
                 onTap: () async {
                   await cloudinary.deleteFile(doc.fileUrl);
                   await fs.deleteDocumentMetadata(doc.id);
+
+                  // ── Audit log ──────────────────────────────────────────
+                  if (context.mounted) {
+                    final auth =
+                        Provider.of<AuthProvider>(context, listen: false);
+                    await SettingsService().logAction(
+                      performedBy:      auth.userModel?.uid ?? '',
+                      performedByName:  auth.userModel?.displayName ?? '',
+                      action:           AuditAction.deleted,
+                      targetCollection: 'documents',
+                      targetId:         doc.id,
+                      description:
+                          'Deleted document "${doc.fileName}" '
+                          'for ${doc.memberName}',
+                    );
+                  }
                 },
                 child: const Icon(Icons.delete_outline,
                     size: 18, color: Colors.grey),

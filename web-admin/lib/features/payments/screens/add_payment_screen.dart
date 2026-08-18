@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
+import '../../../core/models/audit_log_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/settings_service.dart';
 
 class AddPaymentScreen extends StatefulWidget {
   final String? preselectedMemberId;
@@ -103,6 +105,19 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
         notes:      _notes.text.trim(),
         createdAt:  DateTime.now(),
       ));
+
+      // ── Audit log ──────────────────────────────────────────────────────
+      await SettingsService().logAction(
+        performedBy:      auth.userModel?.uid ?? '',
+        performedByName:  auth.userModel?.displayName ?? '',
+        action:           AuditAction.created,
+        targetCollection: 'payments',
+        targetId:         id,
+        description:
+            'Recorded ${_type.label} payment of ₱${_amount.text.trim()} '
+            'for $_memberName',
+      );
+
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

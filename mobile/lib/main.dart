@@ -9,6 +9,8 @@ import 'core/providers/auth_provider.dart';
 import 'core/routing/app_router.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/notification_handler.dart';
+import 'core/services/onesignal_service.dart';
+import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,20 +39,38 @@ class _LamhoaiAppState extends State<LamhoaiApp> {
 
     // Initialize FCM after first frame — wrapped in try/catch + timeout
     // so a slow connection or permission denial never blocks the app
+    // AFTER:
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        await FCMService.instance.initialize(
-          onMessageTap: (message) {
-            NotificationHandler.handleMessage(message, _router);
-          },
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            debugPrint('FCM init timed out — continuing without FCM');
-          },
-        );
+        if (!kIsWeb) {
+          // Mobile — OneSignal
+          await OneSignalService.instance
+              .initialize('9c051b93-8eb3-47cc-bdc3-bb783dca00c0')
+              .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('OneSignal init timed out — continuing without push');
+            },
+          );
+
+          OneSignalService.instance.addClickListener((data) {
+            NotificationHandler.handleData(data, _router);
+          });
+        } else {
+          // Web — still FCM (unchanged)
+          await FCMService.instance.initialize(
+            onMessageTap: (message) {
+              NotificationHandler.handleMessage(message, _router);
+            },
+          ).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('FCM init timed out — continuing without FCM');
+            },
+          );
+        }
       } catch (e) {
-        debugPrint('FCM init error: $e — continuing without FCM');
+        debugPrint('Push init error: $e — continuing without push');
       }
     });
   }

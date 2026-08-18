@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/notification_service.dart';
 import 'add_payment_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/routing/app_router.dart';
@@ -18,6 +19,9 @@ class PaymentsScreen extends StatefulWidget {
 class _PaymentsScreenState extends State<PaymentsScreen> {
   final _fs     = FirestoreService();
   final _search = TextEditingController();
+  final _notif  = NotificationService();
+
+  bool _sendingReminders = false;
 
   String         _searchQuery  = '';
   PaymentStatus? _statusFilter;
@@ -57,6 +61,51 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     };
   }
 
+  Future<void> _sendDuesReminders() async {
+    final days = await showDialog<int>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Send Dues Reminder',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0D2A5C))),
+        content: const Text(
+            'Notify members whose unpaid dues are coming up within:',
+            style: TextStyle(fontSize: 13.5)),
+        actions: [
+          for (final d in [1, 3, 7, 14])
+            TextButton(
+              onPressed: () => Navigator.pop(context, d),
+              child: Text('$d day${d == 1 ? '' : 's'}'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+
+    if (days == null) return;
+
+    setState(() => _sendingReminders = true);
+    final result = await _notif.sendDuesReminders(daysAhead: days);
+    if (mounted) {
+      setState(() => _sendingReminders = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: result.success
+              ? const Color(0xFF1A7A4A)
+              : const Color(0xFFCC2200),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth      = context.watch<AuthProvider>();
@@ -71,14 +120,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           children: [
             // ── Header ───────────────────────────────────────────────────────
             Row(
-  children: [
-    IconButton(
-      icon: const Icon(Icons.arrow_back, color: _navy),
-      tooltip: 'Back to Dashboard',
-      onPressed: () => context.go(AppRoutes.dashboard),
-    ),
-    const SizedBox(width: 8),
-                  Column(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  tooltip: 'Back to Dashboard',
+                  onPressed: () => context.go(AppRoutes.dashboard),
+                ),
+                const SizedBox(width: 8),
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Payments',
@@ -93,7 +142,28 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   ],
                 ),
                 const Spacer(),
-                if (canRecord)
+                if (canRecord) ...[
+                  OutlinedButton.icon(
+                    onPressed: _sendingReminders ? null : _sendDuesReminders,
+                    icon: _sendingReminders
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.notifications_active_outlined,
+                            size: 18),
+                    label: Text(
+                        _sendingReminders ? 'Sending...' : 'Send Dues Reminder'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _navy,
+                      side: const BorderSide(color: _navy),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   ElevatedButton.icon(
                     onPressed: () => Navigator.push(
                       context,
@@ -111,6 +181,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
+                ],
               ],
             ),
             const SizedBox(height: 24),
@@ -337,13 +408,21 @@ class _SummaryCard extends StatelessWidget {
 }
 
 // ── Payment table row ─────────────────────────────────────────────────────────
-class _PaymentTableRow extends StatelessWidget {
+class _PaymentTableRow extends StatefulWidget {
   final PaymentModel payment;
   final FirestoreService fs;
   final bool canRecord;
 
   const _PaymentTableRow({
     required this.payment, required this.fs, required this.canRecord});
+
+  @override
+  State<_PaymentTableRow> createState() => _PaymentTableRowState();
+}
+
+class _PaymentTableRowState extends State<_PaymentTableRow> {
+  final _notif = NotificationService();
+  bool _marking = false;
 
   Color _fg(PaymentStatus s) {
     switch (s) {
@@ -367,8 +446,51 @@ class _PaymentTableRow extends StatelessWidget {
       : '${d.day.toString().padLeft(2,'0')}/'
         '${d.month.toString().padLeft(2,'0')}/${d.year}';
 
+  Future<void> _markPaid() async {
+    setState(() => _marking = true);
+    final payment = widget.payment;
+
+    try {
+      await widget.fs.markPaymentPaid(payment.id);
+
+      // Notify the member their payment was confirmed. Fire this after
+      // the Firestore update succeeds, so a failed/slow push never
+      // blocks or misrepresents the actual payment record.
+      final result = await _notif.sendToMember(
+        uid: payment.uid,
+        title: 'Payment Confirmed',
+        body: 'Hi ${payment.memberName}, your ₱${payment.amount.toStringAsFixed(2)} '
+            '${payment.type.label} payment has been received and confirmed.',
+        type: 'payment',
+        extraData: {'paymentId': payment.id},
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.success
+                ? 'Payment marked paid. Member notified.'
+                : 'Payment marked paid, but notification failed: ${result.message}'),
+            backgroundColor: result.success
+                ? const Color(0xFF1A7A4A)
+                : const Color(0xFF7A6A1A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error marking payment paid: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _marking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final payment = widget.payment;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
@@ -408,16 +530,21 @@ class _PaymentTableRow extends StatelessWidget {
           ),
           SizedBox(
             width: 80,
-            child: (canRecord &&
+            child: (widget.canRecord &&
                     (payment.status == PaymentStatus.unpaid ||
                      payment.status == PaymentStatus.overdue))
                 ? TextButton(
-                    onPressed: () => fs.markPaymentPaid(payment.id),
+                    onPressed: _marking ? null : _markPaid,
                     style: TextButton.styleFrom(
                         foregroundColor: const Color(0xFF1A7A4A),
                         padding: EdgeInsets.zero),
-                    child: const Text('Mark Paid',
-                        style: TextStyle(fontSize: 12)))
+                    child: _marking
+                        ? const SizedBox(
+                            width: 14, height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Mark Paid',
+                            style: TextStyle(fontSize: 12)))
                 : null,
           ),
         ],

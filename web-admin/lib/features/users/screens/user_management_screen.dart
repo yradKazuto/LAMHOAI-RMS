@@ -7,6 +7,8 @@ import '../../../core/models/staff_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/models/audit_log_model.dart';
+import '../../../core/services/settings_service.dart';
 
 class UserManagementScreen extends StatelessWidget {
   const UserManagementScreen({super.key});

@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/complaint_model.dart';
+import '../../../core/models/audit_log_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/services/settings_service.dart';
 import '../../../core/routing/app_router.dart';
 
 class ComplaintsScreen extends StatefulWidget {
@@ -413,6 +416,7 @@ class _ComplaintDetailSheetState
     extends State<_ComplaintDetailSheet> {
   late ComplaintStatus _selectedStatus;
   final _noteCtrl = TextEditingController();
+  final _notif    = NotificationService();
   bool _loading   = false;
 
   static const Color _navy = Color(0xFF0D2A5C);
@@ -436,6 +440,12 @@ class _ComplaintDetailSheetState
 
   Future<void> _updateStatus() async {
     setState(() => _loading = true);
+
+    // Remember the original status BEFORE updating, so we only notify
+    // when it's actually changing to resolved/rejected — not on every
+    // save (e.g. editing the note while status stays the same).
+    final previousStatus = widget.complaint.status;
+
     try {
       await widget.fs.updateComplaintStatus(
         complaintId:    widget.complaint.id,
@@ -443,6 +453,47 @@ class _ComplaintDetailSheetState
         resolvedBy:     widget.auth.userModel?.uid ?? '',
         resolutionNote: _noteCtrl.text.trim(),
       );
+
+      // ── Audit log ────────────────────────────────────────────────────
+      await SettingsService().logAction(
+        performedBy:      widget.auth.userModel?.uid ?? '',
+        performedByName:  widget.auth.userModel?.displayName ?? '',
+        action:           AuditAction.statusChanged,
+        targetCollection: 'complaints',
+        targetId:         widget.complaint.id,
+        description:      'Changed complaint "${widget.complaint.subject}" '
+                           'status from ${previousStatus.label} to '
+                           '${_selectedStatus.label}',
+      );
+
+      // Notify the member only when the status is genuinely changing
+      // to a final outcome (resolved or rejected).
+      final justResolved = _selectedStatus == ComplaintStatus.resolved &&
+          previousStatus != ComplaintStatus.resolved;
+      final justRejected = _selectedStatus == ComplaintStatus.rejected &&
+          previousStatus != ComplaintStatus.rejected;
+
+      if (justResolved || justRejected) {
+        final note = _noteCtrl.text.trim();
+        final title =
+            justResolved ? 'Complaint Resolved' : 'Complaint Update';
+        final body = justResolved
+            ? 'Your complaint "${widget.complaint.subject}" has been resolved'
+                '${note.isNotEmpty ? ': $note' : '.'}'
+            : 'Your complaint "${widget.complaint.subject}" was not approved'
+                '${note.isNotEmpty ? ': $note' : '.'}';
+
+        // Fire-and-forget — don't block the UI on push delivery; the
+        // status update itself already succeeded and is what matters most.
+        _notif.sendToMember(
+          uid: widget.complaint.uid,
+          title: title,
+          body: body,
+          type: 'complaint',
+          extraData: {'complaintId': widget.complaint.id},
+        );
+      }
+
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
