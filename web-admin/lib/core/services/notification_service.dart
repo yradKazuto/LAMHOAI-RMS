@@ -7,19 +7,18 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── OneSignal config ─────────────────────────────────────────────────────
-  // From OneSignal Dashboard → Settings → Keys & IDs.
-  // NOTE: embedding the REST API key in a Flutter Web app means it is
-  // visible in browser network requests / bundle to anyone who opens
-  // dev tools on the admin panel. Acceptable for a small trusted admin
-  // audience (e.g. capstone project); for a public-facing admin panel
-  // this call should be moved behind a server you control instead.
-  static const String _oneSignalAppId = '9c051b93-8eb3-47cc-bdc3-bb783dca00c0';
-  static const String _oneSignalRestApiKey = 'os_v2_app_tqcrxe4ownd4zpodxn4d3sqaycgwq4klukxu6x4asmcrcungd43ybpf7bgqjrmxpute5ahmhysaofjpqngvxw4jkts2bdnv2tazzooa';
+  // Loaded dynamically from the .env file.
+  static String get _oneSignalAppId =>
+      dotenv.env['ONESIGNAL_APP_ID'] ?? '';
+  static String get _oneSignalRestApiKey =>
+      dotenv.env['ONESIGNAL_API_KEY'] ?? '';
+
   static const String _oneSignalUrl =
       'https://onesignal.com/api/v1/notifications';
 
@@ -41,7 +40,7 @@ class NotificationService {
       final memberUids = snap.docs.map((d) => d.id).toList();
 
       if (memberUids.isEmpty) {
-        return NotificationResult(
+        return const NotificationResult(
           success: false,
           sent: 0,
           failed: 0,

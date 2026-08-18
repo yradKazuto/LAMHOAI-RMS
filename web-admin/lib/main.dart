@@ -3,15 +3,21 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Added flutter_dotenv import
 import 'core/providers/auth_provider.dart';
 import 'core/routing/app_router.dart';
-import 'firebase_options.dart'; // Uncomment after running flutterfire configure
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables before initializing app or services
+  await dotenv.load(fileName: ".env");
+
   await Firebase.initializeApp(
-   options: DefaultFirebaseOptions.currentPlatform, // Uncomment after flutterfire configure
+    options: DefaultFirebaseOptions.currentPlatform,
   );
+
   runApp(const LamhoaiApp());
 }
 
@@ -50,7 +56,7 @@ class LamhoaiApp extends StatelessWidget {
         secondary: accent,
       ),
       scaffoldBackgroundColor: const Color(0xFFF0F4FB),
-      fontFamily: 'Inter', // Add inter to pubspec or use default
+      fontFamily: 'Inter',
       textTheme: const TextTheme(
         bodyMedium: TextStyle(color: Color(0xFF1A2B4A)),
       ),
