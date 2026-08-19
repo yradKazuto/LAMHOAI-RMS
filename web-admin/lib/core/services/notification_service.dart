@@ -13,14 +13,25 @@ class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── OneSignal config ─────────────────────────────────────────────────────
-  // Loaded dynamically from the .env file.
-  static String get _oneSignalAppId =>
-      dotenv.env['ONESIGNAL_APP_ID'] ?? '';
+  // Read from .env at call time (NOT a compile-time const — dotenv loads
+  // asynchronously in main.dart before this is ever used, but the actual
+  // values aren't known until runtime, so these must be getters).
+  //
+  // .env must contain:
+  //   ONESIGNAL_APP_ID=9c051b93-8eb3-47cc-bdc3-bb783dca00c0
+  //   ONESIGNAL_REST_API_KEY=os_v2_app_...
+  //
+  // NOTE: dotenv keeps the key out of git / GitHub push protection, but
+  // it does NOT hide it from the browser at runtime — Flutter Web still
+  // bundles .env as a compiled asset, so the key remains visible to
+  // anyone inspecting network requests or the app bundle. Acceptable for
+  // a small trusted admin audience (e.g. capstone project); a
+  // public-facing admin panel should move this call behind a server you
+  // control instead.
+  static String get _oneSignalAppId => dotenv.env['ONESIGNAL_APP_ID'] ?? '';
   static String get _oneSignalRestApiKey =>
-      dotenv.env['ONESIGNAL_API_KEY'] ?? '';
-
-  static const String _oneSignalUrl =
-      'https://onesignal.com/api/v1/notifications';
+      dotenv.env['ONESIGNAL_REST_API_KEY'] ?? '';
+  static const String _oneSignalUrl = 'https://api.onesignal.com/notifications';
 
   // ── Send announcement notification to all members ──────────────────────────
   Future<NotificationResult> sendAnnouncementToAll({
@@ -29,9 +40,6 @@ class NotificationService {
     required String body,
   }) async {
     try {
-      // Get all member uids — used for writing notification history docs,
-      // not for targeting the push itself (OneSignal handles that via
-      // its own subscribed-devices list).
       final snap = await _db
           .collection('users')
           .where('role', isEqualTo: 'member')
@@ -40,7 +48,7 @@ class NotificationService {
       final memberUids = snap.docs.map((d) => d.id).toList();
 
       if (memberUids.isEmpty) {
-        return const NotificationResult(
+        return NotificationResult(
           success: false,
           sent: 0,
           failed: 0,
@@ -79,12 +87,8 @@ class NotificationService {
       Map<String, dynamic> json = {};
       try {
         json = jsonDecode(response.body) as Map<String, dynamic>;
-      } catch (_) {
-        // Non-JSON or unexpected shape — fall through with defaults below.
-      }
+      } catch (_) {}
 
-      // Write a notification history doc for every member so
-      // NotificationsScreen shows it regardless of push delivery.
       final batch = _db.batch();
       for (final uid in memberUids) {
         final ref = _db.collection('notifications').doc();
@@ -119,8 +123,6 @@ class NotificationService {
   }
 
   // ── Send to a single member (e.g. dues reminder, complaint update) ─────────
-  // Targets by Firebase uid, using the "external ID" OneSignal.login(uid)
-  // set on the member's device in the mobile app.
   Future<NotificationResult> sendToMember({
     required String uid,
     required String title,
@@ -180,10 +182,6 @@ class NotificationService {
   }
 
   // ── Send dues reminders to members with unpaid dues due soon ───────────────
-  // Queries the payments collection for unpaid dues within the next
-  // [daysAhead] days, groups them by member, and sends each member a
-  // personalized reminder via sendToMember(). Call this from a button
-  // on the Payments screen.
   Future<NotificationResult> sendDuesReminders({int daysAhead = 7}) async {
     try {
       final now = DateTime.now();
@@ -205,8 +203,6 @@ class NotificationService {
         );
       }
 
-      // Group payments by member uid so someone with 2 unpaid dues gets
-      // one combined reminder, not two separate pushes.
       final Map<String, List<Map<String, dynamic>>> byMember = {};
       for (final doc in paymentsSnap.docs) {
         final data = doc.data();
@@ -229,10 +225,6 @@ class NotificationService {
         final dueCount = dues.length;
         final formatted = _formatPeso(totalAmount);
 
-        // Find the soonest due date among this member's unpaid dues, and
-        // state the real number of days remaining — not the window size
-        // used to search for them. A payment due in 3 days should say
-        // "3 days," not "7 days," even if the search window was 7.
         final soonestDueDate = dues
             .map((d) => (d['dueDate'] as Timestamp).toDate())
             .reduce((a, b) => a.isBefore(b) ? a : b);
@@ -249,7 +241,6 @@ class NotificationService {
           dueWhen = 'in $daysUntilDue days';
         }
 
-        // Look up display name for a personalized message.
         String name = 'Member';
         try {
           final userDoc = await _db.collection('users').doc(uid).get();
@@ -257,9 +248,7 @@ class NotificationService {
                   true
               ? userDoc.data()!['displayName'] as String
               : 'Member';
-        } catch (_) {
-          // Fall back to generic greeting if the lookup fails.
-        }
+        } catch (_) {}
 
         final title =
             dueCount == 1 ? 'Payment Due Soon' : '$dueCount Payments Due Soon';
@@ -297,7 +286,6 @@ class NotificationService {
     }
   }
 
-  // ── Simple peso formatter (no intl dependency required) ────────────────────
   String _formatPeso(double amount) {
     final wholeStr = amount.toStringAsFixed(2);
     final parts = wholeStr.split('.');
@@ -312,7 +300,6 @@ class NotificationService {
     return '₱${buffer.toString()}.$decPart';
   }
 
-  // ── Get member count (for UI preview) ────────────────────────────────────
   Future<int> getMemberTokenCount() async {
     final snap =
         await _db.collection('users').where('role', isEqualTo: 'member').get();

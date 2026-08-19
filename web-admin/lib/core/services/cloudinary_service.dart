@@ -1,30 +1,28 @@
 // core/services/cloudinary_service.dart
 //
 // Uses unsigned uploads via Cloudinary's REST API endpoint.
-// The cloud name is hardcoded. API Key and Secret are read from
-// environment variables injected at build time:
+// Cloud name is hardcoded (not sensitive — it's visible in every
+// uploaded file's public URL anyway). API Key and Secret are read
+// from .env at runtime via flutter_dotenv.
 //
-//   flutter run --dart-define=CLOUDINARY_API_KEY=your_key \
-//               --dart-define=CLOUDINARY_API_SECRET=your_secret
-//
-// For production web builds:
-//   flutter build web --dart-define=CLOUDINARY_API_KEY=your_key \
-//                     --dart-define=CLOUDINARY_API_SECRET=your_secret
+// .env must contain:
+//   CLOUDINARY_API_KEY=your_key
+//   CLOUDINARY_API_SECRET=your_secret
 
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class CloudinaryService {
   // ── Config ─────────────────────────────────────────────────────────────────
   static const String cloudName = 'drmufa6ev';
 
-  // Injected at build via --dart-define
-  static const String _apiKey =
-      String.fromEnvironment('CLOUDINARY_API_KEY', defaultValue: '');
-  static const String _apiSecret =
-      String.fromEnvironment('CLOUDINARY_API_SECRET', defaultValue: '');
+  // Read from .env at call time (not a compile-time const — dotenv loads
+  // asynchronously in main.dart before this is ever used).
+  static String get _apiKey => dotenv.env['CLOUDINARY_API_KEY'] ?? '';
+  static String get _apiSecret => dotenv.env['CLOUDINARY_API_SECRET'] ?? '';
 
   static const String _uploadFolder = 'lamhoai_rms/documents';
 
@@ -56,8 +54,8 @@ class CloudinaryService {
     if (_apiKey.isEmpty || _apiSecret.isEmpty) {
       throw CloudinaryUploadException(
         'Cloudinary API key or secret not configured. '
-        'Run with --dart-define=CLOUDINARY_API_KEY=... '
-        '--dart-define=CLOUDINARY_API_SECRET=...',
+        'Check that .env contains CLOUDINARY_API_KEY and '
+        'CLOUDINARY_API_SECRET, and that dotenv.load() ran in main.dart.',
       );
     }
 
