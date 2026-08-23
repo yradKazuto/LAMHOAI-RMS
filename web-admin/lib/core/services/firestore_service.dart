@@ -57,6 +57,13 @@ class FirestoreService {
     await _users.doc(uid).update({'status': status.name});
   }
 
+  // ── Updates only the photoUrl field — won't overwrite name, email, or
+  // any other field that might be sitting unsaved in the edit form at
+  // the same time.
+  Future<void> updateMemberPhoto(String uid, String photoUrl) async {
+    await _users.doc(uid).update({'photoUrl': photoUrl});
+  }
+
   Future<void> deleteMember(String uid) async {
     await _users.doc(uid).delete();
   }

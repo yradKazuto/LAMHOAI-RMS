@@ -31,9 +31,9 @@ String documentMimeType(String ext) {
 }
 
 /// Full upload flow: pick file -> collect member/type -> upload to
-/// Cloudinary -> save metadata -> log the action. Returns true on
-/// success, false if the user cancelled at any step. Throws on
-/// upload/save failure — caller should wrap in try/catch.
+/// Cloudinary (with a live progress dialog) -> save metadata -> log the
+/// action. Returns true on success, false if the user cancelled at any
+/// step. Throws on upload/save failure — caller should wrap in try/catch.
 Future<bool> runDocumentUploadFlow({
   required BuildContext context,
   required FirestoreService fs,
@@ -68,12 +68,37 @@ Future<bool> runDocumentUploadFlow({
   );
   if (selection == null) return false;
 
-  final fileUrl = await cloudinary.uploadFile(
-    fileBytes: file.bytes!,
-    fileName:  file.name,
-    memberId:  selection.memberId,
-    mimeType:  documentMimeType(file.extension ?? ''),
+  if (!context.mounted) return false;
+
+  // Show a non-dismissible progress dialog for the actual upload. It's
+  // shown fire-and-forget (not awaited) so the upload below can run
+  // concurrently and drive the progress bar via the ValueNotifier.
+  final progress = ValueNotifier<double>(0);
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _UploadProgressDialog(
+      fileName: file.name,
+      progress: progress,
+    ),
   );
+
+  final String fileUrl;
+  try {
+    fileUrl = await cloudinary.uploadFile(
+      fileBytes: file.bytes!,
+      fileName:  file.name,
+      memberId:  selection.memberId,
+      mimeType:  documentMimeType(file.extension ?? ''),
+      onProgress: (p) => progress.value = p,
+    );
+  } finally {
+    // Always close the progress dialog, whether the upload succeeded
+    // or threw — the error itself propagates normally to the caller.
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
 
   await fs.saveDocumentMetadata(
     memberUid:  selection.memberId,
@@ -96,6 +121,78 @@ Future<bool> runDocumentUploadFlow({
   );
 
   return true;
+}
+
+// ── Upload progress dialog ──────────────────────────────────────────────────
+class _UploadProgressDialog extends StatelessWidget {
+  final String fileName;
+  final ValueNotifier<double> progress;
+
+  const _UploadProgressDialog({
+    required this.fileName,
+    required this.progress,
+  });
+
+  static const Color _navy   = Color(0xFF0D2A5C);
+  static const Color _accent = Color(0xFF2E6BE6);
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(26),
+        child: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Uploading Document',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: _navy)),
+              const SizedBox(height: 6),
+              Text(fileName,
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 22),
+              ValueListenableBuilder<double>(
+                valueListenable: progress,
+                builder: (_, value, __) {
+                  final percent = (value * 100).clamp(0, 100).toStringAsFixed(0);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          // Indeterminate (bouncing) until the first byte
+                          // is actually reported, then switches to a
+                          // real determinate bar.
+                          value: value > 0 ? value : null,
+                          minHeight: 8,
+                          backgroundColor: const Color(0xFFE8EDF5),
+                          valueColor:
+                              const AlwaysStoppedAnimation(_accent),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('$percent%',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey[600])),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Upload dialog (public — shared by DocumentsScreen and MemberDetailScreen) ─

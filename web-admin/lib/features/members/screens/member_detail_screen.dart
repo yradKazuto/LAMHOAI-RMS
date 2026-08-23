@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
+import 'package:file_picker/file_picker.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/document_model.dart';
@@ -26,10 +27,16 @@ class MemberDetailScreen extends StatefulWidget {
 
 class _MemberDetailScreenState extends State<MemberDetailScreen>
     with SingleTickerProviderStateMixin {
-  final _fs = FirestoreService();
+  final _fs         = FirestoreService();
+  final _cloudinary = CloudinaryService();
   late TabController _tabs;
   bool _editMode = false;
   bool _saving   = false;
+
+  // Local override so a freshly uploaded photo shows immediately without
+  // needing to re-fetch the member (widget.member is a static snapshot
+  // passed in at navigation time, not a live stream).
+  late String _photoUrl;
 
   // Edit controllers
   late TextEditingController _name;
@@ -48,6 +55,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
+    _photoUrl = widget.member.photoUrl;
     _initControllers(widget.member);
   }
 
@@ -221,6 +229,70 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     }
   }
 
+  // ── Pick, upload, and persist a new profile photo ───────────────────────────
+  Future<void> _changePhoto({
+    required void Function(double progress) onProgress,
+    required void Function(bool uploading) onUploadingChanged,
+  }) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not read image file.')),
+        );
+      }
+      return;
+    }
+
+    onUploadingChanged(true);
+    try {
+      final url = await _cloudinary.uploadFile(
+        fileBytes: file.bytes!,
+        fileName:  file.name,
+        memberId:  widget.member.uid,
+        mimeType:  documentMimeType(file.extension ?? ''),
+        onProgress: onProgress,
+      );
+
+      await _fs.updateMemberPhoto(widget.member.uid, url);
+
+      final auth = context.read<AuthProvider>();
+      await SettingsService().logAction(
+        performedBy:      auth.userModel?.uid ?? '',
+        performedByName:  auth.userModel?.displayName ?? '',
+        action:           AuditAction.updated,
+        targetCollection: 'users',
+        targetId:         widget.member.uid,
+        description:      'Updated profile photo for ${widget.member.name}',
+      );
+
+      if (mounted) {
+        setState(() => _photoUrl = url);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo updated.'),
+            backgroundColor: Color(0xFF1A7A4A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Photo upload failed: $e')),
+        );
+      }
+    } finally {
+      onUploadingChanged(false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth    = context.watch<AuthProvider>();
@@ -321,13 +393,16 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         children: [
           _ProfileTab(
             member: widget.member,
+            photoUrl: _photoUrl,
             editMode: _editMode,
+            canEditPhoto: canEdit,
             name: _name, email: _email, lot: _lot,
             contact: _contact, address: _address,
             phase: _phase, status: _status,
             onPhaseChanged: (v) => setState(() => _phase = v),
             onStatusChanged: (v) => setState(() => _status = v),
             onViewLot: _viewLotOnMap,
+            onChangePhoto: _changePhoto,
           ),
           _PaymentsTab(memberId: widget.member.uid, memberName: widget.member.name, auth: auth),
           _DocumentsTab(memberId: widget.member.uid, memberName: widget.member.name, auth: auth),
@@ -340,198 +415,374 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
 // ── Profile tab ───────────────────────────────────────────────────────────────
 class _ProfileTab extends StatelessWidget {
   final MemberModel member;
+  final String photoUrl;
   final bool editMode;
+  final bool canEditPhoto;
   final TextEditingController name, email, lot, contact, address;
   final String phase;
   final MemberStatus status;
   final void Function(String) onPhaseChanged;
   final void Function(MemberStatus) onStatusChanged;
   final VoidCallback onViewLot;
+  final Future<void> Function({
+    required void Function(double progress) onProgress,
+    required void Function(bool uploading) onUploadingChanged,
+  }) onChangePhoto;
 
   static const Color _navy = Color(0xFF0D2A5C);
 
   const _ProfileTab({
-    required this.member, required this.editMode,
+    required this.member, required this.photoUrl, required this.editMode,
+    required this.canEditPhoto,
     required this.name, required this.email,
     required this.lot, required this.contact, required this.address,
     required this.phase, required this.status,
     required this.onPhaseChanged, required this.onStatusChanged,
-    required this.onViewLot,
+    required this.onViewLot, required this.onChangePhoto,
   });
+
+  String _fmt(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Member card header ────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE0E8F4)),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor:
-                      const Color(0xFF2E6BE6).withOpacity(0.12),
-                  child: Text(
-                    member.name.isNotEmpty
-                        ? member.name[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF2E6BE6)),
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(member.name,
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: _navy)),
-                    const SizedBox(height: 4),
-                    Text(member.email,
-                        style: TextStyle(
-                            fontSize: 13.5, color: Colors.grey[600])),
-                    const SizedBox(height: 6),
-                    _StatusBadge(status: member.status),
-                  ],
-                ),
-                const Spacer(),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('Lot ${member.lotNumber}',
-                        style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: _navy)),
-                    const SizedBox(height: 4),
-                    Text(member.phase,
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.grey[600])),
-                    if (member.lotNumber.trim().isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      OutlinedButton.icon(
-                        onPressed: editMode ? null : onViewLot,
-                        icon: const Icon(Icons.map_outlined, size: 16),
-                        label: const Text('View Lot on Map'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF2E6BE6),
-                          side: const BorderSide(
-                            color: Color(0xFF2E6BE6),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 9,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    Text(
-                      'Member since ${_fmt(member.createdAt)}',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.grey[400]),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Stack the sidebar above the info card on narrow screens,
+          // side-by-side on wide ones.
+          final isNarrow = constraints.maxWidth < 760;
 
-          // ── Edit / view fields ────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE0E8F4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          final sidebar = _ProfileSidebarCard(
+            member: member,
+            photoUrl: photoUrl,
+            canEditPhoto: canEditPhoto,
+            onViewLot: onViewLot,
+            onChangePhoto: onChangePhoto,
+          );
+
+          final infoCard = _MemberInfoCard(
+            editMode: editMode,
+            name: name, email: email, lot: lot,
+            contact: contact, address: address,
+            phase: phase, status: status,
+            memberStatusLabel: member.status.label,
+            onPhaseChanged: onPhaseChanged,
+            onStatusChanged: onStatusChanged,
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Member Information',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: _navy)),
+                sidebar,
                 const SizedBox(height: 20),
-                Row(children: [
-                  Expanded(child: _DetailField(
-                      label: 'Full Name', controller: name,
-                      readOnly: !editMode)),
-                  const SizedBox(width: 16),
-                  Expanded(child: _DetailField(
-                      label: 'Email Address', controller: email,
-                      readOnly: !editMode)),
-                ]),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(child: _DetailField(
-                      label: 'Lot Number', controller: lot,
-                      readOnly: !editMode)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: editMode
-                        ? _DropdownField<String>(
-                            label: 'Phase',
-                            value: phase,
-                            items: const ['Phase 1', 'Phase 2', 'Phase 3'],
-                            labelOf: (v) => v,
-                            onChanged: onPhaseChanged,
-                          )
-                        : _ReadOnlyField(label: 'Phase', value: phase),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(child: _DetailField(
-                      label: 'Contact Number', controller: contact,
-                      readOnly: !editMode)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: editMode
-                        ? _DropdownField<MemberStatus>(
-                            label: 'Status',
-                            value: status,
-                            items: MemberStatus.values,
-                            labelOf: (v) => v.label,
-                            onChanged: onStatusChanged,
-                          )
-                        : _ReadOnlyField(
-                            label: 'Status', value: member.status.label),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                _DetailField(
-                    label: 'Address', controller: address,
-                    readOnly: !editMode, maxLines: 2),
+                infoCard,
               ],
-            ),
-          ),
-        ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 300, child: sidebar),
+              const SizedBox(width: 20),
+              Expanded(child: infoCard),
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+// ── Sidebar profile card (portrait) ─────────────────────────────────────────
+class _ProfileSidebarCard extends StatefulWidget {
+  final MemberModel member;
+  final String photoUrl;
+  final bool canEditPhoto;
+  final VoidCallback onViewLot;
+  final Future<void> Function({
+    required void Function(double progress) onProgress,
+    required void Function(bool uploading) onUploadingChanged,
+  }) onChangePhoto;
+
+  const _ProfileSidebarCard({
+    required this.member,
+    required this.photoUrl,
+    required this.canEditPhoto,
+    required this.onViewLot,
+    required this.onChangePhoto,
+  });
+
+  @override
+  State<_ProfileSidebarCard> createState() => _ProfileSidebarCardState();
+}
+
+class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
+  bool _uploading = false;
+  double _progress = 0;
+
+  static const Color _navy = Color(0xFF0D2A5C);
 
   String _fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/'
       '${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final member = widget.member;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E8F4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ── Avatar with upload overlay ────────────────────────────────────
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: 52,
+                backgroundColor:
+                    const Color(0xFF2E6BE6).withOpacity(0.12),
+                backgroundImage: widget.photoUrl.isNotEmpty
+                    ? NetworkImage(widget.photoUrl)
+                    : null,
+                child: widget.photoUrl.isEmpty
+                    ? Text(
+                        member.name.isNotEmpty
+                            ? member.name[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2E6BE6)),
+                      )
+                    : null,
+              ),
+              if (_uploading)
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black45,
+                    ),
+                    child: Center(
+                      child: SizedBox(
+                        width: 34,
+                        height: 34,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          value: _progress > 0 ? _progress : null,
+                          valueColor:
+                              const AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (widget.canEditPhoto && !_uploading)
+                Positioned(
+                  bottom: -2,
+                  right: -2,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => widget.onChangePhoto(
+                      onProgress: (p) => setState(() => _progress = p),
+                      onUploadingChanged: (u) => setState(() {
+                        _uploading = u;
+                        if (!u) _progress = 0;
+                      }),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2E6BE6),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(Icons.camera_alt,
+                          size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          Text(member.name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: _navy)),
+          const SizedBox(height: 4),
+          Text(member.email,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          const SizedBox(height: 10),
+          _StatusBadge(status: member.status),
+
+          const SizedBox(height: 20),
+          const Divider(color: Color(0xFFE0E8F4)),
+          const SizedBox(height: 16),
+
+          _SidebarRow(label: 'Lot', value: 'Lot ${member.lotNumber}'),
+          const SizedBox(height: 10),
+          _SidebarRow(label: 'Phase', value: member.phase),
+          const SizedBox(height: 10),
+          _SidebarRow(label: 'Member since', value: _fmt(member.createdAt)),
+
+          if (member.lotNumber.trim().isNotEmpty) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: widget.onViewLot,
+                icon: const Icon(Icons.map_outlined, size: 16),
+                label: const Text('View Lot on Map'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2E6BE6),
+                  side: const BorderSide(color: Color(0xFF2E6BE6)),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _SidebarRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(label,
+          style: TextStyle(fontSize: 12.5, color: Colors.grey[500])),
+      Flexible(
+        child: Text(value.isEmpty ? '—' : value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A2B4A)),
+            overflow: TextOverflow.ellipsis),
+      ),
+    ],
+  );
+}
+
+// ── Member information card (edit form) ─────────────────────────────────────
+class _MemberInfoCard extends StatelessWidget {
+  final bool editMode;
+  final TextEditingController name, email, lot, contact, address;
+  final String phase;
+  final MemberStatus status;
+  final String memberStatusLabel;
+  final void Function(String) onPhaseChanged;
+  final void Function(MemberStatus) onStatusChanged;
+
+  static const Color _navy = Color(0xFF0D2A5C);
+
+  const _MemberInfoCard({
+    required this.editMode,
+    required this.name, required this.email,
+    required this.lot, required this.contact, required this.address,
+    required this.phase, required this.status,
+    required this.memberStatusLabel,
+    required this.onPhaseChanged, required this.onStatusChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E8F4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Member Information',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _navy)),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: _DetailField(
+                label: 'Full Name', controller: name,
+                readOnly: !editMode)),
+            const SizedBox(width: 16),
+            Expanded(child: _DetailField(
+                label: 'Email Address', controller: email,
+                readOnly: !editMode)),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(child: _DetailField(
+                label: 'Lot Number', controller: lot,
+                readOnly: !editMode)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: editMode
+                  ? _DropdownField<String>(
+                      label: 'Phase',
+                      value: phase,
+                      items: const ['Phase 1', 'Phase 2', 'Phase 3'],
+                      labelOf: (v) => v,
+                      onChanged: onPhaseChanged,
+                    )
+                  : _ReadOnlyField(label: 'Phase', value: phase),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(child: _DetailField(
+                label: 'Contact Number', controller: contact,
+                readOnly: !editMode)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: editMode
+                  ? _DropdownField<MemberStatus>(
+                      label: 'Status',
+                      value: status,
+                      items: MemberStatus.values,
+                      labelOf: (v) => v.label,
+                      onChanged: onStatusChanged,
+                    )
+                  : _ReadOnlyField(
+                      label: 'Status', value: memberStatusLabel),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          _DetailField(
+              label: 'Address', controller: address,
+              readOnly: !editMode, maxLines: 2),
+        ],
+      ),
+    );
+  }
 }
 
 // ── Payments tab ──────────────────────────────────────────────────────────────

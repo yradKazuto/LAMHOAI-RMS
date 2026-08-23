@@ -9,10 +9,10 @@
 //   CLOUDINARY_API_KEY=your_key
 //   CLOUDINARY_API_SECRET=your_secret
 
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
+import 'dart:convert' show utf8;
+import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class CloudinaryService {
@@ -44,12 +44,15 @@ class CloudinaryService {
 
   // ── Upload file bytes to Cloudinary ───────────────────────────────────────
   /// Returns the secure URL of the uploaded file.
+  /// [onProgress] is called with a value from 0.0 to 1.0 as the upload
+  /// progresses — hook this up to a progress bar in the UI.
   /// Throws [CloudinaryUploadException] on failure.
   Future<String> uploadFile({
     required Uint8List fileBytes,
     required String fileName,
     required String memberId,
     required String mimeType,
+    void Function(double progress)? onProgress,
   }) async {
     if (_apiKey.isEmpty || _apiSecret.isEmpty) {
       throw CloudinaryUploadException(
@@ -73,34 +76,53 @@ class CloudinaryService {
       timestamp: timestamp,
     );
 
-    final request = http.MultipartRequest('POST', Uri.parse(_uploadUrl))
-      ..fields['api_key']   = _apiKey
-      ..fields['timestamp'] = timestamp
-      ..fields['folder']    = folder
-      ..fields['public_id'] = publicId
-      ..fields['signature'] = signature
-      ..files.add(http.MultipartFile.fromBytes(
-        'file',
+    final formData = FormData.fromMap({
+      'api_key':   _apiKey,
+      'timestamp': timestamp,
+      'folder':    folder,
+      'public_id': publicId,
+      'signature': signature,
+      'file': MultipartFile.fromBytes(
         fileBytes,
         filename: fileName,
-      ));
+      ),
+    });
 
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
+    try {
+      final response = await Dio().post(
+        _uploadUrl,
+        data: formData,
+        onSendProgress: (sent, total) {
+          if (total > 0) onProgress?.call(sent / total);
+        },
+      );
 
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final url  = json['secure_url'] as String?;
+      final data = response.data as Map<String, dynamic>;
+      final url  = data['secure_url'] as String?;
       if (url == null || url.isEmpty) {
         throw CloudinaryUploadException('Upload succeeded but no URL returned.');
       }
       return url;
-    } else {
-      final json    = jsonDecode(response.body) as Map<String, dynamic>;
-      final message = (json['error'] as Map?)?['message'] as String?
-          ?? 'Upload failed (${response.statusCode})';
+    } on DioException catch (e) {
+      final message = _extractErrorMessage(e.response?.data) ??
+          'Upload failed (${e.response?.statusCode ?? e.message})';
       throw CloudinaryUploadException(message);
     }
+  }
+
+  // ── Safely pull an error message out of Cloudinary's error response
+  // shape ({"error": {"message": "..."}}) without relying on an inline
+  // ternary + cast chain, which some Dart web build configurations
+  // parse ambiguously.
+  static String? _extractErrorMessage(dynamic data) {
+    if (data is Map) {
+      final error = data['error'];
+      if (error is Map) {
+        final msg = error['message'];
+        if (msg is String) return msg;
+      }
+    }
+    return null;
   }
 
   // ── Delete by public ID ────────────────────────────────────────────────────
@@ -135,15 +157,21 @@ class CloudinaryService {
     final deleteUrl =
         'https://api.cloudinary.com/v1_1/$cloudName/image/destroy';
 
-    await http.post(
-      Uri.parse(deleteUrl),
-      body: {
-        'public_id': publicId,
-        'api_key':   _apiKey,
-        'timestamp': timestamp,
-        'signature': signature,
-      },
-    );
+    try {
+      await Dio().post(
+        deleteUrl,
+        data: FormData.fromMap({
+          'public_id': publicId,
+          'api_key':   _apiKey,
+          'timestamp': timestamp,
+          'signature': signature,
+        }),
+      );
+    } catch (_) {
+      // Best-effort delete — don't let a failed cleanup call surface
+      // as an error to the user; the document record is already gone
+      // from Firestore by the time this runs.
+    }
   }
 }
 

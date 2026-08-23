@@ -33,6 +33,7 @@ class MemberModel {
   final MemberStatus status;
   final String contactNumber;
   final String address;
+  final String photoUrl;       // profile photo — empty string if none set
   final DateTime createdAt;
 
   const MemberModel({
@@ -45,6 +46,7 @@ class MemberModel {
     required this.status,
     required this.contactNumber,
     required this.address,
+    this.photoUrl = '',
     required this.createdAt,
   });
 
@@ -63,6 +65,7 @@ class MemberModel {
       status:        MemberStatusExt.fromString(map['status'] as String?),
       contactNumber: map['contactNumber'] as String? ?? '',
       address:       map['address']       as String? ?? '',
+      photoUrl:      map['photoUrl']      as String? ?? '',
       createdAt:     (map['createdAt'] as Timestamp?)?.toDate()
                      ?? DateTime.now(),
     );
@@ -78,13 +81,15 @@ class MemberModel {
     'status':        status.name,
     'contactNumber': contactNumber,
     'address':       address,
+    'photoUrl':      photoUrl,
     'createdAt':     Timestamp.fromDate(createdAt),
   };
 
   MemberModel copyWith({
     String? uid, String? name, String? email, String? role,
     String? lotNumber, String? phase, MemberStatus? status,
-    String? contactNumber, String? address, DateTime? createdAt,
+    String? contactNumber, String? address, String? photoUrl,
+    DateTime? createdAt,
   }) => MemberModel(
     uid:           uid           ?? this.uid,
     name:          name          ?? this.name,
@@ -95,6 +100,7 @@ class MemberModel {
     status:        status        ?? this.status,
     contactNumber: contactNumber ?? this.contactNumber,
     address:       address       ?? this.address,
+    photoUrl:      photoUrl      ?? this.photoUrl,
     createdAt:     createdAt     ?? this.createdAt,
   );
 }
