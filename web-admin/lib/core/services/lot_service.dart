@@ -43,6 +43,22 @@ class LotService {
         );
   }
 
+  /// Streams ALL lots currently assigned to [uid] — a member can now own
+  /// more than one lot, so this replaces the old single-lot lookup.
+  /// Used to show a member's real, live list of owned lots on their
+  /// profile — always in sync with the Location Mapping feature, no
+  /// denormalized copy to go stale.
+  Stream<List<LotModel>> streamLotsForMember(String uid) {
+    if (uid.isEmpty) return Stream.value(<LotModel>[]);
+    return _lots
+        .where('uid', isEqualTo: uid)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) =>
+                LotModel.fromMap(d.id, d.data() as Map<String, dynamic>))
+            .toList());
+  }
+
   Future<List<String>> getDistinctPhases() async {
     final snap = await _lots.get();
 
@@ -199,37 +215,12 @@ class LotService {
     }
 
     // --------------------------------------------------------------
-    // Check if the selected member already owns another lot
+    // Note: members are now allowed to own more than one lot (e.g.
+    // Block 1 Lot 1 and Block 2 Lot 2 for the same member), so the
+    // previous "already assigned to another lot" restriction has been
+    // removed. Ownership across multiple lots is shown via
+    // LotService.streamLotsForMember on the member's profile.
     // --------------------------------------------------------------
-
-    final existingLots = await _lots
-        .where('uid', isEqualTo: uid)
-        .get();
-
-    for (final doc in existingLots.docs) {
-      if (doc.id == lotId) {
-        continue;
-      }
-
-      final data =
-          doc.data() as Map<String, dynamic>;
-
-      final existingPhase =
-          data['phase'] as String? ?? '';
-
-      final existingBlock =
-          data['block'] as String? ?? '';
-
-      final existingLot =
-          data['lotNumber'] as String? ?? '';
-
-      throw Exception(
-        '$ownerName is already assigned to '
-        '$existingPhase • '
-        '$existingBlock • '
-        'Lot $existingLot.',
-      );
-    }
 
     // --------------------------------------------------------------
     // Batch update

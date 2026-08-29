@@ -119,10 +119,22 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Widget _buildBody(List<PaymentModel> all) {
     double paid = 0, pending = 0, overdue = 0;
     for (final p in all) {
-      if (p.status == PaymentStatus.paid)    paid    += p.amount;
-      if (p.status == PaymentStatus.pending ||
-          p.statusLabel.toLowerCase() == 'unpaid') pending += p.amount;
-      if (p.status == PaymentStatus.overdue) overdue += p.amount;
+      // Use effectiveStatus (not the raw Firestore `status`) so a pending
+      // payment whose dueDate has passed is counted as overdue here too —
+      // this keeps the summary totals in sync with what each list item
+      // displays via statusLabel.
+      switch (p.effectiveStatus) {
+        case PaymentStatus.paid:
+          paid += p.amount;
+          break;
+        case PaymentStatus.overdue:
+          overdue += p.amount;
+          break;
+        case PaymentStatus.pending:
+        default:
+          pending += p.amount;
+          break;
+      }
     }
 
     final filtered = _filter == null

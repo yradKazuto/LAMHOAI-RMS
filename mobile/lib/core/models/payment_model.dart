@@ -57,8 +57,21 @@ class PaymentModel {
     }
   }
 
+  /// The status as it should actually be displayed right now.
+  ///
+  /// Firestore only ever stores 'paid' or 'pending' — nothing flips a
+  /// record to 'overdue' server-side when its due date passes. So instead
+  /// of trusting the raw `status` field, we derive it here: a paid payment
+  /// stays paid, but a pending payment whose dueDate is in the past is
+  /// treated as overdue.
+  PaymentStatus get effectiveStatus {
+    if (status == PaymentStatus.paid) return PaymentStatus.paid;
+    if (dueDate.isBefore(DateTime.now())) return PaymentStatus.overdue;
+    return status;
+  }
+
   String get statusLabel {
-    switch (status) {
+    switch (effectiveStatus) {
       case PaymentStatus.paid:    return 'Paid';
       case PaymentStatus.pending: return 'Pending';
       case PaymentStatus.overdue: return 'Overdue';

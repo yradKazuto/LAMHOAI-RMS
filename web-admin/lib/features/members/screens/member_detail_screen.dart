@@ -8,11 +8,12 @@ import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/document_model.dart';
 import '../../../core/models/audit_log_model.dart';
+import '../../../core/models/lot_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/services/lot_service.dart';
 import '../../location/screens/location_mapping_screen.dart';
 import '../../payments/screens/add_payment_screen.dart';
 import '../../documents/widgets/document_upload_flow.dart';
@@ -29,22 +30,18 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     with SingleTickerProviderStateMixin {
   final _fs         = FirestoreService();
   final _cloudinary = CloudinaryService();
+  final _lotService = LotService();
   late TabController _tabs;
   bool _editMode = false;
   bool _saving   = false;
 
-  // Local override so a freshly uploaded photo shows immediately without
-  // needing to re-fetch the member (widget.member is a static snapshot
-  // passed in at navigation time, not a live stream).
   late String _photoUrl;
 
-  // Edit controllers
   late TextEditingController _name;
   late TextEditingController _email;
   late TextEditingController _lot;
   late TextEditingController _contact;
   late TextEditingController _address;
-  late String _phase;
   late MemberStatus _status;
 
   static const Color _navy   = Color(0xFF0D2A5C);
@@ -65,7 +62,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     _lot     = TextEditingController(text: m.lotNumber);
     _contact = TextEditingController(text: m.contactNumber);
     _address = TextEditingController(text: m.address);
-    _phase   = m.phase;
     _status  = m.status;
   }
 
@@ -77,7 +73,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     super.dispose();
   }
 
-  // ── Send password reset email ──────────────────────────────────────────────
   Future<void> _sendPasswordReset(
       BuildContext context) async {
     final email = widget.member.email;
@@ -90,7 +85,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
       return;
     }
 
-    // Confirm before sending
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -168,7 +162,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         lotNumber:     _lot.text.trim(),
         contactNumber: _contact.text.trim(),
         address:       _address.text.trim(),
-        phase:         _phase,
         status:        _status,
       );
       await _fs.updateMember(updated);
@@ -188,48 +181,20 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     }
   }
 
-  // ── Open this member's assigned lot on the subdivision map ────────────────
-  Future<void> _viewLotOnMap() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('lots')
-          .where('uid', isEqualTo: widget.member.uid)
-          .limit(1)
-          .get();
-
-      if (!mounted) return;
-
-      if (snap.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This member is not currently assigned to a lot.'),
-          ),
-        );
-        return;
-      }
-
-      final lotId = snap.docs.first.id;
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LocationMappingScreen(
-            targetLotId: lotId,
-          ),
+  // ── Open a specific lot on the subdivision map ──────────────────────────
+  // Takes the lot directly (from the already-loaded owned-lots list) so
+  // there's no need for a separate Firestore lookup like before.
+  Future<void> _viewLotOnMap(LotModel lot) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationMappingScreen(
+          targetLotId: lot.id,
         ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unable to open the lot on the map: $e'),
-        ),
-      );
-    }
+      ),
+    );
   }
 
-  // ── Pick, upload, and persist a new profile photo ───────────────────────────
   Future<void> _changePhoto({
     required void Function(double progress) onProgress,
     required void Function(bool uploading) onUploadingChanged,
@@ -314,7 +279,6 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         ),
         actions: [
           if (canEdit && !_editMode) ...[
-            // Reset Password button
             TextButton.icon(
               onPressed: () => _sendPasswordReset(context),
               icon: const Icon(Icons.lock_reset_outlined,
@@ -396,10 +360,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             photoUrl: _photoUrl,
             editMode: _editMode,
             canEditPhoto: canEdit,
+            lotService: _lotService,
             name: _name, email: _email, lot: _lot,
             contact: _contact, address: _address,
-            phase: _phase, status: _status,
-            onPhaseChanged: (v) => setState(() => _phase = v),
+            status: _status,
             onStatusChanged: (v) => setState(() => _status = v),
             onViewLot: _viewLotOnMap,
             onChangePhoto: _changePhoto,
@@ -412,18 +376,16 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   }
 }
 
-// ── Profile tab ───────────────────────────────────────────────────────────────
 class _ProfileTab extends StatelessWidget {
   final MemberModel member;
   final String photoUrl;
   final bool editMode;
   final bool canEditPhoto;
+  final LotService lotService;
   final TextEditingController name, email, lot, contact, address;
-  final String phase;
   final MemberStatus status;
-  final void Function(String) onPhaseChanged;
   final void Function(MemberStatus) onStatusChanged;
-  final VoidCallback onViewLot;
+  final Future<void> Function(LotModel lot) onViewLot;
   final Future<void> Function({
     required void Function(double progress) onProgress,
     required void Function(bool uploading) onUploadingChanged,
@@ -433,64 +395,65 @@ class _ProfileTab extends StatelessWidget {
 
   const _ProfileTab({
     required this.member, required this.photoUrl, required this.editMode,
-    required this.canEditPhoto,
+    required this.canEditPhoto, required this.lotService,
     required this.name, required this.email,
     required this.lot, required this.contact, required this.address,
-    required this.phase, required this.status,
-    required this.onPhaseChanged, required this.onStatusChanged,
+    required this.status,
+    required this.onStatusChanged,
     required this.onViewLot, required this.onChangePhoto,
   });
-
-  String _fmt(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/'
-      '${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Stack the sidebar above the info card on narrow screens,
-          // side-by-side on wide ones.
-          final isNarrow = constraints.maxWidth < 760;
+      child: StreamBuilder<List<LotModel>>(
+        stream: lotService.streamLotsForMember(member.uid),
+        builder: (context, lotSnap) {
+          final ownedLots = lotSnap.data ?? const <LotModel>[];
 
-          final sidebar = _ProfileSidebarCard(
-            member: member,
-            photoUrl: photoUrl,
-            canEditPhoto: canEditPhoto,
-            onViewLot: onViewLot,
-            onChangePhoto: onChangePhoto,
-          );
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 760;
 
-          final infoCard = _MemberInfoCard(
-            editMode: editMode,
-            name: name, email: email, lot: lot,
-            contact: contact, address: address,
-            phase: phase, status: status,
-            memberStatusLabel: member.status.label,
-            onPhaseChanged: onPhaseChanged,
-            onStatusChanged: onStatusChanged,
-          );
+              final sidebar = _ProfileSidebarCard(
+                member: member,
+                photoUrl: photoUrl,
+                canEditPhoto: canEditPhoto,
+                ownedLots: ownedLots,
+                onViewLot: onViewLot,
+                onChangePhoto: onChangePhoto,
+              );
 
-          if (isNarrow) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                sidebar,
-                const SizedBox(height: 20),
-                infoCard,
-              ],
-            );
-          }
+              final infoCard = _MemberInfoCard(
+                editMode: editMode,
+                name: name, email: email, lot: lot,
+                contact: contact, address: address,
+                status: status,
+                memberStatusLabel: member.status.label,
+                onStatusChanged: onStatusChanged,
+              );
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(width: 300, child: sidebar),
-              const SizedBox(width: 20),
-              Expanded(child: infoCard),
-            ],
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    sidebar,
+                    const SizedBox(height: 20),
+                    infoCard,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 300, child: sidebar),
+                  const SizedBox(width: 20),
+                  Expanded(child: infoCard),
+                ],
+              );
+            },
           );
         },
       ),
@@ -498,12 +461,12 @@ class _ProfileTab extends StatelessWidget {
   }
 }
 
-// ── Sidebar profile card (portrait) ─────────────────────────────────────────
 class _ProfileSidebarCard extends StatefulWidget {
   final MemberModel member;
   final String photoUrl;
   final bool canEditPhoto;
-  final VoidCallback onViewLot;
+  final List<LotModel> ownedLots;
+  final Future<void> Function(LotModel lot) onViewLot;
   final Future<void> Function({
     required void Function(double progress) onProgress,
     required void Function(bool uploading) onUploadingChanged,
@@ -513,6 +476,7 @@ class _ProfileSidebarCard extends StatefulWidget {
     required this.member,
     required this.photoUrl,
     required this.canEditPhoto,
+    required this.ownedLots,
     required this.onViewLot,
     required this.onChangePhoto,
   });
@@ -545,7 +509,6 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // ── Avatar with upload overlay ────────────────────────────────────
           Stack(
             clipBehavior: Clip.none,
             children: [
@@ -635,32 +598,91 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
           const Divider(color: Color(0xFFE0E8F4)),
           const SizedBox(height: 16),
 
-          _SidebarRow(label: 'Lot', value: 'Lot ${member.lotNumber}'),
+          // ── Owned Lots ─────────────────────────────────────────────────
+          Row(
+            children: [
+              Text('Owned Lots',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[600])),
+              const Spacer(),
+              if (widget.ownedLots.isNotEmpty)
+                Text('${widget.ownedLots.length}',
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey[500])),
+            ],
+          ),
           const SizedBox(height: 10),
-          _SidebarRow(label: 'Phase', value: member.phase),
+
+          if (widget.ownedLots.isEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('No lots assigned.',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey[400])),
+            )
+          else
+            Column(
+              children: widget.ownedLots
+                  .map((lot) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _OwnedLotTile(
+                          lot: lot,
+                          onTap: () => widget.onViewLot(lot),
+                        ),
+                      ))
+                  .toList(),
+            ),
+
           const SizedBox(height: 10),
           _SidebarRow(label: 'Member since', value: _fmt(member.createdAt)),
-
-          if (member.lotNumber.trim().isNotEmpty) ...[
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: widget.onViewLot,
-                icon: const Icon(Icons.map_outlined, size: 16),
-                label: const Text('View Lot on Map'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2E6BE6),
-                  side: const BorderSide(color: Color(0xFF2E6BE6)),
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
+      ),
+    );
+  }
+}
+
+// ── One owned-lot row (e.g. "Block 1 • Lot 1") ────────────────────────────
+class _OwnedLotTile extends StatelessWidget {
+  final LotModel lot;
+  final VoidCallback onTap;
+
+  const _OwnedLotTile({required this.lot, required this.onTap});
+
+  static const Color _navy = Color(0xFF0D2A5C);
+
+  @override
+  Widget build(BuildContext context) {
+    final block = lot.block.isEmpty ? '—' : lot.block;
+    final lotNo = lot.lotNumber.isEmpty ? '—' : lot.lotNumber;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F4FB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFD0DBEE)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.location_on_outlined,
+                size: 15, color: Color(0xFF2E6BE6)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text('Block $block • Lot $lotNo',
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: _navy),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
+          ],
+        ),
       ),
     );
   }
@@ -694,10 +716,8 @@ class _SidebarRow extends StatelessWidget {
 class _MemberInfoCard extends StatelessWidget {
   final bool editMode;
   final TextEditingController name, email, lot, contact, address;
-  final String phase;
   final MemberStatus status;
   final String memberStatusLabel;
-  final void Function(String) onPhaseChanged;
   final void Function(MemberStatus) onStatusChanged;
 
   static const Color _navy = Color(0xFF0D2A5C);
@@ -706,9 +726,9 @@ class _MemberInfoCard extends StatelessWidget {
     required this.editMode,
     required this.name, required this.email,
     required this.lot, required this.contact, required this.address,
-    required this.phase, required this.status,
+    required this.status,
     required this.memberStatusLabel,
-    required this.onPhaseChanged, required this.onStatusChanged,
+    required this.onStatusChanged,
   });
 
   @override
@@ -728,6 +748,12 @@ class _MemberInfoCard extends StatelessWidget {
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: _navy)),
+          const SizedBox(height: 4),
+          Text(
+            'Lot ownership is managed from Location Mapping — '
+            'see "Owned Lots" on the left.',
+            style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+          ),
           const SizedBox(height: 20),
           Row(children: [
             Expanded(child: _DetailField(
@@ -737,24 +763,6 @@ class _MemberInfoCard extends StatelessWidget {
             Expanded(child: _DetailField(
                 label: 'Email Address', controller: email,
                 readOnly: !editMode)),
-          ]),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: _DetailField(
-                label: 'Lot Number', controller: lot,
-                readOnly: !editMode)),
-            const SizedBox(width: 16),
-            Expanded(
-              child: editMode
-                  ? _DropdownField<String>(
-                      label: 'Phase',
-                      value: phase,
-                      items: const ['Phase 1', 'Phase 2', 'Phase 3'],
-                      labelOf: (v) => v,
-                      onChanged: onPhaseChanged,
-                    )
-                  : _ReadOnlyField(label: 'Phase', value: phase),
-            ),
           ]),
           const SizedBox(height: 16),
           Row(children: [
@@ -785,7 +793,6 @@ class _MemberInfoCard extends StatelessWidget {
   }
 }
 
-// ── Payments tab ──────────────────────────────────────────────────────────────
 class _PaymentsTab extends StatelessWidget {
   final String memberId;
   final String memberName;
@@ -878,7 +885,6 @@ class _PaymentsTab extends StatelessWidget {
   }
 }
 
-// ── Documents tab ─────────────────────────────────────────────────────────────
 class _DocumentsTab extends StatelessWidget {
   final String memberId;
   final String memberName;
@@ -990,8 +996,6 @@ class _DocumentsTab extends StatelessWidget {
     );
   }
 }
-
-// ── Shared small widgets ──────────────────────────────────────────────────────
 
 class _StatusBadge extends StatelessWidget {
   final MemberStatus status;
@@ -1218,7 +1222,6 @@ class _PaymentRow extends StatelessWidget {
               onPressed: () async {
                 await fs.markPaymentPaid(payment.id);
 
-                // ── Audit log ────────────────────────────────────────────
                 if (context.mounted) {
                   final auth =
                       Provider.of<AuthProvider>(context, listen: false);
@@ -1284,7 +1287,6 @@ class _DocCard extends StatelessWidget {
                   await cloudinary.deleteFile(doc.fileUrl);
                   await fs.deleteDocumentMetadata(doc.id);
 
-                  // ── Audit log ──────────────────────────────────────────
                   if (context.mounted) {
                     final auth =
                         Provider.of<AuthProvider>(context, listen: false);

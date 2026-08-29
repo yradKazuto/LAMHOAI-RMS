@@ -1,4 +1,6 @@
 // features/members/screens/members_screen.dart
+// UPDATED — Lot No. / Block now pulled live from the `lots` collection
+// (matched by uid) instead of the member's own manually-typed fields.
 // UPDATED — Add Member dialog now creates Firebase Auth account + Firestore doc
 
 import 'package:flutter/material.dart';
@@ -7,8 +9,10 @@ import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/user_model.dart';
+import '../../../core/models/lot_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/lot_service.dart';
 import 'member_detail_screen.dart';
 
 class MembersScreen extends StatefulWidget {
@@ -18,8 +22,9 @@ class MembersScreen extends StatefulWidget {
 }
 
 class _MembersScreenState extends State<MembersScreen> {
-  final _search = TextEditingController();
-  final _fs     = FirestoreService();
+  final _search      = TextEditingController();
+  final _fs          = FirestoreService();
+  final _lotService  = LotService();
 
   String  _searchQuery  = '';
   String? _statusFilter;
@@ -35,17 +40,23 @@ class _MembersScreenState extends State<MembersScreen> {
     super.dispose();
   }
 
-  List<MemberModel> _filtered(List<MemberModel> all) {
+  /// Filters members using the REAL lot data (matched by uid), not the
+  /// member's own manually-typed lotNumber/phase fields.
+  List<MemberModel> _filtered(
+    List<MemberModel> all,
+    Map<String, LotModel> lotByUid,
+  ) {
     return all.where((m) {
-      final q           = _searchQuery.toLowerCase();
-      final matchSearch = q.isEmpty ||
+      final lot          = lotByUid[m.uid];
+      final q            = _searchQuery.toLowerCase();
+      final matchSearch  = q.isEmpty ||
           m.name.toLowerCase().contains(q) ||
           m.email.toLowerCase().contains(q) ||
-          m.lotNumber.toLowerCase().contains(q);
-      final matchStatus = _statusFilter == null ||
+          (lot?.lotNumber.toLowerCase().contains(q) ?? false);
+      final matchStatus  = _statusFilter == null ||
           m.status.name == _statusFilter;
-      final matchBlock  = _blockFilter == null ||
-          m.phase == _blockFilter;
+      final matchBlock   = _blockFilter == null ||
+          lot?.block == _blockFilter;
       return matchSearch && matchStatus && matchBlock;
     }).toList();
   }
@@ -225,82 +236,106 @@ class _MembersScreenState extends State<MembersScreen> {
 
             // ── Table ─────────────────────────────────────────────────────────
             Expanded(
-              child: StreamBuilder<List<MemberModel>>(
-                stream: _fs.streamMembers(),
-                builder: (context, snap) {
-                  if (snap.connectionState ==
-                      ConnectionState.waiting) {
-                    return const Center(
-                        child:
-                            CircularProgressIndicator());
-                  }
-                  if (snap.hasError) {
-                    return Center(
-                        child: Text(
-                            'Error: ${snap.error}',
-                            style: const TextStyle(
-                                color: Colors.red)));
+              child: StreamBuilder<List<LotModel>>(
+                stream: _lotService.streamLots(),
+                builder: (context, lotSnap) {
+                  // Build a uid -> lot lookup from the real lots collection.
+                  // This is the single source of truth for Lot No. / Block.
+                  final lotByUid = <String, LotModel>{};
+                  for (final lot in lotSnap.data ?? <LotModel>[]) {
+                    final uid = lot.uid;
+                    if (uid != null && uid.isNotEmpty) {
+                      lotByUid[uid] = lot;
+                    }
                   }
 
-                  final members =
-                      _filtered(snap.data ?? []);
+                  return StreamBuilder<List<MemberModel>>(
+                    stream: _fs.streamMembers(),
+                    builder: (context, snap) {
+                      if (snap.connectionState ==
+                              ConnectionState.waiting ||
+                          lotSnap.connectionState ==
+                              ConnectionState.waiting) {
+                        return const Center(
+                            child:
+                                CircularProgressIndicator());
+                      }
+                      if (snap.hasError) {
+                        return Center(
+                            child: Text(
+                                'Error: ${snap.error}',
+                                style: const TextStyle(
+                                    color: Colors.red)));
+                      }
 
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius:
-                          BorderRadius.circular(12),
-                      border: Border.all(
-                          color:
-                              const Color(0xFFE0E8F4)),
-                    ),
-                    child: Column(
-                      children: [
-                        _TableHeader(),
-                        const Divider(
-                            height: 1,
-                            color: Color(0xFFE0E8F4)),
-                        if (members.isEmpty)
-                          const Expanded(
-                            child: Center(
-                              child: Text(
-                                  'No members found.',
-                                  style: TextStyle(
-                                      color:
-                                          Colors.grey)),
-                            ),
-                          )
-                        else
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: members.length,
-                              separatorBuilder:
-                                  (_, __) =>
-                                      const Divider(
-                                          height: 1,
-                                          color: Color(
-                                              0xFFEEF2F9)),
-                              itemBuilder:
-                                  (context, i) =>
-                                      _MemberRow(
-                                member:   members[i],
-                                canEdit:  canEdit,
-                                onTap: () =>
-                                    Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        MemberDetailScreen(
-                                            member:
-                                                members[
-                                                    i]),
-                                  ),
+                      final members = _filtered(
+                        snap.data ?? [],
+                        lotByUid,
+                      );
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius:
+                              BorderRadius.circular(12),
+                          border: Border.all(
+                              color:
+                                  const Color(0xFFE0E8F4)),
+                        ),
+                        child: Column(
+                          children: [
+                            _TableHeader(),
+                            const Divider(
+                                height: 1,
+                                color: Color(0xFFE0E8F4)),
+                            if (members.isEmpty)
+                              const Expanded(
+                                child: Center(
+                                  child: Text(
+                                      'No members found.',
+                                      style: TextStyle(
+                                          color:
+                                              Colors.grey)),
+                                ),
+                              )
+                            else
+                              Expanded(
+                                child: ListView.separated(
+                                  itemCount: members.length,
+                                  separatorBuilder:
+                                      (_, __) =>
+                                          const Divider(
+                                              height: 1,
+                                              color: Color(
+                                                  0xFFEEF2F9)),
+                                  itemBuilder:
+                                      (context, i) {
+                                    final member = members[i];
+                                    final lot =
+                                        lotByUid[member.uid];
+
+                                    return _MemberRow(
+                                      member:  member,
+                                      lot:     lot,
+                                      canEdit: canEdit,
+                                      onTap: () =>
+                                          Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              MemberDetailScreen(
+                                                  member:
+                                                      member),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
-                            ),
-                          ),
-                      ],
-                    ),
+                          ],
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -403,11 +438,13 @@ class _TH extends StatelessWidget {
 // ── Member row ────────────────────────────────────────────────────────────────
 class _MemberRow extends StatelessWidget {
   final MemberModel  member;
+  final LotModel?     lot;
   final bool         canEdit;
   final VoidCallback onTap;
 
   const _MemberRow({
     required this.member,
+    required this.lot,
     required this.canEdit,
     required this.onTap,
   });
@@ -487,14 +524,20 @@ class _MemberRow extends StatelessWidget {
           ),
           Expanded(
             flex: 2,
-            child: Text(member.lotNumber,
+            child: Text(
+                lot?.lotNumber.isNotEmpty == true
+                    ? 'Lot ${lot!.lotNumber}'
+                    : '—',
                 style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF1A2B4A))),
           ),
           Expanded(
             flex: 2,
-            child: Text(member.phase,
+            child: Text(
+                lot?.block.isNotEmpty == true
+                    ? lot!.block
+                    : '—',
                 style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF1A2B4A))),
@@ -630,7 +673,9 @@ class _AddMemberDialogState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Member created. Verification email sent.'),
+                'Member created. Verification email sent. '
+                'Assign them to a lot from Location Mapping to '
+                'show their Lot No. and Block in this list.'),
             backgroundColor: Color(0xFF1A7A4A),
           ),
         );
@@ -921,7 +966,7 @@ class _AddMemberDialogState
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'The member will use this email and password to log in on the mobile app.',
+                          'The member will use this email and password to log in on the mobile app. Lot Number and Block entered here are provisional — they will not appear in the Homeowner Records table until this member is assigned a lot from Location Mapping.',
                           style: TextStyle(
                               fontSize: 12.5,
                               color: Color(
