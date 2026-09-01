@@ -398,6 +398,92 @@ class LotService {
   }
 
   // ================================================================
+  // BULK IMPORT — digitized polygon coordinates from the coordinate
+  // picker tool (Block / Lot / Point / X / Y Excel export)
+  // ================================================================
+
+  /// Creates or updates lots for [phase] from digitized polygon data.
+  /// [lotsData] maps "block|lotNumber" -> ordered list of normalized
+  /// (0.0-1.0) points around that lot's boundary. mapX/mapY are set
+  /// to the polygon's centroid so the simple pin display also works
+  /// immediately, without waiting for separate polygon rendering.
+  ///
+  /// Returns the number of lots created or updated.
+  Future<int> importPolygonLots({
+    required String phase,
+    required Map<String, List<LotPoint>> lotsData,
+    required String updatedBy,
+  }) async {
+    // Look up any lots that already exist for this phase, so we
+    // update in place rather than creating duplicates.
+    final existingSnap =
+        await _lots.where('phase', isEqualTo: phase).get();
+
+    final existingByKey = <String, String>{}; // "block|lot" -> docId
+    for (final doc in existingSnap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final block = data['block'] as String? ?? '';
+      final lotNumber = data['lotNumber'] as String? ?? '';
+      existingByKey['$block|$lotNumber'] = doc.id;
+    }
+
+    final batch = _db.batch();
+    int count = 0;
+
+    for (final entry in lotsData.entries) {
+      final parts = entry.key.split('|');
+      if (parts.length != 2) continue;
+      final block = parts[0];
+      final lotNumber = parts[1];
+      final points = entry.value;
+      if (points.isEmpty) continue;
+
+      // Centroid — simple average of the polygon's points. Good
+      // enough for pin placement; doesn't need to be geometrically
+      // exact (e.g. for a concave shape) since it's just a marker.
+      final cx = points.map((p) => p.x).reduce((a, b) => a + b) /
+          points.length;
+      final cy = points.map((p) => p.y).reduce((a, b) => a + b) /
+          points.length;
+
+      final polygonMaps = points.map((p) => p.toMap()).toList();
+
+      final existingId = existingByKey[entry.key];
+      if (existingId != null) {
+        batch.update(_lots.doc(existingId), {
+          'polygonPoints': polygonMaps,
+          'mapX': cx,
+          'mapY': cy,
+          'updatedBy': updatedBy,
+          'updatedAt': Timestamp.now(),
+        });
+      } else {
+        batch.set(_lots.doc(), {
+          'phase': phase,
+          'block': block,
+          'lotNumber': lotNumber,
+          'areaSqm': null,
+          'status': LotStatus.vacant.name,
+          'uid': null,
+          'ownerName': null,
+          'price': null,
+          'contactNumber': null,
+          'notes': null,
+          'updatedBy': updatedBy,
+          'updatedAt': Timestamp.now(),
+          'mapX': cx,
+          'mapY': cy,
+          'polygonPoints': polygonMaps,
+        });
+      }
+      count++;
+    }
+
+    await batch.commit();
+    return count;
+  }
+
+  // ================================================================
   // DELETE
   // ================================================================
 

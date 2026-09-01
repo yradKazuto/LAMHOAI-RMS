@@ -520,9 +520,6 @@ class _VacantLotDialogState
       GlobalKey<FormState>();
 
   late final TextEditingController
-      _phaseController;
-
-  late final TextEditingController
       _blockController;
 
   late final TextEditingController
@@ -545,11 +542,6 @@ class _VacantLotDialogState
   @override
   void initState() {
     super.initState();
-
-    _phaseController =
-        TextEditingController(
-      text: widget.lot.phase,
-    );
 
     _blockController =
         TextEditingController(
@@ -594,7 +586,6 @@ class _VacantLotDialogState
 
   @override
   void dispose() {
-    _phaseController.dispose();
     _blockController.dispose();
     _lotController.dispose();
     _areaController.dispose();
@@ -695,34 +686,27 @@ class _VacantLotDialogState
 
                 const SizedBox(height: 12),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: _textField(
-                        controller:
-                            _phaseController,
-                        label: 'Phase',
-                        hint: 'Phase 1',
-                        icon:
-                            Icons.layers_outlined,
-                        enabled:
-                            widget.canEdit,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _textField(
-                        controller:
-                            _blockController,
-                        label: 'Block',
-                        hint: 'Block 1',
-                        icon:
-                            Icons.grid_view_rounded,
-                        enabled:
-                            widget.canEdit,
-                      ),
-                    ),
-                  ],
+                // Phase is intentionally NOT an editable field here.
+                // It's fixed to whichever phase this lot already
+                // belongs to — editing it as free text previously let
+                // a lot get silently re-tagged into the wrong phase
+                // (e.g. a Phase 2 lot ending up in Phase 1's list)
+                // whenever this shared dialog was opened from a
+                // different phase's map screen.
+                _infoRow(
+                  Icons.layers_outlined,
+                  'Phase',
+                  _displayValue(widget.lot.phase),
+                ),
+
+                const SizedBox(height: 12),
+
+                _textField(
+                  controller: _blockController,
+                  label: 'Block',
+                  hint: 'Block 1',
+                  icon: Icons.grid_view_rounded,
+                  enabled: widget.canEdit,
                 ),
 
                 const SizedBox(height: 12),
@@ -980,8 +964,10 @@ class _VacantLotDialogState
     try {
       final data =
           <String, dynamic>{
-        'phase':
-            _phaseController.text.trim(),
+        // Phase is never re-derived from user input here — it stays
+        // whatever it already was on the lot. See the note above the
+        // Phase display field for why.
+        'phase': widget.lot.phase,
 
         'block':
             _blockController.text.trim(),
@@ -1901,9 +1887,6 @@ class _AddLotDialogState
       GlobalKey<FormState>();
 
   late final TextEditingController
-      _phaseController;
-
-  late final TextEditingController
       _blockController;
 
   late final TextEditingController
@@ -1920,11 +1903,6 @@ class _AddLotDialogState
   @override
   void initState() {
     super.initState();
-
-    _phaseController =
-        TextEditingController(
-      text: widget.phase,
-    );
 
     _blockController =
         TextEditingController(
@@ -1945,7 +1923,6 @@ class _AddLotDialogState
 
   @override
   void dispose() {
-    _phaseController.dispose();
     _blockController.dispose();
     _lotController.dispose();
     _areaController.dispose();
@@ -1978,30 +1955,27 @@ class _AddLotDialogState
             key: _formKey,
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _textField(
-                        controller:
-                            _phaseController,
-                        label: 'Phase',
-                        hint: 'Phase 1',
-                        icon:
-                            Icons.layers_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _textField(
-                        controller:
-                            _blockController,
-                        label: 'Block',
-                        hint: 'Block 1',
-                        icon:
-                            Icons.grid_view_rounded,
-                      ),
-                    ),
-                  ],
+                // Phase is fixed to whichever screen this dialog was
+                // opened from (widget.phase) and is not user-editable —
+                // letting it be freely typed here previously allowed a
+                // lot to be created under the wrong phase (e.g. a lot
+                // typed while working in Phase 2 silently landing in
+                // Phase 1's list).
+                _infoRow(
+                  Icons.layers_outlined,
+                  'Phase',
+                  _displayValue(widget.phase),
+                ),
+
+                const SizedBox(height: 12),
+
+                _textField(
+                  controller:
+                      _blockController,
+                  label: 'Block',
+                  hint: 'Block 1',
+                  icon:
+                      Icons.grid_view_rounded,
                 ),
 
                 const SizedBox(height: 12),
@@ -2120,8 +2094,7 @@ class _AddLotDialogState
 
     try {
       await _service.createLotAtPin(
-        phase:
-            _phaseController.text.trim(),
+        phase: widget.phase,
         block:
             _blockController.text.trim(),
         lotNumber:

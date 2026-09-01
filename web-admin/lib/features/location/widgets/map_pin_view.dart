@@ -529,7 +529,7 @@ class _MapPinViewState extends State<MapPinView>
       showDialog(
         context: context,
         builder: (_) => AddLotDialog(
-          phase: '',
+          phase: 'Phase 1',
           block: polygon.block,
           lotNumber: polygon.lotNumber.toString(),
           currentUserId: widget.currentUserId,
