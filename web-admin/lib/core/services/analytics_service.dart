@@ -125,15 +125,30 @@ class AnalyticsService {
   }
 
   // ── Payment status breakdown ──────────────────────────────────────────────
+  // Computes the EFFECTIVE status per record (unpaid + dueDate passed =>
+  // overdue) rather than trusting the raw stored `status` field. The stored
+  // field is only kept accurate by syncOverdueStatuses(), which runs when
+  // an admin opens Payments or Reports — a dashboard viewed before either
+  // of those would otherwise undercount overdue and overcount unpaid.
   Future<PaymentStatusBreakdown> getPaymentStatusBreakdown() async {
     final snap = await _db.collection('payments').get();
+    final now  = DateTime.now();
 
     int paid = 0, unpaid = 0, overdue = 0, waived = 0;
 
     for (final doc in snap.docs) {
       final data   = doc.data() as Map<String, dynamic>;
       final status = data['status'] as String? ?? 'unpaid';
-      switch (status) {
+      final dueTs  = data['dueDate'] as Timestamp?;
+      final dueDate = dueTs?.toDate();
+
+      final effective = (status == 'unpaid' &&
+              dueDate != null &&
+              dueDate.isBefore(now))
+          ? 'overdue'
+          : status;
+
+      switch (effective) {
         case 'paid':    paid++;    break;
         case 'unpaid':  unpaid++;  break;
         case 'overdue': overdue++; break;

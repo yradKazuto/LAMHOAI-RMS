@@ -10,6 +10,20 @@ import '../models/announcement_model.dart';
 import '../models/complaint_model.dart';
 import '../models/user_model.dart';
 
+/// Outcome of a generateMembershipFees() call, for showing a confirmation
+/// summary to the admin ("Created 42, skipped 8 who already had one").
+class GenerateDuesResult {
+  final int created;
+  final int skipped;
+  final int totalActiveMembers;
+
+  const GenerateDuesResult({
+    required this.created,
+    required this.skipped,
+    required this.totalActiveMembers,
+  });
+}
+
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -138,6 +152,127 @@ class FirestoreService {
 
   Future<void> deletePayment(String paymentId) async {
     await _payments.doc(paymentId).delete();
+  }
+
+  /// Free-tier alternative to a scheduled Cloud Function (those require the
+  /// paid Blaze plan). Call this from a screen's initState — each time an
+  /// admin opens Payments, any `unpaid` record whose dueDate has passed
+  /// gets its stored `status` flipped to `overdue` for real. This keeps
+  /// the Firestore field itself accurate (unlike the display-only
+  /// `displayStatus` getter), so future reports/queries that filter
+  /// directly on `status` will see it too.
+  ///
+  /// Trade-off vs. a Cloud Function: this only runs while someone with
+  /// write access has the app open — there's no background update while
+  /// the app is closed. For an admin-facing screen that's opened
+  /// regularly, that's usually close enough in practice.
+  ///
+  /// Requires a composite index on (status ==, dueDate <) — Firestore will
+  /// give you a console link to create it the first time this runs.
+  Future<int> syncOverdueStatuses() async {
+    final now  = DateTime.now();
+    final snap = await _payments
+        .where('status', isEqualTo: PaymentStatus.unpaid.name)
+        .where('dueDate', isLessThan: Timestamp.fromDate(now))
+        .get();
+
+    if (snap.docs.isEmpty) return 0;
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.update(doc.reference, {'status': PaymentStatus.overdue.name});
+    }
+    await batch.commit();
+    return snap.docs.length;
+  }
+
+  // ── Membership Fee (annual, org-wide — distinct from per-lot monthly dues) ─
+
+  /// Membership fee payment records for a given calendar year, keyed by
+  /// dueDate falling within [year]. Requires a composite index on
+  /// (type ==, dueDate range) — Firestore will surface a console link the
+  /// first time this runs if the index doesn't exist yet.
+  Stream<List<PaymentModel>> streamMembershipFeesForYear(int year) {
+    final start = DateTime(year, 1, 1);
+    final end   = DateTime(year + 1, 1, 1);
+    return _payments
+        .where('type', isEqualTo: PaymentType.membershipFee.name)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dueDate', isLessThan: Timestamp.fromDate(end))
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => PaymentModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
+  }
+
+  /// Creates one unpaid membership-fee record per active member who doesn't
+  /// already have one for [year]. Skips members who already have a record
+  /// (duplicate prevention is by calendar year of dueDate). Uses a single
+  /// WriteBatch — fine for typical HOA member counts, but batches cap at
+  /// 500 writes, so a very large association would need chunking.
+  Future<GenerateDuesResult> generateMembershipFees({
+    required int    year,
+    required double amount,
+    required String recordedBy,
+  }) async {
+    final membersSnap = await _users
+        .where('role', isEqualTo: 'member')
+        .where('status', isEqualTo: MemberStatus.active.name)
+        .get();
+    final members = membersSnap.docs
+        .map((d) => MemberModel.fromMap(
+            d.data() as Map<String, dynamic>, d.id))
+        .toList();
+
+    final start = DateTime(year, 1, 1);
+    final end   = DateTime(year + 1, 1, 1);
+    final existingSnap = await _payments
+        .where('type', isEqualTo: PaymentType.membershipFee.name)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dueDate', isLessThan: Timestamp.fromDate(end))
+        .get();
+    final existingUids = existingSnap.docs
+        .map((d) => (d.data() as Map<String, dynamic>)['uid'] as String? ?? '')
+        .toSet();
+
+    final toCreate = members
+        .where((m) => !existingUids.contains(m.uid))
+        .toList();
+
+    if (toCreate.isEmpty) {
+      return GenerateDuesResult(
+        created: 0,
+        skipped: members.length,
+        totalActiveMembers: members.length,
+      );
+    }
+
+    final batch   = _db.batch();
+    final dueDate = DateTime(year, 1, 31);
+    for (final member in toCreate) {
+      final ref = _payments.doc();
+      final payment = PaymentModel(
+        id:         ref.id,
+        uid:        member.uid,
+        memberName: member.name,
+        type:       PaymentType.membershipFee,
+        amount:     amount,
+        status:     PaymentStatus.unpaid,
+        dueDate:    dueDate,
+        recordedBy: recordedBy,
+        notes:      'Auto-generated annual membership fee for $year',
+        createdAt:  DateTime.now(),
+      );
+      batch.set(ref, payment.toMap());
+    }
+    await batch.commit();
+
+    return GenerateDuesResult(
+      created: toCreate.length,
+      skipped: members.length - toCreate.length,
+      totalActiveMembers: members.length,
+    );
   }
 
   // ════════════════════════════════════════════════════════════════════════════

@@ -2,12 +2,13 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum PaymentType { dues, penalty, specialAssessment, other }
+enum PaymentType { dues, membershipFee, penalty, specialAssessment, other }
 
 extension PaymentTypeExt on PaymentType {
   String get label {
     switch (this) {
       case PaymentType.dues:              return 'Monthly Dues';
+      case PaymentType.membershipFee:     return 'Membership Fee';
       case PaymentType.penalty:           return 'Penalty';
       case PaymentType.specialAssessment: return 'Special Assessment';
       case PaymentType.other:             return 'Other';
@@ -17,6 +18,7 @@ extension PaymentTypeExt on PaymentType {
   static PaymentType fromString(String? v) {
     switch (v) {
       case 'dues':              return PaymentType.dues;
+      case 'membershipFee':     return PaymentType.membershipFee;
       case 'penalty':           return PaymentType.penalty;
       case 'specialAssessment': return PaymentType.specialAssessment;
       default:                  return PaymentType.other;
@@ -121,4 +123,23 @@ class PaymentModel {
     notes:      notes      ?? this.notes,
     createdAt:  createdAt  ?? this.createdAt,
   );
+}
+
+extension PaymentDisplayStatus on PaymentModel {
+  /// Status for DISPLAY purposes only — never written back to Firestore.
+  /// The stored `status` field only ever reflects what an admin explicitly
+  /// set; nothing auto-flips it to `overdue` when a due date passes. This
+  /// getter fills that gap client-side: an `unpaid` record whose dueDate
+  /// is in the past is treated as overdue everywhere the UI shows or
+  /// filters by status. `paid`/`waived` records are never affected.
+  ///
+  /// Use `displayStatus` for badges, totals, and filters. Use `status`
+  /// directly only when you need the literal stored value (e.g. deciding
+  /// whether to show "Mark Paid", or writing a status back to Firestore).
+  PaymentStatus get displayStatus {
+    if (status == PaymentStatus.unpaid && dueDate.isBefore(DateTime.now())) {
+      return PaymentStatus.overdue;
+    }
+    return status;
+  }
 }

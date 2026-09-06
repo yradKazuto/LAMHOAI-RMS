@@ -10,6 +10,7 @@ import 'package:csv/csv.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/providers/auth_provider.dart';
@@ -37,11 +38,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
   static const Color _accent = Color(0xFF2E6BE6);
   static const Color _bg     = Color(0xFFF0F4FB);
 
+  @override
+  void initState() {
+    super.initState();
+    // Same free-tier overdue sync used on Payments — reports built without
+    // ever opening Payments first would otherwise read stale `status`
+    // values straight from Firestore.
+    _fs.syncOverdueStatuses();
+  }
+
   // ── Filter payments ────────────────────────────────────────────────────────
   List<PaymentModel> _applyFilters(List<PaymentModel> all) {
     return all.where((p) {
       final matchStatus = _statusFilter == null ||
-          p.status == _statusFilter;
+          p.displayStatus == _statusFilter;
       final matchMember = _memberFilter == null ||
           p.uid == _memberFilter;
       final matchStart = _startDate == null ||
@@ -83,6 +93,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   // ── Export to CSV ──────────────────────────────────────────────────────────
+  // Uses share_plus (a generic file-share/download package) instead of
+  // Printing.sharePdf — that call is built for PDF byte streams specifically,
+  // so feeding it raw CSV bytes worked by coincidence (readers sniff content
+  // rather than trust the .csv extension) rather than by contract. Requires
+  // adding `share_plus` to pubspec.yaml if it isn't already a dependency.
   Future<void> _exportCsv(List<PaymentModel> payments) async {
     setState(() => _exporting = true);
     try {
@@ -93,19 +108,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
           p.memberName,
           p.type.label,
           p.amount.toStringAsFixed(2),
-          p.status.label,
+          p.displayStatus.label,
           _fmt(p.dueDate),
           _fmt(p.paidDate),
           p.notes,
         ]),
       ];
 
-      final csv = const ListToCsvConverter().convert(rows);
+      final csv   = const ListToCsvConverter().convert(rows);
       final bytes = Uint8List.fromList(csv.codeUnits);
+      final name  = 'lamhoai_payments_${DateTime.now().millisecondsSinceEpoch}.csv';
 
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'lamhoai_payments_${DateTime.now().millisecondsSinceEpoch}.csv',
+      await Share.shareXFiles(
+        [XFile.fromData(bytes, mimeType: 'text/csv', name: name)],
+        text: 'LAMHOAI-RMS Payment Report (CSV)',
       );
     } catch (e) {
       if (mounted) {
@@ -231,7 +247,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           p.memberName,
                           p.type.label,
                           '₱${p.amount.toStringAsFixed(2)}',
-                          p.status.label,
+                          p.displayStatus.label,
                           _fmt(p.dueDate),
                           _fmt(p.paidDate),
                         ]
@@ -684,15 +700,15 @@ class _PaymentRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
                 horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: _bg(payment.status),
+              color: _bg(payment.displayStatus),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Text(payment.status.label,
+            child: Text(payment.displayStatus.label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
-                    color: _fg(payment.status))),
+                    color: _fg(payment.displayStatus))),
           ),
         ),
       ],

@@ -90,7 +90,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         contactNumber: _contact.text.trim(),
         email:         _email.text.trim(),
         president:     _president.text.trim(),
-        dues: DuesConfig(monthly: 0, annual: 0, specialAssessment: 0, penalty: 0),
+        dues: DuesConfig(
+          monthly:           double.tryParse(_monthly.text.trim())    ?? 0,
+          annual:            double.tryParse(_annual.text.trim())     ?? 0,
+          specialAssessment: double.tryParse(_assessment.text.trim()) ?? 0,
+          penalty:           double.tryParse(_penalty.text.trim())    ?? 0,
+        ),
       );
 
       await _svc.saveSettings(settings);

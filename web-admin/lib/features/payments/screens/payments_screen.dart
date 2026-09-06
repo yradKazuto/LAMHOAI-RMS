@@ -7,6 +7,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
 import 'add_payment_screen.dart';
+import 'membership_dues_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/routing/app_router.dart';
 
@@ -32,6 +33,15 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   static const Color _bg     = Color(0xFFF0F4FB);
 
   @override
+  void initState() {
+    super.initState();
+    // Free-tier stand-in for a scheduled Cloud Function — flips any
+    // unpaid-and-past-due record to overdue for real, each time this
+    // screen opens. streamPayments() below picks up the change live.
+    _fs.syncOverdueStatuses();
+  }
+
+  @override
   void dispose() { _search.dispose(); super.dispose(); }
 
   List<PaymentModel> _filtered(List<PaymentModel> all) {
@@ -40,7 +50,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       final matchSearch = q.isEmpty ||
           p.memberName.toLowerCase().contains(q) ||
           p.type.label.toLowerCase().contains(q);
-      final matchStatus = _statusFilter == null || p.status == _statusFilter;
+      final matchStatus = _statusFilter == null || p.displayStatus == _statusFilter;
       final matchType   = _typeFilter   == null || p.type   == _typeFilter;
       return matchSearch && matchStatus && matchType;
     }).toList();
@@ -50,9 +60,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Map<String, double> _totals(List<PaymentModel> list) {
     double totalCollected = 0, totalPending = 0, totalOverdue = 0;
     for (final p in list) {
-      if (p.status == PaymentStatus.paid)    totalCollected += p.amount;
-      if (p.status == PaymentStatus.unpaid)  totalPending   += p.amount;
-      if (p.status == PaymentStatus.overdue) totalOverdue   += p.amount;
+      if (p.status == PaymentStatus.paid)          totalCollected += p.amount;
+      if (p.displayStatus == PaymentStatus.unpaid) totalPending   += p.amount;
+      if (p.displayStatus == PaymentStatus.overdue) totalOverdue  += p.amount;
     }
     return {
       'collected': totalCollected,
@@ -154,6 +164,24 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             size: 18),
                     label: Text(
                         _sendingReminders ? 'Sending...' : 'Send Dues Reminder'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _navy,
+                      side: const BorderSide(color: _navy),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const MembershipDuesScreen()),
+                    ),
+                    icon: const Icon(Icons.groups_outlined, size: 18),
+                    label: const Text('Membership Dues'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _navy,
                       side: const BorderSide(color: _navy),
@@ -517,15 +545,15 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
               padding: const EdgeInsets.symmetric(
                   horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: _bg(payment.status),
+                color: _bg(payment.displayStatus),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(payment.status.label,
+              child: Text(payment.displayStatus.label,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: _fg(payment.status))),
+                      color: _fg(payment.displayStatus))),
             ),
           ),
           SizedBox(

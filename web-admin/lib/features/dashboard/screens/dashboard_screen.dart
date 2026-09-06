@@ -9,8 +9,11 @@ import '../../../core/models/user_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/settings_service.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
+import '../../../core/models/audit_log_model.dart';
+import '../../../core/models/complaint_model.dart';
 import '../../members/screens/members_screen.dart';
 import '../../audit/screens/audit_screen.dart';
 import '../../users/screens/user_management_screen.dart';
@@ -66,6 +69,17 @@ class DashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 28),
                         _StatsRow(role: auth.role),
+                        if (auth.role == UserRole.admin ||
+                            auth.role == UserRole.officer) ...[
+                          const SizedBox(height: 28),
+                          const Text('Actionable Insights & Activity',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: _navy)),
+                          const SizedBox(height: 14),
+                          const _ActivityAndComplaintsRow(),
+                        ],
                         const SizedBox(height: 28),
                         const Text('Quick Access',
                             style: TextStyle(
@@ -473,6 +487,414 @@ class _StatCard extends StatelessWidget {
       ],
     ),
   );
+}
+
+// ── Activity Log + Pending Complaints row ────────────────────────────────────
+class _ActivityAndComplaintsRow extends StatelessWidget {
+  const _ActivityAndComplaintsRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final settingsSvc = SettingsService();
+    final fs          = FirestoreService();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 760;
+        final activity   = _RecentActivityCard(svc: settingsSvc);
+        final complaints = _PendingComplaintsCard(fs: fs);
+
+        if (narrow) {
+          return Column(
+            children: [
+              activity,
+              const SizedBox(height: 14),
+              complaints,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 3, child: activity),
+            const SizedBox(width: 14),
+            Expanded(flex: 2, child: complaints),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── Recent Activity Log card (sourced from Audit Log) ────────────────────────
+class _RecentActivityCard extends StatelessWidget {
+  final SettingsService svc;
+  const _RecentActivityCard({required this.svc});
+
+  Color _actionColor(AuditAction a) {
+    switch (a) {
+      case AuditAction.created:       return const Color(0xFF1A7A4A);
+      case AuditAction.updated:       return const Color(0xFF1A4A9C);
+      case AuditAction.deleted:       return const Color(0xFFCC2200);
+      case AuditAction.statusChanged: return const Color(0xFF7A6A1A);
+      case AuditAction.roleChanged:   return const Color(0xFF5A1A7A);
+      case AuditAction.login:         return const Color(0xFF5A7099);
+    }
+  }
+
+  IconData _actionIcon(AuditAction a) {
+    switch (a) {
+      case AuditAction.created:       return Icons.add_circle_outline;
+      case AuditAction.updated:       return Icons.edit_outlined;
+      case AuditAction.deleted:       return Icons.delete_outline;
+      case AuditAction.statusChanged: return Icons.swap_horiz_outlined;
+      case AuditAction.roleChanged:   return Icons.manage_accounts_outlined;
+      case AuditAction.login:         return Icons.login_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE0E8F4)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Recent Activity Log',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0D2A5C))),
+            const Spacer(),
+            TextButton(
+              onPressed: () => _openAuditLogDialog(context),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize:
+                      MaterialTapTargetSize.shrinkWrap),
+              child: const Text('View all',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2E6BE6))),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        StreamBuilder<List<AuditLogModel>>(
+          stream: svc.streamAuditLogs(limit: 5),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting &&
+                !snap.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                    child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2))),
+              );
+            }
+            final logs = snap.data ?? [];
+            if (logs.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('No recent activity.',
+                    style: TextStyle(
+                        fontSize: 12.5, color: Colors.grey[500])),
+              );
+            }
+            return Column(
+              children: [
+                for (int i = 0; i < logs.length; i++) ...[
+                  if (i > 0)
+                    const Divider(
+                        height: 18, color: Color(0xFFEFF3FA)),
+                  _ActivityRow(
+                    log:   logs[i],
+                    color: _actionColor(logs[i].action),
+                    icon:  _actionIcon(logs[i].action),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+class _ActivityRow extends StatelessWidget {
+  final AuditLogModel log;
+  final Color         color;
+  final IconData      icon;
+  const _ActivityRow({
+    required this.log, required this.color, required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        width: 30, height: 30,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 15, color: color),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                    text: log.performedByName.isNotEmpty
+                        ? log.performedByName
+                        : 'Someone',
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A2B4A))),
+                TextSpan(
+                    text: ' ${log.description}',
+                    style: TextStyle(
+                        fontSize: 12.5, color: Colors.grey[700])),
+              ]),
+            ),
+            const SizedBox(height: 2),
+            Text(_timeAgo(log.createdAt),
+                style: TextStyle(
+                    fontSize: 11, color: Colors.grey[400])),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+// ── Pending Complaints card ───────────────────────────────────────────────────
+class _PendingComplaintsCard extends StatelessWidget {
+  final FirestoreService fs;
+  const _PendingComplaintsCard({required this.fs});
+
+  Color _statusColor(ComplaintStatus s) {
+    switch (s) {
+      case ComplaintStatus.pending:   return const Color(0xFF7A6A1A);
+      case ComplaintStatus.reviewing: return const Color(0xFF1A4A9C);
+      case ComplaintStatus.resolved:  return const Color(0xFF1A7A4A);
+      case ComplaintStatus.rejected:  return const Color(0xFFCC2200);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE0E8F4)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Pending Complaints',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0D2A5C))),
+            const Spacer(),
+            TextButton(
+              onPressed: () => context.go(AppRoutes.complaints),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize:
+                      MaterialTapTargetSize.shrinkWrap),
+              child: const Text('View all',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2E6BE6))),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        StreamBuilder<List<ComplaintModel>>(
+          stream: fs.streamComplaints(),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting &&
+                !snap.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                    child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2))),
+              );
+            }
+            final all = snap.data ?? [];
+            final pending = all
+                .where((c) =>
+                    c.status == ComplaintStatus.pending ||
+                    c.status == ComplaintStatus.reviewing)
+                .toList()
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            final pendingCount = all
+                .where((c) => c.status == ComplaintStatus.pending)
+                .length;
+            final reviewingCount = all
+                .where((c) => c.status == ComplaintStatus.reviewing)
+                .length;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('${pending.length}',
+                        style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0D2A5C))),
+                    const SizedBox(width: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: Wrap(
+                        spacing: 10,
+                        runSpacing: 4,
+                        children: [
+                          _StatusDot(
+                              color: _statusColor(
+                                  ComplaintStatus.pending),
+                              label: 'Pending ($pendingCount)'),
+                          _StatusDot(
+                              color: _statusColor(
+                                  ComplaintStatus.reviewing),
+                              label: 'Reviewing ($reviewingCount)'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (pending.isEmpty)
+                  Text('No open complaints right now.',
+                      style: TextStyle(
+                          fontSize: 12.5, color: Colors.grey[500]))
+                else
+                  Column(
+                    children: [
+                      for (int i = 0; i < pending.length && i < 4; i++) ...[
+                        if (i > 0)
+                          const Divider(
+                              height: 16, color: Color(0xFFEFF3FA)),
+                        _ComplaintRow(
+                          complaint: pending[i],
+                          color: _statusColor(pending[i].status),
+                        ),
+                      ],
+                    ],
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+class _StatusDot extends StatelessWidget {
+  final Color  color;
+  final String label;
+  const _StatusDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 7, height: 7,
+        decoration:
+            BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 5),
+      Text(label,
+          style: TextStyle(fontSize: 11.5, color: Colors.grey[600])),
+    ],
+  );
+}
+
+class _ComplaintRow extends StatelessWidget {
+  final ComplaintModel complaint;
+  final Color          color;
+  const _ComplaintRow({required this.complaint, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        margin: const EdgeInsets.only(top: 4),
+        width: 6, height: 6,
+        decoration:
+            BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(complaint.subject.isNotEmpty
+                    ? complaint.subject
+                    : '(No subject)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A2B4A))),
+            Text(complaint.memberName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 11.5, color: Colors.grey[500])),
+          ],
+        ),
+      ),
+      const SizedBox(width: 8),
+      Text(_timeAgo(complaint.createdAt),
+          style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+    ],
+  );
+}
+
+// ── Shared time-ago formatter ─────────────────────────────────────────────────
+String _timeAgo(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inSeconds < 60)  return 'just now';
+  if (diff.inMinutes < 60)  return '${diff.inMinutes}m ago';
+  if (diff.inHours   < 24)  return '${diff.inHours}h ago';
+  if (diff.inDays    < 7)   return '${diff.inDays}d ago';
+  return '${dt.month}/${dt.day}/${dt.year}';
 }
 
 // ── Top bar ───────────────────────────────────────────────────────────────────

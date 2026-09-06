@@ -79,23 +79,23 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   ImageStreamListener? _imageListener;
 
   // ── Blocks side panel ────────────────────────────────────────────────
+  // Selecting a block highlights its lots (spotlight — see
+  // _BlockSpotlightPainter) AND zooms/pans to frame them, matching how
+  // the click-to-focus reference works: translate = viewportCenter -
+  // scale * targetPoint, using MEASURED content/viewport sizes (not
+  // assumed constants) each time.
   String? _selectedBlock;
   static const double _minScale = 0.3;
   static const double _maxScale = 8.0;
 
-  // Manual zoom-center override per block. Long-pressing a block in the
-  // panel arms this, then the next map tap saves that point (normalized
-  // 0..1) as where "zoom to this block" should center on — sidesteps
-  // trying to compute it automatically from stored lot/polygon data,
-  // which kept landing off. Session-only for now (not persisted).
-  String? _pickingFocusForBlock;
-  final Map<String, Offset> _blockFocusPoints = {};
+  // Diagnostic snapshot of the last zoom-to-block computation, shown
+  // as an on-screen overlay so "the zoom is off" can be checked
+  // against actual numbers instead of guessed at blind.
+  _ZoomDebugInfo? _lastZoomDebug;
 
   // ── Native digitize mode ────────────────────────────────────────────
   bool _digitizing = false;
   final List<Offset> _digitizePoints = []; // normalized 0.0-1.0 points
-
-  static const double _contentWidth = 1000;
 
   @override
   void initState() {
@@ -107,12 +107,8 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
       vsync: this,
       duration: const Duration(milliseconds: 380),
     );
-    _zoomCurve =
-        CurvedAnimation(parent: _zoomAnimController, curve: Curves.easeInOutCubic);
-    // Registered ONCE — the previous version added a new listener on
-    // every zoom call and never removed the old ones, which piled up
-    // over repeated taps (still functionally masked by ordering, but
-    // wasteful and a real bug worth fixing regardless).
+    _zoomCurve = CurvedAnimation(
+        parent: _zoomAnimController, curve: Curves.easeInOutCubic);
     _zoomAnimController.addListener(() {
       final tween = _zoomTween;
       if (tween != null) {
@@ -207,55 +203,36 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     return result;
   }
 
+
+  /// Toggles which block is highlighted, and zooms/pans to frame it.
   void _selectBlock(String block) {
     final deselecting = _selectedBlock == block;
-    setState(() => _selectedBlock = deselecting ? null : block);
+    setState(() {
+      _selectedBlock = deselecting ? null : block;
+      if (deselecting) _lastZoomDebug = null;
+    });
 
     if (deselecting) {
       _animateToMatrix(Matrix4.identity());
-      return;
-    }
-
-    // A manually-set focus point (long-press a block, then tap the
-    // map) always wins over the automatic guess — it's exact by
-    // construction, since it's just "where the admin tapped."
-    final savedFocus = _blockFocusPoints[block];
-    if (savedFocus != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _zoomToNormalizedPoint(savedFocus, scale: 3.2),
-      );
     } else {
+      // Wait a frame so layout (including the spotlight/highlight
+      // showing up) is settled before measuring anything.
       WidgetsBinding.instance.addPostFrameCallback((_) => _zoomToBlock(block));
     }
   }
 
-  /// Arms/disarms "tap the map to set this block's zoom center" mode.
-  /// Long-pressing the same block again cancels it.
-  void _toggleFocusPicking(String block) {
-    if (_pickingFocusForBlock == block) {
-      setState(() => _pickingFocusForBlock = null);
-      return;
-    }
-    setState(() => _pickingFocusForBlock = block);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text('Tap the map to set the zoom center for "$block"'),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
-
-  TickerFuture _animateToMatrix(Matrix4 target) {
-    _zoomTween = Matrix4Tween(
-      begin: _transformController.value,
-      end: target,
-    );
+  void _animateToMatrix(Matrix4 target) {
+    _zoomTween = Matrix4Tween(begin: _transformController.value, end: target);
     _zoomAnimController.reset();
-    return _zoomAnimController.forward();
+    _zoomAnimController.forward();
   }
 
-  /// Best-effort automatic framing from stored lot/polygon data —
-  /// used only when no manual focus point has been set for this block.
+  /// Frames the given block's lots (polygon or pin) in the viewport.
+  ///
+  /// translate = viewportCenter - scale * targetPoint — the same
+  /// formula the click-to-focus reference reduces to once its
+  /// transform-origin:center math is worked out, using MEASURED
+  /// content/viewport sizes each time rather than assumed constants.
   void _zoomToBlock(String block) {
     final contentBox =
         _contentKey.currentContext?.findRenderObject() as RenderBox?;
@@ -272,45 +249,103 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     final contentSize = contentBox.size;
     final viewportSize = viewportBox.size;
 
-    final points = <Offset>[];
+    // The content box (AspectRatio) is centered inside the
+    // InteractiveViewer's child area — if the map's aspect ratio
+    // doesn't match the viewport's, Center adds empty margin on the
+    // sides (or top/bottom). That margin has to be added back into
+    // every point below, exactly like Phase 1's map_pin_view.dart
+    // does, or every computed position drifts by exactly that amount.
+    final letterboxX = (viewportSize.width - contentSize.width) / 2;
+    final letterboxY = (viewportSize.height - contentSize.height) / 2;
+
+    // One representative point PER LOT (its own centroid, or its pin
+    // position) — not every raw vertex. A single stray digitized point
+    // only nudges its own lot's centroid a little; it can't single-
+    // handedly blow out a min/max bounding box the way a raw vertex
+    // can. The lot itself is tracked alongside each centroid purely
+    // for the debug overlay (status/owner) — doesn't affect the
+    // framing math at all.
+    final lotEntries = <MapEntry<LotModel, Offset>>[];
     for (final lot in widget.lots) {
       if (lot.block.trim().toLowerCase() != block.trim().toLowerCase()) {
         continue;
       }
       if (lot.hasPolygon) {
-        for (final p in lot.polygonPoints!) {
-          points.add(Offset(
-            p.x * contentSize.width,
-            p.y * contentSize.height,
-          ));
+        final pts = lot.polygonPoints!;
+        double sx = 0, sy = 0;
+        for (final p in pts) {
+          sx += p.x * contentSize.width;
+          sy += p.y * contentSize.height;
         }
+        lotEntries.add(MapEntry(
+          lot,
+          Offset(letterboxX + sx / pts.length, letterboxY + sy / pts.length),
+        ));
       } else if (lot.mapX != null && lot.mapY != null) {
-        points.add(Offset(
-          lot.mapX! * contentSize.width,
-          lot.mapY! * contentSize.height,
+        lotEntries.add(MapEntry(
+          lot,
+          Offset(
+            letterboxX + lot.mapX! * contentSize.width,
+            letterboxY + lot.mapY! * contentSize.height,
+          ),
         ));
       }
     }
 
-    if (points.isEmpty) return;
+    if (lotEntries.isEmpty) return;
+    final lotCentroids = lotEntries.map((e) => e.value).toList();
 
-    double minX = points.first.dx;
-    double maxX = points.first.dx;
-    double minY = points.first.dy;
-    double maxY = points.first.dy;
+    // Median center (robust to outliers, unlike a mean or a min/max
+    // box) — used only to detect which lots are clearly out of place,
+    // not as the final target itself. Worth knowing its limit: this
+    // only protects against a MINORITY of bad points. If most of a
+    // block's lots share the same mistake (e.g. several digitized in
+    // the wrong spot), the median gets pulled toward THEM, and the
+    // one correctly-placed lot can end up looking like the "outlier"
+    // instead. The per-lot list in the debug overlay is there so you
+    // can catch that case by eye — it shows the raw numbers whether
+    // or not this filter agrees with them.
+    final xs = lotCentroids.map((p) => p.dx).toList()..sort();
+    final ys = lotCentroids.map((p) => p.dy).toList()..sort();
+    final medianCenter = Offset(xs[xs.length ~/ 2], ys[ys.length ~/ 2]);
 
-    for (final p in points) {
+    final distances =
+        lotCentroids.map((p) => (p - medianCenter).distance).toList()..sort();
+    final medianDistance = distances[distances.length ~/ 2];
+    // A lot's centroid counts as an outlier once it's much farther from
+    // the median than the typical lot is — generous enough that a
+    // genuinely large block doesn't trip this, but tight enough to
+    // reject a lot whose digitized shape stretches off into unrelated
+    // parts of the map.
+    final outlierThreshold =
+        (medianDistance * 4).clamp(120.0, double.infinity);
+
+    bool isOutlier(Offset c) =>
+        (c - medianCenter).distance > outlierThreshold;
+
+    final keptLots =
+        lotCentroids.where((c) => !isOutlier(c)).toList();
+    // If literally everything got flagged (e.g. only one or two lots
+    // total, so "distance from median" isn't meaningful), fall back to
+    // using all of them rather than framing nothing.
+    final framingPoints = keptLots.isNotEmpty ? keptLots : lotCentroids;
+
+    double minX = framingPoints.first.dx;
+    double maxX = framingPoints.first.dx;
+    double minY = framingPoints.first.dy;
+    double maxY = framingPoints.first.dy;
+
+    for (final p in framingPoints) {
       if (p.dx < minX) minX = p.dx;
       if (p.dx > maxX) maxX = p.dx;
       if (p.dy < minY) minY = p.dy;
       if (p.dy > maxY) maxY = p.dy;
     }
 
-    // A block that's just a single pin lot (no digitized boundary yet)
-    // collapses to a zero-size box — pad it so we still zoom in on it
-    // instead of bailing out below.
+    // A block that's just a single lot collapses to a zero-size box —
+    // pad it so we still zoom in on it instead of bailing out below.
     if (maxX - minX <= 0 || maxY - minY <= 0) {
-      const pad = 60.0;
+      const pad = 80.0;
       final cx = (minX + maxX) / 2;
       final cy = (minY + maxY) / 2;
       minX = cx - pad;
@@ -323,140 +358,65 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     final boxHeight = maxY - minY;
     if (boxWidth <= 0 || boxHeight <= 0) return;
 
-    final centerLocal = Offset((minX + maxX) / 2, (minY + maxY) / 2);
+    final targetPoint = Offset((minX + maxX) / 2, (minY + maxY) / 2);
 
     const paddingFactor = 2.5;
-    final scaleByWidth =
-        (viewportSize.width / (boxWidth * paddingFactor))
-            .clamp(_minScale, _maxScale);
-    final scaleByHeight =
-        (viewportSize.height / (boxHeight * paddingFactor))
-            .clamp(_minScale, _maxScale);
+    final scaleByWidth = (viewportSize.width / (boxWidth * paddingFactor))
+        .clamp(_minScale, _maxScale);
+    final scaleByHeight = (viewportSize.height / (boxHeight * paddingFactor))
+        .clamp(_minScale, _maxScale);
     final scale = scaleByWidth < scaleByHeight ? scaleByWidth : scaleByHeight;
 
-    _zoomToContentPoint(centerLocal, scale: scale);
-  }
-
-  /// Converts a normalized (0..1) lot-style point to content-local
-  /// pixels and zooms to it. Used for manually-set focus points.
-  void _zoomToNormalizedPoint(Offset normalized, {required double scale}) {
-    final contentBox =
-        _contentKey.currentContext?.findRenderObject() as RenderBox?;
-    if (contentBox == null || !contentBox.hasSize) return;
-    final contentSize = contentBox.size;
-    _zoomToContentPoint(
-      Offset(
-        normalized.dx * contentSize.width,
-        normalized.dy * contentSize.height,
-      ),
-      scale: scale,
-    );
-  }
-
-  /// Centers the viewport on a CONTENT-LOCAL point at the given scale.
-  ///
-  /// Rather than assuming any particular relationship between
-  /// `_transformController.value` and what actually ends up on screen
-  /// (an assumption that kept being wrong — this view has no Center()
-  /// wrapper, and `constrained: true` may be fitting the content
-  /// underneath the live matrix in a way that isn't visible in the
-  /// controller's value), this reads Flutter's own EXACT composed
-  /// transform for the current frame via `getTransformTo`, and backs
-  /// out exactly what's "hidden" outside the live matrix — no
-  /// approximation, no sampling, no guessing.
-  void _zoomToContentPoint(Offset contentLocal, {required double scale}) {
-    final contentBox =
-        _contentKey.currentContext?.findRenderObject() as RenderBox?;
-    final viewportBox =
-        _viewportKey.currentContext?.findRenderObject() as RenderBox?;
-
-    if (contentBox == null ||
-        viewportBox == null ||
-        !contentBox.hasSize ||
-        !viewportBox.hasSize) {
-      return;
-    }
-
-    final viewportSize = viewportBox.size;
     final viewportCenter =
         Offset(viewportSize.width / 2, viewportSize.height / 2);
-
-    final Matrix4 total = contentBox.getTransformTo(viewportBox);
-    final Matrix4 live = _transformController.value;
-
-    Matrix4 hiddenBase;
-    Matrix4 hiddenBaseInverse;
-    try {
-      final liveInverse = Matrix4.inverted(live);
-      hiddenBase = total.multiplied(liveInverse);
-      hiddenBaseInverse = Matrix4.inverted(hiddenBase);
-    } catch (_) {
-      // Singular matrix (e.g. mid-layout) — skip this attempt rather
-      // than crash; the next tap will just try again.
-      return;
-    }
-
-    final desiredUnderLive =
-        MatrixUtils.transformPoint(hiddenBaseInverse, viewportCenter);
-
-    final clampedScale = scale.clamp(_minScale, _maxScale);
-    final translate = desiredUnderLive - contentLocal * clampedScale;
-
-    if (!translate.dx.isFinite || !translate.dy.isFinite) return;
+    final translate = viewportCenter - targetPoint * scale;
 
     final target = Matrix4.identity()
       ..translate(translate.dx, translate.dy)
-      ..scale(clampedScale);
+      ..scale(scale);
 
-    _animateToMatrix(target).whenComplete(() => _snapToExactCenter(contentLocal));
-  }
+    // Center, expressed as a percentage of the IMAGE itself (letterbox
+    // subtracted back out) — this is the number to eyeball against
+    // where the block actually visually sits on the map.
+    final imageLocalCenter =
+        Offset(targetPoint.dx - letterboxX, targetPoint.dy - letterboxY);
+    final centerPercent = Offset(
+      (imageLocalCenter.dx / contentSize.width).clamp(0.0, 1.0),
+      (imageLocalCenter.dy / contentSize.height).clamp(0.0, 1.0),
+    );
 
-  /// Runs once after the main zoom animation finishes. Measures exactly
-  /// where `contentLocal` actually ended up on screen and, if it's off
-  /// by more than a pixel or two, nudges the transform the rest of the
-  /// way using a freshly-sampled LOCAL scale (accurate for a small
-  /// correction like this even if whatever caused the original drift —
-  /// still unclear — isn't something the upfront math accounted for).
-  void _snapToExactCenter(Offset contentLocal) {
-    if (!mounted) return;
+    final debugLots = lotEntries.map((e) {
+      final lot = e.key;
+      final localCenter = Offset(
+        e.value.dx - letterboxX,
+        e.value.dy - letterboxY,
+      );
+      return _ZoomDebugLot(
+        lotNumber: lot.lotNumber,
+        centerPercent: Offset(
+          (localCenter.dx / contentSize.width).clamp(0.0, 1.0),
+          (localCenter.dy / contentSize.height).clamp(0.0, 1.0),
+        ),
+        isOutlier: isOutlier(e.value),
+        status: lot.status,
+        ownerName: lot.ownerName,
+      );
+    }).toList();
 
-    final contentBox =
-        _contentKey.currentContext?.findRenderObject() as RenderBox?;
-    final viewportBox =
-        _viewportKey.currentContext?.findRenderObject() as RenderBox?;
-    if (contentBox == null ||
-        viewportBox == null ||
-        !contentBox.hasSize ||
-        !viewportBox.hasSize) {
-      return;
-    }
+    setState(() {
+      _lastZoomDebug = _ZoomDebugInfo(
+        block: block,
+        lotsFound: lotCentroids.length,
+        lotsExcluded: lotCentroids.length - framingPoints.length,
+        centerPercent: centerPercent,
+        scale: scale,
+        contentSize: contentSize,
+        viewportSize: viewportSize,
+        lots: debugLots,
+      );
+    });
 
-    final viewportSize = viewportBox.size;
-    final viewportCenter =
-        Offset(viewportSize.width / 2, viewportSize.height / 2);
-
-    Offset screenPosOf(Offset local) =>
-        viewportBox.globalToLocal(contentBox.localToGlobal(local));
-
-    final actualScreen = screenPosOf(contentLocal);
-    final error = viewportCenter - actualScreen;
-
-    if (error.distance < 1.5) return; // already dead-on
-
-    const probe = 40.0;
-    final sx = screenPosOf(contentLocal + const Offset(probe, 0));
-    final sy = screenPosOf(contentLocal + const Offset(0, probe));
-    final localScaleX = (sx.dx - actualScreen.dx) / probe;
-    final localScaleY = (sy.dy - actualScreen.dy) / probe;
-
-    if (localScaleX.abs() < 1e-6 || localScaleY.abs() < 1e-6) return;
-
-    final delta = Offset(error.dx / localScaleX, error.dy / localScaleY);
-    if (!delta.dx.isFinite || !delta.dy.isFinite) return;
-
-    final corrected = _transformController.value.clone()
-      ..translate(delta.dx, delta.dy);
-    _transformController.value = corrected;
+    _animateToMatrix(target);
   }
 
   // ── Upload the map image for this phase ──────────────────────────────
@@ -665,24 +625,6 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     final nx = (local.dx / contentSize.width).clamp(0.0, 1.0);
     final ny = (local.dy / contentSize.height).clamp(0.0, 1.0);
 
-    // Picking a manual zoom-center for a block takes priority over
-    // every other tap behavior while active.
-    if (_pickingFocusForBlock != null) {
-      final block = _pickingFocusForBlock!;
-      final point = Offset(nx, ny);
-      setState(() {
-        _blockFocusPoints[block] = point;
-        _pickingFocusForBlock = null;
-      });
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('Zoom center set for "$block"')),
-      );
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _zoomToNormalizedPoint(point, scale: 3.2),
-      );
-      return;
-    }
-
     // Digitize mode — every tap just adds another boundary point,
     // nothing else happens while active.
     if (_digitizing) {
@@ -700,6 +642,31 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
         _openLotDialog(lot);
         return;
       }
+    }
+
+    // Defensive safety net for pin lots: each pin marker has its own
+    // GestureDetector for opening it, which normally wins the tap over
+    // this outer handler — but that's a gesture-arena race, not a
+    // guarantee. If this handler ever DOES end up processing a tap
+    // that landed on/near an existing pin (as happened during digitize
+    // mode — see the pin markers below), open that lot instead of
+    // silently creating a duplicate one on top of it.
+    LotModel? nearestPin;
+    double nearestDistSq = double.infinity;
+    const pinHitRadius = 14 / 1000; // matches the 28px pin marker, normalized
+    for (final lot in widget.lots) {
+      if (lot.hasPolygon || lot.mapX == null || lot.mapY == null) continue;
+      final dx = lot.mapX! - nx;
+      final dy = lot.mapY! - ny;
+      final distSq = dx * dx + dy * dy;
+      if (distSq <= pinHitRadius * pinHitRadius && distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        nearestPin = lot;
+      }
+    }
+    if (nearestPin != null) {
+      _openLotDialog(nearestPin);
+      return;
     }
 
     if (!widget.canEdit) return;
@@ -784,11 +751,6 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final contentHeight = _aspectRatio == null
-                ? _contentWidth
-                : _contentWidth / _aspectRatio!;
-            final contentSize = Size(_contentWidth, contentHeight);
-
             final polygonLots =
                 widget.lots.where((l) => l.hasPolygon).toList();
             final pinLots =
@@ -799,14 +761,35 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
               minScale: 0.3,
               maxScale: 8,
               boundaryMargin: const EdgeInsets.all(200),
-              child: GestureDetector(
-                onTapUp: (d) => _onTapUp(d, contentSize),
-                child: SizedBox(
-                  key: _contentKey,
-                  width: contentSize.width,
-                  height: contentSize.height,
-                  child: Stack(
-                    children: [
+              // Center + AspectRatio — matching Phase 1's
+              // map_pin_view.dart structure exactly, not just its
+              // math. Phase 1's zoom math explicitly accounts for a
+              // real letterbox margin that Center+AspectRatio
+              // guarantees exists; this view was previously using a
+              // plain fixed-size SizedBox with no such guarantee,
+              // which is the most likely actual cause of the zoom
+              // drift — the two views' content simply wasn't laid out
+              // the same way, no matter how carefully the transform
+              // math tried to compensate for it.
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: _aspectRatio ?? 1.0,
+                  child: LayoutBuilder(
+                    builder: (context, innerConstraints) {
+                      // The REAL, final size of the content box, now
+                      // that AspectRatio has resolved it — used for
+                      // every coordinate calculation below instead of
+                      // an assumed constant, so this stays correct
+                      // regardless of what size AspectRatio actually
+                      // settles on for a given viewport.
+                      final contentSize = innerConstraints.biggest;
+
+                      return GestureDetector(
+                        onTapUp: (d) => _onTapUp(d, contentSize),
+                        child: Stack(
+                          key: _contentKey,
+                          fit: StackFit.expand,
+                          children: [
                       Positioned.fill(
                         child: Image(
                           image: NetworkImage(widget.phaseMap.imageUrl),
@@ -820,6 +803,42 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                         ),
                       ),
 
+                      // Spotlight highlight — matches Phase 1's
+                      // map_pin_view.dart exactly: a dark layer over
+                      // the whole map with the selected block's actual
+                      // digitized shape (or a circle, for pin lots)
+                      // cut out of it. Lots ALWAYS show their normal
+                      // status color everywhere, selected or not —
+                      // this only dims the background map art around
+                      // the selected block, it never grays out lots.
+                      if (_selectedBlock != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: _BlockSpotlightPainter(
+                                polygonShapes: widget.lots
+                                    .where((l) =>
+                                        l.hasPolygon &&
+                                        l.block.trim().toLowerCase() ==
+                                            _selectedBlock!.trim().toLowerCase())
+                                    .map((l) => l.polygonPoints!
+                                        .map((p) => Offset(p.x, p.y))
+                                        .toList())
+                                    .toList(),
+                                pinCenters: widget.lots
+                                    .where((l) =>
+                                        !l.hasPolygon &&
+                                        l.mapX != null &&
+                                        l.mapY != null &&
+                                        l.block.trim().toLowerCase() ==
+                                            _selectedBlock!.trim().toLowerCase())
+                                    .map((l) => Offset(l.mapX!, l.mapY!))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+
                       // Digitized polygon lots — precise clickable shapes
                       if (polygonLots.isNotEmpty)
                         Positioned.fill(
@@ -832,35 +851,54 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                           ),
                         ),
 
-                      // Simple pin lots — no digitized boundary yet
+                      // Simple pin lots — no digitized boundary yet.
+                      // Their own GestureDetector normally handles taps
+                      // for opening the lot, but that was competing with
+                      // the outer map's tap handler for the SAME tap
+                      // whenever digitize mode was active — Flutter's
+                      // gesture arena doesn't reliably pick a winner
+                      // between a nested GestureDetector and an
+                      // ancestor's when both recognize a tap, so a tap
+                      // meant to hit a pin could instead register as a
+                      // new digitize boundary point right on top of it
+                      // (that's the red dot). While digitizing, pins are
+                      // dimmed and stop intercepting taps entirely, so
+                      // every tap unambiguously goes to placing a point.
                       for (final lot in pinLots)
                         if (lot.mapX != null && lot.mapY != null)
                           Positioned(
                             left: lot.mapX! * contentSize.width - 14,
                             top: lot.mapY! * contentSize.height - 14,
-                            child: GestureDetector(
-                              onTap: () => _openLotDialog(lot),
-                              child: Tooltip(
-                                message:
-                                    'Block ${lot.block} • Lot ${lot.lotNumber}',
-                                child: Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _colorFor(lot.status),
-                                    border: Border.all(
-                                        color: Colors.white, width: 2),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Colors.black26,
-                                        blurRadius: 3,
-                                        offset: Offset(0, 1),
+                            child: IgnorePointer(
+                              ignoring: _digitizing,
+                              child: GestureDetector(
+                                onTap: () => _openLotDialog(lot),
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 220),
+                                  opacity: _digitizing ? 0.35 : 1.0,
+                                  child: Tooltip(
+                                    message:
+                                        'Block ${lot.block} • Lot ${lot.lotNumber}',
+                                    child: Container(
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _colorFor(lot.status),
+                                        border: Border.all(
+                                            color: Colors.white, width: 2),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            blurRadius: 3,
+                                            offset: Offset(0, 1),
+                                          ),
+                                        ],
                                       ),
-                                    ],
+                                      child: Icon(_iconFor(lot.status),
+                                          size: 14, color: Colors.white),
+                                    ),
                                   ),
-                                  child: Icon(_iconFor(lot.status),
-                                      size: 14, color: Colors.white),
                                 ),
                               ),
                             ),
@@ -876,13 +914,24 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                             ),
                           ),
                         ),
-                    ],
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
             );
           },
         ),
+
+        // ── Zoom diagnostic overlay ──────────────────────────────────
+        if (_lastZoomDebug != null)
+          Positioned(
+            top: 12,
+            left: 12,
+            child: _ZoomDebugOverlay(info: _lastZoomDebug!),
+          ),
 
         // ── Toolbar ──────────────────────────────────────────────────
         if (widget.canEdit)
@@ -1038,8 +1087,8 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
           ),
           const SizedBox(height: 4),
           Text(
-            'Tap a block to zoom in, tap again to reset. '
-            'Long-press to set exactly where it zooms.',
+            'Tap a block to zoom in and highlight its lots. '
+            'Tap again to reset.',
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey[600],
@@ -1067,10 +1116,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                           child: _buildBlockButton(
                             label: block,
                             selected: _selectedBlock == block,
-                            picking: _pickingFocusForBlock == block,
-                            hasCustomFocus: _blockFocusPoints.containsKey(block),
                             onTap: () => _selectBlock(block),
-                            onLongPress: () => _toggleFocusPicking(block),
                           ),
                         ),
                       ),
@@ -1134,34 +1180,22 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   Widget _buildBlockButton({
     required String label,
     required bool selected,
-    required bool picking,
-    required bool hasCustomFocus,
     required VoidCallback onTap,
-    required VoidCallback onLongPress,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(9),
         onTap: onTap,
-        onLongPress: onLongPress,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
-            color: picking
-                ? const Color(0xFFFFF3E0)
-                : selected
-                    ? const Color(0xFFE8F0FE)
-                    : const Color(0xFFF8F9FB),
+            color: selected ? const Color(0xFFE8F0FE) : const Color(0xFFF8F9FB),
             borderRadius: BorderRadius.circular(9),
             border: Border.all(
-              color: picking
-                  ? _orange
-                  : selected
-                      ? _accent
-                      : const Color(0xFFE2E5E9),
-              width: picking || selected ? 1.4 : 1,
+              color: selected ? _accent : const Color(0xFFE2E5E9),
+              width: selected ? 1.4 : 1,
             ),
           ),
           child: Row(
@@ -1169,35 +1203,19 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
               Icon(
                 Icons.grid_view_rounded,
                 size: 16,
-                color: picking
-                    ? _orange
-                    : selected
-                        ? _accent
-                        : Colors.grey[500],
+                color: selected ? _accent : Colors.grey[500],
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  picking ? '$label — tap the map…' : label,
+                  label,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: picking
-                        ? const Color(0xFF8A5A00)
-                        : selected
-                            ? _navy
-                            : Colors.grey[800],
+                    color: selected ? _navy : Colors.grey[800],
                   ),
                 ),
               ),
-              // Subtle indicator — no extra button, just a small dot to
-              // show this block has a manually-set zoom center.
-              if (hasCustomFocus && !picking)
-                Icon(
-                  Icons.push_pin,
-                  size: 12,
-                  color: Colors.grey[400],
-                ),
             ],
           ),
         ),
@@ -1228,6 +1246,138 @@ class _LegendRow extends StatelessWidget {
           style: const TextStyle(fontSize: 12, color: _navy),
         ),
       ],
+    );
+  }
+}
+
+// ── Zoom diagnostic snapshot ────────────────────────────────────────
+// Plain data holder — what _zoomToBlock actually computed, surfaced
+// so "it's off" can be checked against real numbers instead of
+// guessed at. Nothing here affects the zoom itself.
+class _ZoomDebugInfo {
+  final String block;
+  final int lotsFound;
+  final int lotsExcluded;
+  final Offset centerPercent; // 0..1 of the image itself
+  final double scale;
+  final Size contentSize;
+  final Size viewportSize;
+  final List<_ZoomDebugLot> lots;
+
+  const _ZoomDebugInfo({
+    required this.block,
+    required this.lotsFound,
+    required this.lotsExcluded,
+    required this.centerPercent,
+    required this.scale,
+    required this.contentSize,
+    required this.viewportSize,
+    required this.lots,
+  });
+}
+
+// Per-lot breakdown — lets you spot exactly which lot number's stored
+// points are sitting somewhere they shouldn't, instead of guessing
+// from the block-level average.
+class _ZoomDebugLot {
+  final String lotNumber;
+  final Offset centerPercent; // 0..1 of the image itself — kept for
+  // the outlier math, no longer shown directly (status is more useful
+  // to read at a glance than a raw position).
+  final bool isOutlier;
+  final LotStatus status;
+  final String? ownerName;
+
+  const _ZoomDebugLot({
+    required this.lotNumber,
+    required this.centerPercent,
+    required this.isOutlier,
+    required this.status,
+    required this.ownerName,
+  });
+
+  /// "John Doe" if occupied and named, otherwise the status itself
+  /// ("Unassigned" for vacant, so it reads clearly rather than blank).
+  String get statusLabel {
+    if (status == LotStatus.occupied) {
+      final name = ownerName?.trim() ?? '';
+      if (name.isNotEmpty) return name;
+      return 'Occupied';
+    }
+    switch (status) {
+      case LotStatus.vacant:
+        return 'Unassigned';
+      case LotStatus.forSale:
+        return 'For Sale';
+      case LotStatus.reserved:
+        return 'Reserved';
+      case LotStatus.occupied:
+        return 'Occupied'; // unreachable, handled above
+    }
+  }
+}
+
+class _ZoomDebugOverlay extends StatelessWidget {
+  final _ZoomDebugInfo info;
+
+  const _ZoomDebugOverlay({required this.info});
+
+  @override
+  Widget build(BuildContext context) {
+    String pct(double v) => '${(v * 100).toStringAsFixed(0)}%';
+    String px(double v) => v.toStringAsFixed(0);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.72),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DefaultTextStyle(
+        style: const TextStyle(
+          fontSize: 12,
+          color: Colors.white,
+          height: 1.5,
+          fontFamily: 'monospace',
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Block ${info.block}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${info.lotsFound} lots found'
+              '${info.lotsExcluded > 0 ? ' · ${info.lotsExcluded} excluded (outlier)' : ''}',
+            ),
+            Text(
+              'Center: ${pct(info.centerPercent.dx)}, ${pct(info.centerPercent.dy)}',
+            ),
+            Text('Scale: ${info.scale.toStringAsFixed(2)}x'),
+            Text(
+              'Content: ${px(info.contentSize.width)}x${px(info.contentSize.height)} '
+              '· Viewport: ${px(info.viewportSize.width)}x${px(info.viewportSize.height)}',
+            ),
+            if (info.lots.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              const Text('— Lots —',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              for (final lot in info.lots)
+                Text(
+                  'Lot ${lot.lotNumber}: ${lot.statusLabel}'
+                  '${lot.isOutlier ? '  ⚠ likely misplaced' : ''}',
+                  style: TextStyle(
+                    color: lot.isOutlier ? Colors.amber : Colors.white,
+                    fontWeight:
+                        lot.isOutlier ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1337,6 +1487,68 @@ class _PolygonPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PolygonPainter oldDelegate) {
     return oldDelegate.lots != lots || oldDelegate.contentSize != contentSize;
+  }
+}
+
+// ── Selected-block spotlight — matches Phase 1's map_pin_view.dart ────
+// Dims the whole map with a translucent black layer, then cuts the
+// selected block's exact shape out of that layer (BlendMode.clear),
+// so only the background map art around it dims. Lot colors are
+// painted in a separate layer on top of this and are never touched
+// here — every lot keeps its normal status color always.
+class _BlockSpotlightPainter extends CustomPainter {
+  final List<List<Offset>> polygonShapes; // normalized 0..1 points
+  final List<Offset> pinCenters; // normalized 0..1 centers
+
+  const _BlockSpotlightPainter({
+    required this.polygonShapes,
+    required this.pinCenters,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (polygonShapes.isEmpty && pinCenters.isEmpty) return;
+
+    canvas.saveLayer(Offset.zero & size, Paint());
+
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = Colors.black.withOpacity(0.45),
+    );
+
+    final clearPaint = Paint()..blendMode = BlendMode.clear;
+
+    for (final points in polygonShapes) {
+      if (points.isEmpty) continue;
+
+      final path = Path();
+      final first = points.first;
+      path.moveTo(first.dx * size.width, first.dy * size.height);
+      for (int i = 1; i < points.length; i++) {
+        final p = points[i];
+        path.lineTo(p.dx * size.width, p.dy * size.height);
+      }
+      path.close();
+
+      canvas.drawPath(path, clearPaint);
+    }
+
+    // Pin lots have no digitized boundary to cut out — clear a circle
+    // around the marker instead, matching its own on-screen size.
+    for (final center in pinCenters) {
+      canvas.drawCircle(
+        Offset(center.dx * size.width, center.dy * size.height),
+        20,
+        clearPaint,
+      );
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BlockSpotlightPainter oldDelegate) {
+    return true;
   }
 }
 
