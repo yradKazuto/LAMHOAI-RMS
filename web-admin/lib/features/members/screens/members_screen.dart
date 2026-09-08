@@ -30,9 +30,9 @@ class _MembersScreenState extends State<MembersScreen> {
   String? _statusFilter;
   String? _blockFilter;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void dispose() {
@@ -474,7 +474,7 @@ class _MemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    hoverColor: const Color(0xFFF0F4FB),
+    hoverColor: const Color(0xFFF4F7FB),
     child: Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: 20, vertical: 14),
@@ -487,7 +487,7 @@ class _MemberRow extends StatelessWidget {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor:
-                      const Color(0xFF2E6BE6)
+                      const Color(0xFF2563EB)
                           .withOpacity(0.12),
                   child: Text(
                     member.name.isNotEmpty
@@ -497,7 +497,7 @@ class _MemberRow extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF2E6BE6)),
+                        color: Color(0xFF2563EB)),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -507,7 +507,7 @@ class _MemberRow extends StatelessWidget {
                           fontSize: 13.5,
                           fontWeight: FontWeight.w500,
                           color:
-                              Color(0xFF0D2A5C)),
+                              Color(0xFF1E293B)),
                       overflow:
                           TextOverflow.ellipsis),
                 ),
@@ -598,8 +598,8 @@ class _AddMemberDialogState
   bool    _obscure = true;
   String? _error;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
 
   @override
   void dispose() {
@@ -954,7 +954,7 @@ class _AddMemberDialogState
                         BorderRadius.circular(8),
                     border: Border.all(
                         color: const Color(
-                                0xFF2E6BE6)
+                                0xFF2563EB)
                             .withOpacity(0.2)),
                   ),
                   child: const Row(
@@ -962,7 +962,7 @@ class _AddMemberDialogState
                       Icon(Icons.info_outline,
                           size: 15,
                           color:
-                              Color(0xFF2E6BE6)),
+                              Color(0xFF2563EB)),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1043,7 +1043,7 @@ class _FieldLabel extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF0D2A5C)));
+          color: Color(0xFF1E293B)));
 }
 
 class _Field extends StatelessWidget {

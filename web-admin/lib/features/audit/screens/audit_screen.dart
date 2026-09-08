@@ -17,9 +17,9 @@ class _AuditScreenState extends State<AuditScreen> {
   String?      _actionFilter;
   String?      _collectionFilter;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void dispose() {
@@ -60,7 +60,7 @@ class _AuditScreenState extends State<AuditScreen> {
       case AuditAction.deleted:       return const Color(0xFFFFF0EE);
       case AuditAction.statusChanged: return const Color(0xFFFFF8E0);
       case AuditAction.roleChanged:   return const Color(0xFFF5EEFF);
-      case AuditAction.login:         return const Color(0xFFF0F4FB);
+      case AuditAction.login:         return const Color(0xFFF4F7FB);
     }
   }
 
@@ -222,7 +222,7 @@ class _AuditScreenState extends State<AuditScreen> {
                       ConnectionState.waiting) {
                     return const Center(
                         child: CircularProgressIndicator(
-                            color: Color(0xFF2E6BE6)));
+                            color: Color(0xFF2563EB)));
                   }
 
                   if (snap.hasError) {
@@ -237,7 +237,7 @@ class _AuditScreenState extends State<AuditScreen> {
                               style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF0D2A5C))),
+                                  color: Color(0xFF1E293B))),
                           const SizedBox(height: 6),
                           Text(
                             'Check Firestore rules — audit_logs needs\n'
@@ -393,7 +393,7 @@ class _AuditScreenState extends State<AuditScreen> {
                                                     FontWeight
                                                         .w500,
                                                 color: Color(
-                                                    0xFF0D2A5C)),
+                                                    0xFF1E293B)),
                                           ),
                                           const SizedBox(
                                               height: 3),

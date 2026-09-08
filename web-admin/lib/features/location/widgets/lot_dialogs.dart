@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/lot_model.dart';
 import '../../../core/services/lot_service.dart';
 
-const _navy = Color(0xFF0D2A52);
+const _navy = Color(0xFF1E293B);
 const _blue = Color(0xFF1565C0);
 const _green = Color(0xFF2E7D32);
 const _orange = Color(0xFFEF6C00);

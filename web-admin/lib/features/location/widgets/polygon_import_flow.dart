@@ -13,7 +13,7 @@ import 'package:excel/excel.dart' as xlsx;
 import '../../../core/models/lot_model.dart';
 import '../../../core/services/lot_service.dart';
 
-const _navy = Color(0xFF0D2A52);
+const _navy = Color(0xFF1E293B);
 
 /// Runs the full import flow: pick file -> parse -> confirm -> import.
 /// [imageWidth]/[imageHeight] are the phase's actual map image pixel
@@ -56,7 +56,7 @@ Future<int?> runPolygonImportFlow({
 
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (_) => AlertDialog(
+    builder: (dialogCtx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: const Text('Import Lot Coordinates',
           style: TextStyle(
@@ -69,11 +69,11 @@ Future<int?> runPolygonImportFlow({
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, false),
+          onPressed: () => Navigator.pop(dialogCtx, false),
           child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
         ),
         ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
+          onPressed: () => Navigator.pop(dialogCtx, true),
           style: ElevatedButton.styleFrom(
             backgroundColor: _navy,
             foregroundColor: Colors.white,

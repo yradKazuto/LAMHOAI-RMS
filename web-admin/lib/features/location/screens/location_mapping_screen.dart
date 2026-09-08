@@ -16,12 +16,12 @@ import '../widgets/lot_dialogs.dart';
 import '../widgets/map_pin_view.dart';
 import '../widgets/simple_phase_map_view.dart';
 
-const _navy = Color(0xFF0D2A52);
+const _navy = Color(0xFF1E293B);
 const _blue = Color(0xFF1565C0);
 const _green = Color(0xFF2E7D32);
 const _orange = Color(0xFFEF6C00);
 const _grey = Color(0xFFBDBDBD);
-const _accent = Color(0xFF2E6BE6);
+const _accent = Color(0xFF2563EB);
 
 const String kPhaseOnePolygonMap = 'Phase 1';
 
@@ -132,14 +132,55 @@ class _LocationMappingScreenState
         doc.id,
       );
 
-      // Close the lot dialog first.
-      Navigator.of(context).pop();
+      // Close the lot dialog first. showDialog() defaults to pushing
+      // onto the root navigator — popping via a plain `context` from
+      // elsewhere could accidentally pop the wrong navigator, so we're
+      // explicit about targeting the root here regardless of nesting.
+      Navigator.of(context, rootNavigator: true).pop();
 
-      // Open the member details screen.
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MemberDetailScreen(
-            member: member,
+      if (!mounted) return;
+
+      // Open the member details screen as a modal, floating on top of
+      // the map instead of navigating away from it.
+      final size = MediaQuery.of(context).size;
+      await showDialog(
+        context: context,
+        barrierColor: Colors.black.withOpacity(0.35),
+        builder: (dialogCtx) => Dialog(
+          insetPadding: const EdgeInsets.all(40),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          child: SizedBox(
+            width: size.width > 900 ? 820 : size.width * 0.92,
+            height: size.height * 0.85,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                children: [
+                  MemberDetailScreen(
+                    member: member,
+                    originLabel: 'Location Mapping',
+                    originRoute: AppRoutes.location,
+                    showBreadcrumb: false,
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Material(
+                      color: Colors.white,
+                      shape: const CircleBorder(),
+                      elevation: 3,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Close',
+                        onPressed: () =>
+                            Navigator.of(dialogCtx).pop(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       );
@@ -192,7 +233,7 @@ class _LocationMappingScreenState
 
     final name = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12)),
         title: const Text('Add Phase',
@@ -215,14 +256,14 @@ class _LocationMappingScreenState
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
               final trimmed = controller.text.trim();
               if (trimmed.isEmpty) return;
-              Navigator.pop(context, trimmed);
+              Navigator.pop(dialogCtx, trimmed);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _navy,

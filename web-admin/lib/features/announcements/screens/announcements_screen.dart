@@ -13,9 +13,9 @@ import '../../../core/routing/app_router.dart';
 class AnnouncementsScreen extends StatelessWidget {
   const AnnouncementsScreen({super.key});
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +31,6 @@ class AnnouncementsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ─────────────────────────────────────────────────────
-            // ── Header ─────────────────────────────────────────────────────
 Row(
   children: [
     IconButton(
@@ -78,7 +76,6 @@ Row(
 ),
             const SizedBox(height: 24),
 
-            // ── List ───────────────────────────────────────────────────────
             Expanded(
               child: StreamBuilder<List<AnnouncementModel>>(
                 stream: _fs.streamAnnouncements(),
@@ -162,7 +159,6 @@ Row(
   }
 }
 
-// ── Announcement card ─────────────────────────────────────────────────────────
 class _AnnouncementCard extends StatelessWidget {
   final AnnouncementModel  announcement;
   final bool               canEdit;
@@ -171,7 +167,7 @@ class _AnnouncementCard extends StatelessWidget {
   final NotificationService notif;
   final VoidCallback       onEdit;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _AnnouncementCard({
     required this.announcement,
@@ -230,14 +226,13 @@ class _AnnouncementCard extends StatelessWidget {
                             ? _navy
                             : Colors.grey[500])),
               ),
-              // Status badge
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: announcement.isActive
                       ? const Color(0xFFEAF7F0)
-                      : const Color(0xFFF0F4FB),
+                      : const Color(0xFFF4F7FB),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -271,15 +266,14 @@ class _AnnouncementCard extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_outlined,
-                      size: 18, color: Color(0xFF2E6BE6)),
+                      size: 18, color: Color(0xFF2563EB)),
                   tooltip: 'Edit',
                   onPressed: onEdit,
                 ),
-                // Resend notification
                 IconButton(
                   icon: const Icon(
                       Icons.notifications_outlined,
-                      size: 18, color: Color(0xFF2E6BE6)),
+                      size: 18, color: Color(0xFF2563EB)),
                   tooltip: 'Resend notification',
                   onPressed: () =>
                       _resendNotification(context),
@@ -351,26 +345,26 @@ class _AnnouncementCard extends StatelessWidget {
   Future<void> _confirmDelete(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12)),
         title: const Text('Delete Announcement',
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0D2A5C))),
+                color: Color(0xFF1E293B))),
         content: Text(
             'Delete "${announcement.title}"? '
             'This cannot be undone.',
             style: const TextStyle(fontSize: 13.5)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel',
                 style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFCC2200),
               foregroundColor: Colors.white,
@@ -388,7 +382,6 @@ class _AnnouncementCard extends StatelessWidget {
   }
 }
 
-// ── Post / Edit dialog ────────────────────────────────────────────────────────
 class _PostDialog extends StatefulWidget {
   final FirestoreService    fs;
   final NotificationService notif;
@@ -413,7 +406,7 @@ class _PostDialogState extends State<_PostDialog> {
   bool _loading  = false;
   int  _tokenCount = 0;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   bool get _isEdit => widget.existing != null;
 
@@ -473,7 +466,6 @@ class _PostDialogState extends State<_PostDialog> {
         ));
       }
 
-      // Send push notification if toggled on
       if (_sendPush && mounted) {
         final result =
             await widget.notif.sendAnnouncementToAll(
@@ -523,7 +515,7 @@ class _PostDialogState extends State<_PostDialog> {
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(
-            color: Color(0xFF2E6BE6), width: 1.5)),
+            color: Color(0xFF2563EB), width: 1.5)),
   );
 
   @override
@@ -550,7 +542,6 @@ class _PostDialogState extends State<_PostDialog> {
               ),
               const SizedBox(height: 20),
 
-              // Title
               const Text('Title',
                   style: TextStyle(
                       fontSize: 12.5,
@@ -565,7 +556,6 @@ class _PostDialogState extends State<_PostDialog> {
               ),
               const SizedBox(height: 16),
 
-              // Body
               const Text('Message',
                   style: TextStyle(
                       fontSize: 12.5,
@@ -581,14 +571,13 @@ class _PostDialogState extends State<_PostDialog> {
               ),
               const SizedBox(height: 16),
 
-              // Push notification toggle
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8F4FF),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: const Color(0xFF2E6BE6)
+                      color: const Color(0xFF2563EB)
                           .withOpacity(0.2)),
                 ),
                 child: Row(
@@ -596,7 +585,7 @@ class _PostDialogState extends State<_PostDialog> {
                     const Icon(
                         Icons.notifications_outlined,
                         size: 18,
-                        color: Color(0xFF2E6BE6)),
+                        color: Color(0xFF2563EB)),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(

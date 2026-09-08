@@ -40,9 +40,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   bool          _uploading   = false;
   String?       _uploadError;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
   static const Color _red    = Color(0xFFCC2200);
 
   @override
@@ -98,10 +98,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    // Fix 3: canUpload — Admin + Officer only (Accountant excluded)
     final canUpload = auth.isAdmin || auth.isOfficer;
 
-    // Fix 4: canDelete — Admin only
     final canDelete = auth.isAdmin;
 
     final isFiltered = widget.filterMemberId != null;
@@ -175,7 +173,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 borderRadius: BorderRadius.circular(4),
                 child: const LinearProgressIndicator(
                   backgroundColor: Color(0xFFD0DBEE),
-                  color: Color(0xFF2E6BE6),
+                  color: Color(0xFF2563EB),
                   minHeight: 3,
                 ),
               ),
@@ -331,7 +329,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       doc:        docs[i],
                       fs:         _fs,
                       cloudinary: _cloudinary,
-                      canDelete:  canDelete,   // Fix 4: Admin only
+                      canDelete:  canDelete,
                     ),
                   );
                 },
@@ -344,11 +342,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 }
 
-// ── Upload button ─────────────────────────────────────────────────────────────
 class _UploadButton extends StatelessWidget {
   final bool uploading;
   final VoidCallback onTap;
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
   const _UploadButton({required this.uploading, required this.onTap});
 
   @override
@@ -373,7 +370,6 @@ class _UploadButton extends StatelessWidget {
   );
 }
 
-// ── Type filter dropdown ──────────────────────────────────────────────────────
 class _TypeFilterDropdown extends StatelessWidget {
   final DocumentType? value;
   final void Function(DocumentType?) onChanged;
@@ -411,7 +407,6 @@ class _TypeFilterDropdown extends StatelessWidget {
   );
 }
 
-// ── Document card ─────────────────────────────────────────────────────────────
 class _DocumentCard extends StatelessWidget {
   final DocumentModel     doc;
   final FirestoreService  fs;
@@ -486,7 +481,7 @@ class _DocumentCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF0F4FB),
+                  color: const Color(0xFFF4F7FB),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(_ext(doc.fileName),
@@ -507,9 +502,8 @@ class _DocumentCard extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF2E6BE6))),
+                        color: Color(0xFF2563EB))),
               ),
-              // Fix 4: Only show delete icon for Admin
               if (canDelete) ...[
                 const SizedBox(width: 6),
                 InkWell(
@@ -558,7 +552,7 @@ class _DocumentCard extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF2E6BE6))),
+                        color: Color(0xFF2563EB))),
               ),
             ],
           ),
@@ -570,14 +564,14 @@ class _DocumentCard extends StatelessWidget {
   Future<void> _confirmDelete(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12)),
         title: const Text('Delete Document',
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0D2A5C))),
+                color: Color(0xFF1E293B))),
         content: Text(
           'Are you sure you want to delete "${doc.fileName}"?\n'
           'This will remove it from Cloudinary and Firestore.',
@@ -585,12 +579,12 @@ class _DocumentCard extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel',
                 style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFCC2200),
               foregroundColor: Colors.white,
@@ -606,7 +600,6 @@ class _DocumentCard extends StatelessWidget {
       await cloudinary.deleteFile(doc.fileUrl);
       await fs.deleteDocumentMetadata(doc.id);
 
-      // ── Audit log ────────────────────────────────────────────────────
       if (context.mounted) {
         final auth = Provider.of<AuthProvider>(context, listen: false);
         await SettingsService().logAction(

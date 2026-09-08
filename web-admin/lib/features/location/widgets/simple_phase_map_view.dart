@@ -23,13 +23,13 @@ import 'map_pin_view.dart' show AddLotDialog;
 import 'lot_dialogs.dart' hide AddLotDialog;
 // import 'polygon_import_flow.dart'; // TODO: re-enable once `excel` package is added (flutter pub add excel)
 
-const _navy = Color(0xFF0D2A52);
+const _navy = Color(0xFF1E293B);
 const _blue = Color(0xFF1565C0);
 const _green = Color(0xFF2E7D32);
 const _orange = Color(0xFFEF6C00);
 const _purple = Color(0xFF6A1B9A);
 const _grey = Color(0xFF9E9E9E);
-const _accent = Color(0xFF2E6BE6);
+const _accent = Color(0xFF2563EB);
 
 class SimplePhaseMapView extends StatefulWidget {
   final PhaseMapModel phaseMap;
@@ -519,7 +519,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Save Lot Boundary',
             style: TextStyle(
@@ -547,14 +547,14 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
               if (blockController.text.trim().isEmpty ||
                   lotController.text.trim().isEmpty) return;
-              Navigator.pop(context, true);
+              Navigator.pop(dialogCtx, true);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _navy,

@@ -11,9 +11,9 @@ import '../../../core/services/analytics_service.dart';
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,6 @@ class AnalyticsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ─────────────────────────────────────────────────────
             Row(
               children: [
                 IconButton(
@@ -53,11 +52,9 @@ class AnalyticsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
 
-            // ── Row 1: Summary tiles ────────────────────────────────────────
             _SummaryTilesRow(svc: _svc),
             const SizedBox(height: 24),
 
-            // ── Row 2: Bar chart + Pie chart ────────────────────────────────
             LayoutBuilder(
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth > 700;
@@ -87,7 +84,6 @@ class AnalyticsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // ── Row 3: Payment compliance gauge ────────────────────────────
             _PaymentComplianceCard(svc: _svc),
           ],
         ),
@@ -96,7 +92,6 @@ class AnalyticsScreen extends StatelessWidget {
   }
 }
 
-// ── Summary tiles ─────────────────────────────────────────────────────────────
 class _SummaryTilesRow extends StatelessWidget {
   final AnalyticsService svc;
   const _SummaryTilesRow({required this.svc});
@@ -219,12 +214,11 @@ class _SummaryTile extends StatelessWidget {
   );
 }
 
-// ── Monthly bar chart ─────────────────────────────────────────────────────────
 class _MonthlyBarChart extends StatelessWidget {
   final AnalyticsService svc;
   const _MonthlyBarChart({required this.svc});
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +338,7 @@ class _MonthlyBarChart extends StatelessWidget {
                               BarChartRodData(
                                 toY: e.value.total,
                                 color:
-                                    const Color(0xFF2E6BE6),
+                                    const Color(0xFF2563EB),
                                 width: 28,
                                 borderRadius:
                                     const BorderRadius.vertical(
@@ -355,7 +349,7 @@ class _MonthlyBarChart extends StatelessWidget {
                                   show: true,
                                   toY: maxY,
                                   color: const Color(
-                                      0xFFF0F4FB),
+                                      0xFFF4F7FB),
                                 ),
                               ),
                             ],
@@ -365,7 +359,7 @@ class _MonthlyBarChart extends StatelessWidget {
                     barTouchData: BarTouchData(
                       touchTooltipData: BarTouchTooltipData(
                         getTooltipColor: (_) =>
-                            const Color(0xFF0D2A5C),
+                            const Color(0xFF1E293B),
                         getTooltipItem:
                             (group, groupIndex, rod, rodIndex) =>
                                 BarTooltipItem(
@@ -388,7 +382,6 @@ class _MonthlyBarChart extends StatelessWidget {
   }
 }
 
-// ── Member status pie chart ───────────────────────────────────────────────────
 class _MemberStatusPieChart extends StatefulWidget {
   final AnalyticsService svc;
   const _MemberStatusPieChart({required this.svc});
@@ -402,7 +395,7 @@ class _MemberStatusPieChartState
     extends State<_MemberStatusPieChart> {
   int _touched = -1;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   Widget build(BuildContext context) {
@@ -514,7 +507,6 @@ class _MemberStatusPieChartState
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Legend
                   Wrap(
                     spacing: 16,
                     runSpacing: 8,
@@ -562,12 +554,11 @@ class _PieSection {
       required this.label});
 }
 
-// ── Payment compliance gauge ──────────────────────────────────────────────────
 class _PaymentComplianceCard extends StatelessWidget {
   final AnalyticsService svc;
   const _PaymentComplianceCard({required this.svc});
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   Widget build(BuildContext context) {
@@ -638,11 +629,10 @@ class _PaymentComplianceCard extends StatelessWidget {
                     color: const Color(0xFF5A7099),
                   ),
                   const SizedBox(height: 20),
-                  // Compliance rate highlight
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0F4FB),
+                      color: const Color(0xFFF4F7FB),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -659,7 +649,7 @@ class _PaymentComplianceCard extends StatelessWidget {
                                 style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF0D2A5C))),
+                                    color: Color(0xFF1E293B))),
                             Text(
                               '${data.paidPercent.toStringAsFixed(1)}% of all payments are paid',
                               style: TextStyle(

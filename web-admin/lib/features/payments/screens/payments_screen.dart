@@ -28,9 +28,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   PaymentStatus? _statusFilter;
   PaymentType?   _typeFilter;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void initState() {
@@ -74,25 +74,25 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Future<void> _sendDuesReminders() async {
     final days = await showDialog<int>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Send Dues Reminder',
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0D2A5C))),
+                color: Color(0xFF1E293B))),
         content: const Text(
             'Notify members whose unpaid dues are coming up within:',
             style: TextStyle(fontSize: 13.5)),
         actions: [
           for (final d in [1, 3, 7, 14])
             TextButton(
-              onPressed: () => Navigator.pop(context, d),
+              onPressed: () => Navigator.pop(dialogCtx, d),
               child: Text('$d day${d == 1 ? '' : 's'}'),
             ),
           TextButton(
-            onPressed: () => Navigator.pop(context, null),
+            onPressed: () => Navigator.pop(dialogCtx, null),
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
         ],
@@ -379,7 +379,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF2E6BE6), width: 1.5)),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5)),
   );
 }
 
@@ -466,7 +466,7 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
       case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
       case PaymentStatus.unpaid:  return const Color(0xFFFFF8E0);
       case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF0F4FB);
+      case PaymentStatus.waived:  return const Color(0xFFF4F7FB);
     }
   }
 
@@ -526,7 +526,7 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
           Expanded(flex: 3, child: Text(payment.memberName,
               style: const TextStyle(
                   fontSize: 13.5, fontWeight: FontWeight.w500,
-                  color: Color(0xFF0D2A5C)),
+                  color: Color(0xFF1E293B)),
               overflow: TextOverflow.ellipsis)),
           Expanded(flex: 2, child: Text(payment.type.label,
               style: TextStyle(fontSize: 13, color: Colors.grey[700]))),

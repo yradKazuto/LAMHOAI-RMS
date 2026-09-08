@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:file_picker/file_picker.dart';
 import '../../../core/models/member_model.dart';
@@ -10,17 +11,39 @@ import '../../../core/models/document_model.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/models/lot_model.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/routing/app_router.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/lot_service.dart';
-import '../../location/screens/location_mapping_screen.dart';
 import '../../payments/screens/add_payment_screen.dart';
 import '../../documents/widgets/document_upload_flow.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final MemberModel member;
-  const MemberDetailScreen({super.key, required this.member});
+
+  /// What the middle breadcrumb segment says, and where its "route"
+  /// (as opposed to its "back") points if there's nothing to pop.
+  /// Defaults to the Homeowners list, since that's the most common
+  /// entry point — pass these when pushing from somewhere else (e.g.
+  /// Location Mapping) so the breadcrumb doesn't say "Homeowners"
+  /// when the user actually came from a different page.
+  final String originLabel;
+  final String originRoute;
+
+  /// Set false when this screen is embedded in a modal (it already has
+  /// its own close button) — the breadcrumb's "Dashboard" link doing a
+  /// full app navigation from underneath a floating dialog is confusing
+  /// rather than useful there.
+  final bool showBreadcrumb;
+
+  const MemberDetailScreen({
+    super.key,
+    required this.member,
+    this.originLabel = 'Homeowners',
+    this.originRoute = AppRoutes.members,
+    this.showBreadcrumb = true,
+  });
 
   @override
   State<MemberDetailScreen> createState() => _MemberDetailScreenState();
@@ -44,9 +67,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   late TextEditingController _address;
   late MemberStatus _status;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void initState() {
@@ -94,7 +117,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0D2A5C))),
+                color: Color(0xFF1E293B))),
         content: Text(
           'Send a password reset email to:\n$email',
           style: const TextStyle(fontSize: 13.5),
@@ -112,7 +135,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                 Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  const Color(0xFF0D2A5C),
+                  const Color(0xFF1E293B),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius:
@@ -185,14 +208,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   // Takes the lot directly (from the already-loaded owned-lots list) so
   // there's no need for a separate Firestore lookup like before.
   Future<void> _viewLotOnMap(LotModel lot) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LocationMappingScreen(
-          targetLotId: lot.id,
-        ),
-      ),
-    );
+    // Use the router's `go` (same as the sidebar's Location Mapping
+    // link) rather than Navigator.push, so this lands on the actual
+    // standalone full-page route instead of being pushed as a nested
+    // page on top of wherever Member Detail happens to be showing.
+    context.go(AppRoutes.location, extra: lot.id);
   }
 
   Future<void> _changePhoto({
@@ -265,112 +285,166 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
 
     return Scaffold(
       backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: _navy),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.member.name,
-          style: const TextStyle(
-              color: _navy, fontWeight: FontWeight.w700, fontSize: 17),
-        ),
-        actions: [
-          if (canEdit && !_editMode) ...[
-            TextButton.icon(
-              onPressed: () => _sendPasswordReset(context),
-              icon: const Icon(Icons.lock_reset_outlined,
-                  size: 16, color: _accent),
-              label: const Text('Reset Password',
-                  style: TextStyle(
-                      color: _accent,
-                      fontWeight: FontWeight.w600)),
-            ),
-            TextButton.icon(
-              onPressed: () =>
-                  setState(() => _editMode = true),
-              icon: const Icon(Icons.edit_outlined,
-                  size: 16, color: _accent),
-              label: const Text('Edit',
-                  style: TextStyle(
-                      color: _accent,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ],
-          if (_editMode) ...[
-            TextButton(
-              onPressed: () => setState(() {
-                _editMode = false;
-                _initControllers(widget.member);
-              }),
-              child: const Text('Cancel',
-                  style: TextStyle(color: Colors.grey)),
-            ),
-            Padding(
-              padding:
-                  const EdgeInsets.only(right: 12),
-              child: ElevatedButton(
-                onPressed:
-                    _saving ? null : _saveEdits,
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: _navy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(
-                                8)),
-                    padding:
-                        const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10)),
-                child: _saving
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child:
-                            CircularProgressIndicator(
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Breadcrumb ─────────────────────────────────────────────────
+            if (widget.showBreadcrumb) ...[
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => context.go(AppRoutes.dashboard),
+                    child: Text('Dashboard',
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey[500])),
+                  ),
+                  Text('  /  ',
+                      style: TextStyle(
+                          fontSize: 13, color: Colors.grey[400])),
+                  GestureDetector(
+                    onTap: () => Navigator.canPop(context)
+                        ? Navigator.pop(context)
+                        : context.go(widget.originRoute),
+                    child: Text(widget.originLabel,
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.grey[500])),
+                  ),
+                  Text('  /  ',
+                      style: TextStyle(
+                          fontSize: 13, color: Colors.grey[400])),
+                  Text(widget.member.name,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _navy)),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── Name + actions ───────────────────────────────────────────────
+            Row(
+              children: [
+                Text(widget.member.name,
+                    style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: _navy)),
+                const Spacer(),
+                if (canEdit && !_editMode) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _sendPasswordReset(context),
+                    icon: const Icon(Icons.lock_reset_outlined,
+                        size: 16),
+                    label: const Text('Reset Password'),
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: _navy,
+                        side: const BorderSide(
+                            color: Color(0xFFD0DBEE)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(8))),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        setState(() => _editMode = true),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit Profile'),
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: _navy,
+                        side: const BorderSide(
+                            color: Color(0xFFD0DBEE)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(8))),
+                  ),
+                ],
+                if (_editMode) ...[
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _editMode = false;
+                      _initControllers(widget.member);
+                    }),
+                    child: const Text('Cancel',
+                        style: TextStyle(color: Colors.grey)),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _saving ? null : _saveEdits,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: _navy,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10)),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: Colors.white))
-                    : const Text('Save'),
+                        : const Text('Save'),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 18),
+
+            // ── Tabs ───────────────────────────────────────────────────────────
+            TabBar(
+              controller: _tabs,
+              isScrollable: true,
+              labelColor: _navy,
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: _accent,
+              labelPadding:
+                  const EdgeInsets.only(right: 28),
+              labelStyle: const TextStyle(
+                  fontWeight: FontWeight.w600, fontSize: 13.5),
+              tabs: const [
+                Tab(text: 'Profile'),
+                Tab(text: 'Payments'),
+                Tab(text: 'Documents'),
+              ],
+            ),
+            const Divider(height: 1, color: Color(0xFFE0E8F4)),
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: [
+                  _ProfileTab(
+                    member: widget.member,
+                    photoUrl: _photoUrl,
+                    editMode: _editMode,
+                    canEditPhoto: canEdit,
+                    lotService: _lotService,
+                    name: _name, email: _email, lot: _lot,
+                    contact: _contact, address: _address,
+                    status: _status,
+                    onStatusChanged: (v) =>
+                        setState(() => _status = v),
+                    onViewLot: _viewLotOnMap,
+                    onChangePhoto: _changePhoto,
+                  ),
+                  _PaymentsTab(
+                      memberId: widget.member.uid,
+                      memberName: widget.member.name,
+                      auth: auth),
+                  _DocumentsTab(
+                      memberId: widget.member.uid,
+                      memberName: widget.member.name,
+                      auth: auth),
+                ],
               ),
             ),
           ],
-        ],
-        bottom: TabBar(
-          controller: _tabs,
-          labelColor: _navy,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: _accent,
-          labelStyle: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 13.5),
-          tabs: const [
-            Tab(text: 'Profile'),
-            Tab(text: 'Payments'),
-            Tab(text: 'Documents'),
-          ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _ProfileTab(
-            member: widget.member,
-            photoUrl: _photoUrl,
-            editMode: _editMode,
-            canEditPhoto: canEdit,
-            lotService: _lotService,
-            name: _name, email: _email, lot: _lot,
-            contact: _contact, address: _address,
-            status: _status,
-            onStatusChanged: (v) => setState(() => _status = v),
-            onViewLot: _viewLotOnMap,
-            onChangePhoto: _changePhoto,
-          ),
-          _PaymentsTab(memberId: widget.member.uid, memberName: widget.member.name, auth: auth),
-          _DocumentsTab(memberId: widget.member.uid, memberName: widget.member.name, auth: auth),
-        ],
       ),
     );
   }
@@ -391,7 +465,7 @@ class _ProfileTab extends StatelessWidget {
     required void Function(bool uploading) onUploadingChanged,
   }) onChangePhoto;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _ProfileTab({
     required this.member, required this.photoUrl, required this.editMode,
@@ -489,7 +563,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
   bool _uploading = false;
   double _progress = 0;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   String _fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/'
@@ -515,7 +589,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
               CircleAvatar(
                 radius: 52,
                 backgroundColor:
-                    const Color(0xFF2E6BE6).withOpacity(0.12),
+                    const Color(0xFF2563EB).withOpacity(0.12),
                 backgroundImage: widget.photoUrl.isNotEmpty
                     ? NetworkImage(widget.photoUrl)
                     : null,
@@ -527,7 +601,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                         style: const TextStyle(
                             fontSize: 34,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF2E6BE6)),
+                            color: Color(0xFF2563EB)),
                       )
                     : null,
               ),
@@ -568,7 +642,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2E6BE6),
+                        color: const Color(0xFF2563EB),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
@@ -649,7 +723,7 @@ class _OwnedLotTile extends StatelessWidget {
 
   const _OwnedLotTile({required this.lot, required this.onTap});
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   Widget build(BuildContext context) {
@@ -663,14 +737,14 @@ class _OwnedLotTile extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0F4FB),
+          color: const Color(0xFFF4F7FB),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFFD0DBEE)),
         ),
         child: Row(
           children: [
             const Icon(Icons.location_on_outlined,
-                size: 15, color: Color(0xFF2E6BE6)),
+                size: 15, color: Color(0xFF2563EB)),
             const SizedBox(width: 8),
             Expanded(
               child: Text('Block $block • Lot $lotNo',
@@ -720,7 +794,7 @@ class _MemberInfoCard extends StatelessWidget {
   final String memberStatusLabel;
   final void Function(MemberStatus) onStatusChanged;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _MemberInfoCard({
     required this.editMode,
@@ -805,7 +879,7 @@ class _PaymentsTab extends StatelessWidget {
     required this.auth,
   });
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   Widget build(BuildContext context) {
@@ -898,7 +972,7 @@ class _DocumentsTab extends StatelessWidget {
     required this.auth,
   });
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   Widget build(BuildContext context) {
@@ -1033,7 +1107,7 @@ class _DetailField extends StatelessWidget {
   final TextEditingController controller;
   final bool readOnly;
   final int maxLines;
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _DetailField({
     required this.label,
@@ -1071,7 +1145,7 @@ class _DetailField extends StatelessWidget {
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFF2E6BE6), width: 1.5)),
+                  color: Color(0xFF2563EB), width: 1.5)),
           disabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Color(0xFFE8EDF5))),
@@ -1150,7 +1224,7 @@ class _DropdownField<T> extends StatelessWidget {
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFF2E6BE6), width: 1.5)),
+                  color: Color(0xFF2563EB), width: 1.5)),
         ),
         items: items
             .map((i) => DropdownMenuItem<T>(
@@ -1181,7 +1255,7 @@ class _PaymentRow extends StatelessWidget {
       case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
       case PaymentStatus.unpaid:  return const Color(0xFFFFF8E0);
       case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF0F4FB);
+      case PaymentStatus.waived:  return const Color(0xFFF4F7FB);
     }
   }
 
@@ -1196,7 +1270,7 @@ class _PaymentRow extends StatelessWidget {
         children: [
           Expanded(flex: 3, child: Text(payment.type.label,
               style: const TextStyle(fontSize: 13.5,
-                  fontWeight: FontWeight.w500, color: Color(0xFF0D2A5C)))),
+                  fontWeight: FontWeight.w500, color: Color(0xFF1E293B)))),
           Expanded(flex: 2, child: Text(
               '₱${payment.amount.toStringAsFixed(2)}',
               style: const TextStyle(fontSize: 13.5, color: Color(0xFF1A2B4A)))),
@@ -1275,11 +1349,11 @@ class _DocCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E6BE6).withOpacity(0.1),
+                  color: const Color(0xFF2563EB).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.insert_drive_file_outlined,
-                    size: 20, color: Color(0xFF2E6BE6)),
+                    size: 20, color: Color(0xFF2563EB)),
               ),
               const Spacer(),
               InkWell(

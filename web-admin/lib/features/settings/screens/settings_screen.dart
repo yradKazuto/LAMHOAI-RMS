@@ -21,13 +21,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _svc = SettingsService();
   bool  _saving = false;
 
-  // Profile controllers
   final _name          = TextEditingController();
   final _address       = TextEditingController();
   final _contact       = TextEditingController();
   final _email         = TextEditingController();
   final _president     = TextEditingController();
-  // Dues controllers
   final _monthly       = TextEditingController();
   final _annual        = TextEditingController();
   final _assessment    = TextEditingController();
@@ -35,9 +33,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _loaded = false;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void initState() {
@@ -62,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _loaded = true); // stop the spinner either way
+        setState(() => _loaded = true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not load settings: $e')),
         );
@@ -100,7 +98,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       await _svc.saveSettings(settings);
 
-      // Log the action
       await _svc.logAction(
         performedBy:      auth.userModel?.uid ?? '',
         performedByName:  auth.userModel?.displayName ?? '',
@@ -131,7 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showDuesDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => Dialog(
+      builder: (dialogCtx) => Dialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14)),
         child: SizedBox(
@@ -152,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(dialogCtx),
                     ),
                   ],
                 ),
@@ -167,7 +164,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogCtx),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _navy,
                       foregroundColor: Colors.white,
@@ -194,7 +191,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ─────────────────────────────────────────────────────
             Row(
               children: [
                 IconButton(
@@ -249,7 +245,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Content ────────────────────────────────────────────────────
             Expanded(
               child: !_loaded
                   ? const Center(
@@ -270,13 +265,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ── Profile tab ───────────────────────────────────────────────────────────────
 class _ProfileTab extends StatelessWidget {
   final TextEditingController name, address, contact,
       email, president;
   final VoidCallback onOpenDuesConfig;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _ProfileTab({
     required this.name,
@@ -349,8 +343,8 @@ class _ProfileTab extends StatelessWidget {
               icon: const Icon(Icons.payments_outlined, size: 16),
               label: const Text('Dues Configuration'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF2E6BE6),
-                side: const BorderSide(color: Color(0xFF2E6BE6)),
+                foregroundColor: const Color(0xFF2563EB),
+                side: const BorderSide(color: Color(0xFF2563EB)),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 10),
                 shape: RoundedRectangleBorder(
@@ -364,12 +358,11 @@ class _ProfileTab extends StatelessWidget {
   }
 }
 
-// ── Dues tab (now shown inside a dialog, triggered from the button above) ─────
 class _DuesTab extends StatelessWidget {
   final TextEditingController monthly, annual,
       assessment, penalty;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _DuesTab({
     required this.monthly,
@@ -445,14 +438,14 @@ class _DuesTab extends StatelessWidget {
               color: const Color(0xFFE8F4FF),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                  color: const Color(0xFF2E6BE6)
+                  color: const Color(0xFF2563EB)
                       .withOpacity(0.2)),
             ),
             child: const Row(
               children: [
                 Icon(Icons.info_outline,
                     size: 16,
-                    color: Color(0xFF2E6BE6)),
+                    color: Color(0xFF2563EB)),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -472,13 +465,12 @@ class _DuesTab extends StatelessWidget {
   }
 }
 
-// ── Settings field ────────────────────────────────────────────────────────────
 class _SettingsField extends StatelessWidget {
   final String                label, hint;
   final TextEditingController ctrl;
   final int                   maxLines;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _SettingsField({
     required this.label,
@@ -522,21 +514,20 @@ class _SettingsField extends StatelessWidget {
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFF2E6BE6), width: 1.5)),
+                  color: Color(0xFF2563EB), width: 1.5)),
         ),
       ),
     ],
   );
 }
 
-// ── Dues amount field ─────────────────────────────────────────────────────────
 class _DuesField extends StatelessWidget {
   final String                label, hint, description;
   final TextEditingController ctrl;
   final IconData              icon;
   final Color                 color;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _DuesField({
     required this.label,

@@ -10,17 +10,48 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/services/settings_service.dart';
 
-class UserManagementScreen extends StatelessWidget {
+class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  @override
+  State<UserManagementScreen> createState() =>
+      _UserManagementScreenState();
+}
+
+class _UserManagementScreenState extends State<UserManagementScreen> {
+  final _fs     = FirestoreService();
+  final _search = TextEditingController();
+
+  String  _searchQuery  = '';
+  String? _roleFilter;
+  String? _statusFilter;
+
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<StaffModel> _filtered(List<StaffModel> all) {
+    return all.where((s) {
+      final q = _searchQuery.toLowerCase();
+      final matchSearch = q.isEmpty ||
+          s.displayName.toLowerCase().contains(q) ||
+          s.email.toLowerCase().contains(q);
+      final matchRole = _roleFilter == null ||
+          s.role.name == _roleFilter;
+      final matchStatus = _statusFilter == null ||
+          (_statusFilter == 'active' ? s.isActive : !s.isActive);
+      return matchSearch && matchRole && matchStatus;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final _fs = FirestoreService();
-
     return Scaffold(
       backgroundColor: _bg,
       body: Padding(
@@ -65,14 +96,97 @@ class UserManagementScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // ── Role legend ───────────────────────────────────────────────────
+            // ── Filters ───────────────────────────────────────────────────────
             Row(
               children: [
-                _RoleBadge(role: UserRole.admin),
-                const SizedBox(width: 8),
-                _RoleBadge(role: UserRole.accountant),
-                const SizedBox(width: 8),
-                _RoleBadge(role: UserRole.officer),
+                SizedBox(
+                  width: 280,
+                  child: TextField(
+                    controller: _search,
+                    onChanged: (v) =>
+                        setState(() => _searchQuery = v),
+                    decoration: InputDecoration(
+                      hintText: 'Search name or email...',
+                      hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[400]),
+                      prefixIcon:
+                          const Icon(Icons.search, size: 18),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding:
+                          const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFD0DBEE))),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFD0DBEE))),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: _accent, width: 1.5)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _DropdownFilter(
+                  value: _roleFilter,
+                  hint:  'All Roles',
+                  items: const [
+                    DropdownMenuItem(
+                        value: null, child: Text('All Roles')),
+                    DropdownMenuItem(
+                        value: 'admin', child: Text('Admin')),
+                    DropdownMenuItem(
+                        value: 'accountant',
+                        child: Text('Accountant')),
+                    DropdownMenuItem(
+                        value: 'officer', child: Text('Officer')),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _roleFilter = v),
+                ),
+                const SizedBox(width: 12),
+                _DropdownFilter(
+                  value: _statusFilter,
+                  hint:  'All Statuses',
+                  items: const [
+                    DropdownMenuItem(
+                        value: null,
+                        child: Text('All Statuses')),
+                    DropdownMenuItem(
+                        value: 'active', child: Text('Active')),
+                    DropdownMenuItem(
+                        value: 'inactive',
+                        child: Text('Inactive')),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _statusFilter = v),
+                ),
+                if (_searchQuery.isNotEmpty ||
+                    _roleFilter != null ||
+                    _statusFilter != null) ...[
+                  const SizedBox(width: 12),
+                  TextButton.icon(
+                    onPressed: () => setState(() {
+                      _search.clear();
+                      _searchQuery  = '';
+                      _roleFilter   = null;
+                      _statusFilter = null;
+                    }),
+                    icon: const Icon(Icons.clear, size: 15),
+                    label: const Text('Clear all'),
+                    style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey[600]),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
@@ -94,7 +208,7 @@ class UserManagementScreen extends StatelessWidget {
                                 color: Colors.red)));
                   }
 
-                  final staff = snap.data ?? [];
+                  final staff = _filtered(snap.data ?? []);
 
                   return Container(
                     decoration: BoxDecoration(
@@ -129,11 +243,13 @@ class UserManagementScreen extends StatelessWidget {
                             color: Color(0xFFE0E8F4)),
 
                         if (staff.isEmpty)
-                          const Expanded(
+                          Expanded(
                             child: Center(
                               child: Text(
-                                  'No staff accounts found.',
-                                  style: TextStyle(
+                                  (snap.data ?? []).isEmpty
+                                      ? 'No staff accounts found.'
+                                      : 'No staff match these filters.',
+                                  style: const TextStyle(
                                       color: Colors.grey)),
                             ),
                           )
@@ -180,7 +296,7 @@ class _StaffRow extends StatelessWidget {
   final FirestoreService fs;
   final BuildContext   context;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _StaffRow({
     required this.staff,
@@ -226,13 +342,13 @@ class _StaffRow extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFF0D2A5C)),
+                              color: Color(0xFF1E293B)),
                           overflow: TextOverflow.ellipsis),
                       if (isSelf)
                         const Text('(You)',
                             style: TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFF2E6BE6))),
+                                color: Color(0xFF2563EB))),
                     ],
                   ),
                 ),
@@ -261,7 +377,7 @@ class _StaffRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: staff.isActive
                     ? const Color(0xFFEAF7F0)
-                    : const Color(0xFFF0F4FB),
+                    : const Color(0xFFF4F7FB),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -289,7 +405,7 @@ class _StaffRow extends StatelessWidget {
                         icon: const Icon(
                             Icons.manage_accounts_outlined,
                             size: 18,
-                            color: Color(0xFF2E6BE6)),
+                            color: Color(0xFF2563EB)),
                         tooltip: 'Change role',
                         onPressed: () =>
                             _showChangeRoleDialog(
@@ -322,7 +438,7 @@ class _StaffRow extends StatelessWidget {
 
   Color _roleColor(UserRole role) {
     switch (role) {
-      case UserRole.admin:      return const Color(0xFF0D2A5C);
+      case UserRole.admin:      return const Color(0xFF1E293B);
       case UserRole.accountant: return const Color(0xFF1A7A4A);
       case UserRole.officer:    return const Color(0xFF7A3A1A);
       default:                  return Colors.grey;
@@ -334,14 +450,14 @@ class _StaffRow extends StatelessWidget {
     UserRole? selected = s.role;
     await showDialog(
       context: ctx,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12)),
         title: Text('Change role for ${s.displayName}',
             style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0D2A5C))),
+                color: Color(0xFF1E293B))),
         content: StatefulBuilder(
           builder: (context, setState) =>
               Column(
@@ -351,7 +467,7 @@ class _StaffRow extends StatelessWidget {
                       value: r,
                       groupValue: selected,
                       title: Text(r.label),
-                      activeColor: const Color(0xFF0D2A5C),
+                      activeColor: const Color(0xFF1E293B),
                       onChanged: (v) =>
                           setState(() => selected = v),
                     ))
@@ -360,7 +476,7 @@ class _StaffRow extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel',
                 style: TextStyle(color: Colors.grey)),
           ),
@@ -369,10 +485,10 @@ class _StaffRow extends StatelessWidget {
               if (selected != null) {
                 await fs.updateStaffRole(s.uid, selected!);
               }
-              Navigator.pop(ctx);
+              Navigator.pop(dialogCtx);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0D2A5C),
+              backgroundColor: const Color(0xFF1E293B),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -389,7 +505,7 @@ class _StaffRow extends StatelessWidget {
     final action = s.isActive ? 'deactivate' : 'activate';
     final confirm = await showDialog<bool>(
       context: ctx,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12)),
         title: Text(
@@ -397,18 +513,18 @@ class _StaffRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0D2A5C))),
+                color: Color(0xFF1E293B))),
         content: Text(
             'Are you sure you want to $action this account?',
             style: const TextStyle(fontSize: 13.5)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel',
                 style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: s.isActive
                   ? const Color(0xFFCC2200)
@@ -446,7 +562,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
   bool     _loading = false;
   String?  _error;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   void dispose() {
@@ -528,7 +644,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(
-            color: Color(0xFF2E6BE6), width: 1.5)),
+            color: Color(0xFF2563EB), width: 1.5)),
     errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFFCC2200))),
@@ -703,6 +819,44 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
   }
 }
 
+// ── Dropdown filter (role / status) ──────────────────────────────────────────
+class _DropdownFilter extends StatelessWidget {
+  final String?                         value;
+  final String                          hint;
+  final List<DropdownMenuItem<String?>> items;
+  final void Function(String?)          onChanged;
+
+  const _DropdownFilter({
+    required this.value,
+    required this.hint,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 42,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0xFFD0DBEE)),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<String?>(
+        value: value,
+        hint: Text(hint,
+            style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+        style: const TextStyle(
+            fontSize: 13, color: Color(0xFF1A2B4A)),
+        icon: const Icon(Icons.expand_more, size: 18),
+        items: items,
+        onChanged: onChanged,
+      ),
+    ),
+  );
+}
+
 // ── Shared small widgets ──────────────────────────────────────────────────────
 class _TH extends StatelessWidget {
   final String text;
@@ -724,7 +878,7 @@ class _Label extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF0D2A5C)));
+          color: Color(0xFF1E293B)));
 }
 
 class _RoleBadge extends StatelessWidget {
@@ -733,7 +887,7 @@ class _RoleBadge extends StatelessWidget {
 
   Color get _color {
     switch (role) {
-      case UserRole.admin:      return const Color(0xFF0D2A5C);
+      case UserRole.admin:      return const Color(0xFF1E293B);
       case UserRole.accountant: return const Color(0xFF1A7A4A);
       case UserRole.officer:    return const Color(0xFF7A3A1A);
       default:                  return Colors.grey;

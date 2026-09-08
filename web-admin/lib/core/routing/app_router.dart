@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../models/user_model.dart';
 import '../providers/auth_provider.dart';
+import 'app_shell.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/members/screens/members_screen.dart';
@@ -129,74 +130,88 @@ GoRouter createRouter(AuthProvider authProvider) {
         name: 'login',
         builder: (_, __) => const LoginScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.dashboard,
-        name: 'dashboard',
-        builder: (_, __) => const DashboardScreen(),
+      ShellRoute(
+        builder: (context, state, child) => AppShell(
+          currentPath: state.matchedLocation,
+          child: child,
+        ),
+        routes: [
+          GoRoute(
+            path: AppRoutes.dashboard,
+            name: 'dashboard',
+            builder: (_, __) => const DashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.members,
+            name: 'members',
+            builder: (_, __) => const MembersScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.payments,
+            name: 'payments',
+            builder: (_, __) => const PaymentsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.documents,
+            name: 'documents',
+            builder: (_, __) => const DocumentsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.users,
+            name: 'users',
+            builder: (_, __) =>
+                const UserManagementScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.announcements,
+            name: 'announcements',
+            builder: (_, __) =>
+                const AnnouncementsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.complaints,
+            name: 'complaints',
+            builder: (_, __) => const ComplaintsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.analytics,
+            name: 'analytics',
+            builder: (_, __) => const AnalyticsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.reports,
+            name: 'reports',
+            builder: (_, __) => const ReportsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.settings,
+            name: 'settings',
+            builder: (_, __) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.audit,
+            name: 'audit',
+            builder: (_, __) => const AuditScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.preview,
+            name: 'preview',
+            builder: (_, __) =>
+                const MemberPreviewScreen(),
+          ),
+        ],
       ),
-      GoRoute(
-        path: AppRoutes.members,
-        name: 'members',
-        builder: (_, __) => const MembersScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.payments,
-        name: 'payments',
-        builder: (_, __) => const PaymentsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.documents,
-        name: 'documents',
-        builder: (_, __) => const DocumentsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.users,
-        name: 'users',
-        builder: (_, __) =>
-            const UserManagementScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.announcements,
-        name: 'announcements',
-        builder: (_, __) =>
-            const AnnouncementsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.complaints,
-        name: 'complaints',
-        builder: (_, __) => const ComplaintsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.analytics,
-        name: 'analytics',
-        builder: (_, __) => const AnalyticsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.reports,
-        name: 'reports',
-        builder: (_, __) => const ReportsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.settings,
-        name: 'settings',
-        builder: (_, __) => const SettingsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.audit,
-        name: 'audit',
-        builder: (_, __) => const AuditScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.preview,
-        name: 'preview',
-        builder: (_, __) =>
-            const MemberPreviewScreen(),
-      ),
+      // Location Mapping intentionally sits OUTSIDE the shell — it's a
+      // full-page canvas without the persistent sidebar/top bar. The
+      // screen manages its own back navigation (see its custom back
+      // arrow), falling back to AppRoutes.dashboard when there's
+      // nothing to pop.
       GoRoute(
         path: AppRoutes.location,
         name: 'location',
-        builder: (_, __) =>
-            const LocationMappingScreen(),
+        builder: (_, state) => LocationMappingScreen(
+          targetLotId: state.extra as String?,
+        ),
       ),
     ],
     errorBuilder: (context, state) =>
@@ -211,7 +226,7 @@ class _ErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: const Color(0xFFF4F7FB),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

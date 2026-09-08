@@ -34,20 +34,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String?        _memberFilterName;
   bool           _exporting = false;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void initState() {
     super.initState();
-    // Same free-tier overdue sync used on Payments — reports built without
-    // ever opening Payments first would otherwise read stale `status`
-    // values straight from Firestore.
     _fs.syncOverdueStatuses();
   }
 
-  // ── Filter payments ────────────────────────────────────────────────────────
   List<PaymentModel> _applyFilters(List<PaymentModel> all) {
     return all.where((p) {
       final matchStatus = _statusFilter == null ||
@@ -92,12 +88,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
-  // ── Export to CSV ──────────────────────────────────────────────────────────
-  // Uses share_plus (a generic file-share/download package) instead of
-  // Printing.sharePdf — that call is built for PDF byte streams specifically,
-  // so feeding it raw CSV bytes worked by coincidence (readers sniff content
-  // rather than trust the .csv extension) rather than by contract. Requires
-  // adding `share_plus` to pubspec.yaml if it isn't already a dependency.
   Future<void> _exportCsv(List<PaymentModel> payments) async {
     setState(() => _exporting = true);
     try {
@@ -133,7 +123,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
-  // ── Export to PDF ──────────────────────────────────────────────────────────
   Future<void> _exportPdf(List<PaymentModel> payments) async {
     setState(() => _exporting = true);
     try {
@@ -141,7 +130,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final font = await PdfGoogleFonts.notoSansRegular();
       final bold = await PdfGoogleFonts.notoSansBold();
 
-      // Chunk into pages of 20 rows
       const pageSize = 20;
       final chunks   = <List<PaymentModel>>[];
       for (var i = 0; i < payments.length; i += pageSize) {
@@ -162,7 +150,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
               crossAxisAlignment:
                   pw.CrossAxisAlignment.start,
               children: [
-                // Header
                 pw.Row(
                   mainAxisAlignment:
                       pw.MainAxisAlignment.spaceBetween,
@@ -200,7 +187,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     thickness: 1),
                 pw.SizedBox(height: 8),
 
-                // Table
                 pw.Table(
                   border: pw.TableBorder.all(
                       color: PdfColors.grey200,
@@ -214,7 +200,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     5: const pw.FlexColumnWidth(1.5),
                   },
                   children: [
-                    // Header row
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(
                           color: PdfColors.indigo900),
@@ -234,7 +219,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               ))
                           .toList(),
                     ),
-                    // Data rows
                     ...chunk.asMap().entries.map((e) {
                       final p   = e.value;
                       final bg  = e.key.isEven
@@ -303,7 +287,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ─────────────────────────────────────────────────────
             Row(
               children: [
                 IconButton(
@@ -330,7 +313,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Filters ────────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -352,7 +334,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     spacing: 14,
                     runSpacing: 14,
                     children: [
-                      // Date range
                       _DateFilter(
                         label: 'From Date',
                         date:  _startDate,
@@ -364,7 +345,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         onTap: () => _pickDate(false),
                       ),
 
-                      // Status filter
                       _FilterDropdown(
                         label: 'Status',
                         value: _statusFilter?.name,
@@ -385,7 +365,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                     .fromString(v)),
                       ),
 
-                      // Member filter
                       _MemberDropdown(
                         fs:           _fs,
                         selectedId:   _memberFilter,
@@ -401,7 +380,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         }),
                       ),
 
-                      // Clear all
                       if (_startDate != null ||
                           _endDate != null ||
                           _statusFilter != null ||
@@ -428,7 +406,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Results table ──────────────────────────────────────────────
             Expanded(
               child: StreamBuilder<List<PaymentModel>>(
                 stream: _fs.streamPayments(),
@@ -456,7 +433,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                     child: Column(
                       children: [
-                        // Table toolbar
                         Container(
                           padding:
                               const EdgeInsets.symmetric(
@@ -481,7 +457,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                     color: _navy),
                               ),
                               const Spacer(),
-                              // CSV export
                               OutlinedButton.icon(
                                 onPressed: payments.isEmpty ||
                                         _exporting
@@ -512,7 +487,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              // PDF export
                               ElevatedButton.icon(
                                 onPressed: payments.isEmpty ||
                                         _exporting
@@ -557,7 +531,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           ),
                         ),
 
-                        // Column headers
                         const Padding(
                           padding: EdgeInsets.symmetric(
                               horizontal: 20, vertical: 12),
@@ -625,7 +598,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 }
 
-// ── Payment row ───────────────────────────────────────────────────────────────
 class _PaymentRow extends StatelessWidget {
   final PaymentModel payment;
   final String Function(DateTime?) fmt;
@@ -647,7 +619,7 @@ class _PaymentRow extends StatelessWidget {
       case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
       case PaymentStatus.unpaid:  return const Color(0xFFFFF8E0);
       case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF0F4FB);
+      case PaymentStatus.waived:  return const Color(0xFFF4F7FB);
     }
   }
 
@@ -663,7 +635,7 @@ class _PaymentRow extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF0D2A5C)),
+                  color: Color(0xFF1E293B)),
               overflow: TextOverflow.ellipsis),
         ),
         Expanded(
@@ -716,7 +688,6 @@ class _PaymentRow extends StatelessWidget {
   );
 }
 
-// ── Small widgets ─────────────────────────────────────────────────────────────
 class _TH extends StatelessWidget {
   final String text;
   const _TH(this.text);
@@ -734,7 +705,7 @@ class _DateFilter extends StatelessWidget {
   final DateTime? date;
   final VoidCallback onTap;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _DateFilter({
     required this.label, required this.date,
@@ -795,7 +766,7 @@ class _FilterDropdown extends StatelessWidget {
   final List<DropdownMenuItem<String?>> items;
   final void Function(String?) onChanged;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _FilterDropdown({
     required this.label, required this.hint,
@@ -850,7 +821,7 @@ class _MemberDropdown extends StatelessWidget {
   final void Function(String id, String name) onSelected;
   final VoidCallback      onClear;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   const _MemberDropdown({
     required this.fs,

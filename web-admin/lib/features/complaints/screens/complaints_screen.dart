@@ -22,9 +22,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   final _searchCtrl  = TextEditingController();
   String?           _statusFilter;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void dispose() {
@@ -312,7 +312,7 @@ class _ComplaintRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => _showDetailSheet(context),
-      hoverColor: const Color(0xFFF0F4FB),
+      hoverColor: const Color(0xFFF4F7FB),
       child: Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: 20, vertical: 14),
@@ -324,7 +324,7 @@ class _ComplaintRow extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF0D2A5C)),
+                      color: Color(0xFF1E293B)),
                   overflow: TextOverflow.ellipsis),
             ),
             Expanded(
@@ -419,7 +419,7 @@ class _ComplaintDetailSheetState
   final _notif    = NotificationService();
   bool _loading   = false;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  static const Color _navy = Color(0xFF1E293B);
 
   @override
   void initState() {
@@ -628,7 +628,7 @@ class _ComplaintDetailSheetState
                                   selected:
                                       _selectedStatus == s,
                                   selectedColor:
-                                      const Color(0xFF0D2A5C),
+                                      const Color(0xFF1E293B),
                                   labelStyle: TextStyle(
                                       fontSize: 12.5,
                                       color:
@@ -682,7 +682,7 @@ class _ComplaintDetailSheetState
                               borderRadius:
                                   BorderRadius.circular(8),
                               borderSide: const BorderSide(
-                                  color: Color(0xFF2E6BE6),
+                                  color: Color(0xFF2563EB),
                                   width: 1.5)),
                         ),
                       ),
