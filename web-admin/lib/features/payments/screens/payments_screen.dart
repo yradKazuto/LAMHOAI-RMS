@@ -6,6 +6,7 @@ import '../../../core/models/payment_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/settings_service.dart';
 import 'add_payment_screen.dart';
 import 'membership_dues_screen.dart';
 import 'package:go_router/go_router.dart';
@@ -18,9 +19,10 @@ class PaymentsScreen extends StatefulWidget {
 }
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
-  final _fs     = FirestoreService();
-  final _search = TextEditingController();
-  final _notif  = NotificationService();
+  final _fs       = FirestoreService();
+  final _settings = SettingsService();
+  final _search   = TextEditingController();
+  final _notif    = NotificationService();
 
   bool _sendingReminders = false;
 
@@ -39,6 +41,19 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     // unpaid-and-past-due record to overdue for real, each time this
     // screen opens. streamPayments() below picks up the change live.
     _fs.syncOverdueStatuses();
+    // Separate concern from the status flip above: adds the flat penalty
+    // to any dues/membershipFee record that's past its grace period and
+    // hasn't been penalized yet (see FirestoreService.applyOverduePenalties
+    // for why status-flip and penalty-amount are kept independent).
+    _applyPenalties();
+  }
+
+  Future<void> _applyPenalties() async {
+    final settings = await _settings.getSettings();
+    await _fs.applyOverduePenalties(
+      penaltyAmount: settings.dues.penalty,
+      graceDays:     settings.dues.penaltyGraceDays,
+    );
   }
 
   @override

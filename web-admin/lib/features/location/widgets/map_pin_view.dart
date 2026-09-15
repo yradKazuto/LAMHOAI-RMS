@@ -146,18 +146,32 @@ class _MapPinViewState extends State<MapPinView>
   List<String> _getBlocks() {
     final blocks = <String>{};
 
-    for (final lot in widget.lots) {
-      final block = lot.block.trim();
-
-      if (block.isNotEmpty) {
-        blocks.add(block);
-      }
-    }
-
-    // Every block that has polygons digitized on the map is
-    // included even if the database has not been populated yet.
+    // The hardcoded polygon blocks are the authoritative source for
+    // Phase 1 — added first, in their canonical "Block N" form.
     for (final polygon in allLotPolygons) {
       blocks.add(polygon.block);
+    }
+
+    // Only add a Firestore lot's block value if it ISN'T already
+    // represented above (comparing with any "Block " prefix and
+    // casing normalized away first). Without this check, a lot whose
+    // block was stored as a bare "1" (e.g. legacy data, or before
+    // block management existed) would show up as a second, seemingly
+    // duplicate entry alongside the real "Block 1" — same block,
+    // two different-looking buttons.
+    String bareForm(String raw) => raw
+        .trim()
+        .replaceFirst(RegExp(r'^block\s*', caseSensitive: false), '')
+        .trim()
+        .toLowerCase();
+
+    final canonicalBare = blocks.map(bareForm).toSet();
+
+    for (final lot in widget.lots) {
+      final block = lot.block.trim();
+      if (block.isEmpty) continue;
+      if (canonicalBare.contains(bareForm(block))) continue;
+      blocks.add(block);
     }
 
     final result = blocks.toList();
@@ -6315,7 +6329,7 @@ class _AddLotDialogState
         phase:
             _phaseController.text.trim(),
         block:
-            _blockController.text.trim(),
+            normalizeBlockLabel(_blockController.text),
         lotNumber:
             _lotController.text.trim(),
         mapX: widget.mapX ?? 0,

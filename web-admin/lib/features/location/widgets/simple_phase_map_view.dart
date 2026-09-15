@@ -3,14 +3,15 @@
 // Map view for any phase OTHER than "Phase 1". Phase 1 keeps using
 // the existing hand-digitized polygon system in map_pin_view.dart,
 // unchanged. New phases use this system instead: an uploaded image
-// (via Cloudinary, so no app rebuild needed), with lots shown either
-// as a simple pin (tap-placed, or before a polygon is digitized) or
-// as a precise clickable polygon shape (once boundary points are
-// imported from the coordinate picker tool). Reuses the same
-// AddLotDialog / OccupiedLotDialog / VacantLotDialog already used
-// for Phase 1's lot management.
+// (via Cloudinary, so no app rebuild needed), with lots shown as a
+// precise clickable polygon shape traced via the "Digitize Lot" tool
+// — tracing is the ONLY way to create a lot here; tapping empty space
+// (road, open space, any untraced gap) intentionally does nothing.
+// Reuses OccupiedLotDialog / VacantLotDialog from lot_dialogs.dart,
+// same as Phase 1's lot management.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:file_picker/file_picker.dart';
 
 import '../../../core/models/lot_model.dart';
@@ -19,15 +20,14 @@ import '../../../core/services/lot_service.dart';
 import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/phase_map_service.dart';
 import '../../documents/widgets/document_upload_flow.dart' show documentMimeType;
-import 'map_pin_view.dart' show AddLotDialog;
-import 'lot_dialogs.dart' hide AddLotDialog;
+import 'lot_dialogs.dart';
 // import 'polygon_import_flow.dart'; // TODO: re-enable once `excel` package is added (flutter pub add excel)
 
 const _navy = Color(0xFF1E293B);
-const _blue = Color(0xFF1565C0);
-const _green = Color(0xFF2E7D32);
-const _orange = Color(0xFFEF6C00);
-const _purple = Color(0xFF6A1B9A);
+const _blue = Color(0xFF2563EB);
+const _green = Color(0xFF16A34A);
+const _orange = Color(0xFFF97316);
+const _purple = Color(0xFF9333EA);
 const _grey = Color(0xFF9E9E9E);
 const _accent = Color(0xFF2563EB);
 
@@ -87,11 +87,6 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   String? _selectedBlock;
   static const double _minScale = 0.3;
   static const double _maxScale = 8.0;
-
-  // Diagnostic snapshot of the last zoom-to-block computation, shown
-  // as an on-screen overlay so "the zoom is off" can be checked
-  // against actual numbers instead of guessed at blind.
-  _ZoomDebugInfo? _lastZoomDebug;
 
   // ── Native digitize mode ────────────────────────────────────────────
   bool _digitizing = false;
@@ -184,14 +179,13 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   }
 
   // ── Blocks side panel ────────────────────────────────────────────────
+  // Uses the phase's OWN defined block list (set via block count at
+  // phase creation, or PhaseMapService.addBlocks) rather than
+  // inferring blocks from whichever lots happen to exist — so a
+  // brand-new, still-empty block shows up and can be picked from a
+  // dropdown before it has any lots in it yet.
   List<String> _getBlocks() {
-    final blocks = <String>{};
-    for (final lot in widget.lots) {
-      final block = lot.block.trim();
-      if (block.isNotEmpty) blocks.add(block);
-    }
-
-    final result = blocks.toList();
+    final result = List<String>.from(widget.phaseMap.blocks);
     result.sort((a, b) {
       final aNumber = int.tryParse(a.replaceAll(RegExp(r'[^0-9]'), ''));
       final bNumber = int.tryParse(b.replaceAll(RegExp(r'[^0-9]'), ''));
@@ -204,12 +198,118 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   }
 
 
-  /// Toggles which block is highlighted, and zooms/pans to frame it.
+  /// Counts how many lots currently sit in [block], so rename/remove
+  /// can refuse to touch a block that's actually in use.
+  int _lotCountForBlock(String block) => widget.lots
+      .where((l) => l.block.trim().toLowerCase() == block.trim().toLowerCase())
+      .length;
+
+  Future<void> _showManageBlocksDialog() async {
+    final addCountController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final blocks = _getBlocks();
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: Text('Manage Blocks — ${widget.phaseMap.name}',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${blocks.length} block(s) defined.',
+                      style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          for (final block in blocks)
+                            _ManageBlockRow(
+                              block: block,
+                              lotCount: _lotCountForBlock(block),
+                              onRename: (newLabel) async {
+                                await _phaseMapService.renameBlock(
+                                    widget.phaseMap.id, block, newLabel);
+                                setDialogState(() {});
+                                if (mounted) setState(() {});
+                              },
+                              onRemove: () async {
+                                await _phaseMapService.removeBlock(
+                                    widget.phaseMap.id, block);
+                                setDialogState(() {});
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: addCountController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Add how many blocks',
+                            hintText: 'e.g. 2',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final count = int.tryParse(addCountController.text.trim());
+                          if (count == null || count <= 0) return;
+                          await _phaseMapService.addBlocks(widget.phaseMap.id, count);
+                          addCountController.clear();
+                          setDialogState(() {});
+                          if (mounted) setState(() {});
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _navy,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Add'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+
   void _selectBlock(String block) {
     final deselecting = _selectedBlock == block;
     setState(() {
       _selectedBlock = deselecting ? null : block;
-      if (deselecting) _lastZoomDebug = null;
     });
 
     if (deselecting) {
@@ -262,10 +362,8 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     // position) — not every raw vertex. A single stray digitized point
     // only nudges its own lot's centroid a little; it can't single-
     // handedly blow out a min/max bounding box the way a raw vertex
-    // can. The lot itself is tracked alongside each centroid purely
-    // for the debug overlay (status/owner) — doesn't affect the
-    // framing math at all.
-    final lotEntries = <MapEntry<LotModel, Offset>>[];
+    // can.
+    final lotCentroids = <Offset>[];
     for (final lot in widget.lots) {
       if (lot.block.trim().toLowerCase() != block.trim().toLowerCase()) {
         continue;
@@ -277,23 +375,20 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
           sx += p.x * contentSize.width;
           sy += p.y * contentSize.height;
         }
-        lotEntries.add(MapEntry(
-          lot,
+        lotCentroids.add(
           Offset(letterboxX + sx / pts.length, letterboxY + sy / pts.length),
-        ));
+        );
       } else if (lot.mapX != null && lot.mapY != null) {
-        lotEntries.add(MapEntry(
-          lot,
+        lotCentroids.add(
           Offset(
             letterboxX + lot.mapX! * contentSize.width,
             letterboxY + lot.mapY! * contentSize.height,
           ),
-        ));
+        );
       }
     }
 
-    if (lotEntries.isEmpty) return;
-    final lotCentroids = lotEntries.map((e) => e.value).toList();
+    if (lotCentroids.isEmpty) return;
 
     // Median center (robust to outliers, unlike a mean or a min/max
     // box) — used only to detect which lots are clearly out of place,
@@ -302,9 +397,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     // block's lots share the same mistake (e.g. several digitized in
     // the wrong spot), the median gets pulled toward THEM, and the
     // one correctly-placed lot can end up looking like the "outlier"
-    // instead. The per-lot list in the debug overlay is there so you
-    // can catch that case by eye — it shows the raw numbers whether
-    // or not this filter agrees with them.
+    // instead.
     final xs = lotCentroids.map((p) => p.dx).toList()..sort();
     final ys = lotCentroids.map((p) => p.dy).toList()..sort();
     final medianCenter = Offset(xs[xs.length ~/ 2], ys[ys.length ~/ 2]);
@@ -374,47 +467,6 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     final target = Matrix4.identity()
       ..translate(translate.dx, translate.dy)
       ..scale(scale);
-
-    // Center, expressed as a percentage of the IMAGE itself (letterbox
-    // subtracted back out) — this is the number to eyeball against
-    // where the block actually visually sits on the map.
-    final imageLocalCenter =
-        Offset(targetPoint.dx - letterboxX, targetPoint.dy - letterboxY);
-    final centerPercent = Offset(
-      (imageLocalCenter.dx / contentSize.width).clamp(0.0, 1.0),
-      (imageLocalCenter.dy / contentSize.height).clamp(0.0, 1.0),
-    );
-
-    final debugLots = lotEntries.map((e) {
-      final lot = e.key;
-      final localCenter = Offset(
-        e.value.dx - letterboxX,
-        e.value.dy - letterboxY,
-      );
-      return _ZoomDebugLot(
-        lotNumber: lot.lotNumber,
-        centerPercent: Offset(
-          (localCenter.dx / contentSize.width).clamp(0.0, 1.0),
-          (localCenter.dy / contentSize.height).clamp(0.0, 1.0),
-        ),
-        isOutlier: isOutlier(e.value),
-        status: lot.status,
-        ownerName: lot.ownerName,
-      );
-    }).toList();
-
-    setState(() {
-      _lastZoomDebug = _ZoomDebugInfo(
-        block: block,
-        lotsFound: lotCentroids.length,
-        lotsExcluded: lotCentroids.length - framingPoints.length,
-        centerPercent: centerPercent,
-        scale: scale,
-        contentSize: contentSize,
-        viewportSize: viewportSize,
-        lots: debugLots,
-      );
-    });
 
     _animateToMatrix(target);
   }
@@ -511,69 +563,128 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     setState(() => _digitizePoints.clear());
   }
 
-  Future<void> _saveDigitizedLot() async {
+Future<void> _saveDigitizedLot() async {
     if (_digitizePoints.length < 3) return;
 
-    final blockController = TextEditingController();
+    final points = _digitizePoints.map((o) => LotPoint(o.dx, o.dy)).toList();
+
+    if (LotService.isSelfIntersecting(points)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This boundary crosses itself — some of the traced lines '
+              'overlap each other. Clear and re-trace the outline in order '
+              'around the lot, without crossing back over an earlier line.',
+            ),
+            backgroundColor: Color(0xFFCC2200),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check against every already-saved, already-digitized lot in this
+    // phase — pin-only lots (no polygonPoints) have no real boundary to
+    // compare against, so they're skipped inside findOverlappingLots.
+    final conflicts = await _lotService.findOverlappingLots(
+      phase: widget.phaseMap.name,
+      points: points,
+    );
+
+    if (conflicts.isNotEmpty) {
+      final names = conflicts
+          .map((l) => 'Block ${l.block} Lot ${l.lotNumber}')
+          .join(', ');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'This shape overlaps an existing lot ($names). Adjust the '
+              'boundary so it doesn\'t cross into another lot\'s area.',
+            ),
+            backgroundColor: const Color(0xFFCC2200),
+          ),
+        );
+      }
+      return;
+    }
+
+    final blocks = _getBlocks();
+    String? selectedBlock = blocks.isNotEmpty ? blocks.first : null;
     final lotController = TextEditingController();
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Save Lot Boundary',
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${_digitizePoints.length} points traced.',
-                style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
-            const SizedBox(height: 14),
-            TextField(
-              controller: blockController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                  labelText: 'Block', hintText: 'e.g. Block 1'),
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text('Save Lot Boundary',
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${_digitizePoints.length} points traced.',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+              const SizedBox(height: 14),
+              if (blocks.isEmpty)
+                Text(
+                  'No blocks defined for this phase yet. Add blocks first '
+                  'from the Blocks panel\'s Manage button.',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                )
+              else
+                DropdownButtonFormField<String>(
+                  value: selectedBlock,
+                  decoration: const InputDecoration(labelText: 'Block'),
+                  items: blocks
+                      .map((b) => DropdownMenuItem(
+                          value: b, child: Text('Block $b')))
+                      .toList(),
+                  onChanged: (v) => setDialogState(() => selectedBlock = v),
+                ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: lotController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                    labelText: 'Lot Number', hintText: 'e.g. 1'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: lotController,
-              decoration: const InputDecoration(
-                  labelText: 'Lot Number', hintText: 'e.g. 1'),
+            ElevatedButton(
+              onPressed: () {
+                if (selectedBlock == null ||
+                    lotController.text.trim().isEmpty) return;
+                Navigator.pop(dialogCtx, true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _navy,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (blockController.text.trim().isEmpty ||
-                  lotController.text.trim().isEmpty) return;
-              Navigator.pop(dialogCtx, true);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _navy,
-              foregroundColor: Colors.white,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
 
     if (confirmed != true) return;
+    if (selectedBlock == null) return;
 
-    final block = blockController.text.trim();
+    final block = selectedBlock!;
     final lotNumber = lotController.text.trim();
-    final points =
-        _digitizePoints.map((o) => LotPoint(o.dx, o.dy)).toList();
 
     try {
       await _lotService.importPolygonLots(
@@ -590,6 +701,16 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
           SnackBar(
             content: Text('Saved Block $block • Lot $lotNumber.'),
             backgroundColor: const Color(0xFF1A7A4A),
+          ),
+        );
+      }
+    } on LotOverlapException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Could not save — conflicts found: ${e.conflicts.join('; ')}'),
+            backgroundColor: const Color(0xFFCC2200),
           ),
         );
       }
@@ -615,8 +736,9 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     return inside;
   }
 
-  // ── Tap handling: check polygons first, then fall back to placing
-  // a new pin on empty space ─────────────────────────────────────────
+  // ── Tap handling: check traced lot polygons first, then existing
+  // pin lots (if any remain from before digitize-only creation) —
+  // empty space (road, open space) does nothing beyond that. ─────────
   void _onTapUp(TapUpDetails details, Size contentSize) {
     final box = _contentKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
@@ -669,20 +791,22 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
       return;
     }
 
-    if (!widget.canEdit) return;
-
-    showDialog(
-      context: context,
-      builder: (_) => AddLotDialog(
-        phase: widget.phaseMap.name,
-        block: '',
-        lotNumber: '',
-        currentUserId: widget.currentUserId,
-        loadAssignableMembers: widget.loadAssignableMembers,
-        mapX: nx,
-        mapY: ny,
-      ),
-    );
+    // Tapping empty space (road, open space, any gap between traced
+    // lots) intentionally does nothing beyond this point — digitizing
+    // is the only way to create a lot now, so there's no implicit
+    // "add a lot here" fallback for an arbitrary tap. A hint nudges an
+    // editor toward the actual tool instead of the tap silently being
+    // ignored with no feedback at all.
+    if (widget.canEdit) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nothing here. Use "Digitize Lot" to trace a new lot\'s '
+            'boundary — that\'s the only way to add one.',
+          ),
+        ),
+      );
+    }
   }
 
   void _openLotDialog(LotModel lot) {
@@ -842,12 +966,29 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                       // Digitized polygon lots — precise clickable shapes
                       if (polygonLots.isNotEmpty)
                         Positioned.fill(
-                          child: CustomPaint(
-                            painter: _PolygonPainter(
-                              lots: polygonLots,
-                              contentSize: contentSize,
-                              colorFor: _colorFor,
-                            ),
+                          child: AnimatedBuilder(
+                            animation: _transformController,
+                            builder: (context, _) {
+                              final scale = _transformController.value
+                                  .getMaxScaleOnAxis();
+                              // Divide by the current zoom scale so the
+                              // border stays visually ~1.6px on screen
+                              // regardless of zoom level, instead of
+                              // ballooning in lockstep with InteractiveViewer's
+                              // own scaling (which is what made it look thick
+                              // when zoomed in). Clamped so it can't vanish
+                              // at high zoom or turn chunky when zoomed out.
+                              final strokeWidth =
+                                  (1.6 / scale).clamp(0.4, 3.0);
+                              return CustomPaint(
+                                painter: _PolygonPainter(
+                                  lots: polygonLots,
+                                  contentSize: contentSize,
+                                  colorFor: _colorFor,
+                                  strokeWidth: strokeWidth,
+                                ),
+                              );
+                            },
                           ),
                         ),
 
@@ -924,14 +1065,6 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
             );
           },
         ),
-
-        // ── Zoom diagnostic overlay ──────────────────────────────────
-        if (_lastZoomDebug != null)
-          Positioned(
-            top: 12,
-            left: 12,
-            child: _ZoomDebugOverlay(info: _lastZoomDebug!),
-          ),
 
         // ── Toolbar ──────────────────────────────────────────────────
         if (widget.canEdit)
@@ -1077,13 +1210,29 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Blocks',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: _navy,
-            ),
+          Row(
+            children: [
+              const Text(
+                'Blocks',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _navy,
+                ),
+              ),
+              const Spacer(),
+              if (widget.canEdit)
+                TextButton.icon(
+                  onPressed: _showManageBlocksDialog,
+                  icon: const Icon(Icons.settings_outlined, size: 15),
+                  label: const Text('Manage'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: _blue,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
@@ -1114,7 +1263,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                         (block) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: _buildBlockButton(
-                            label: block,
+                            label: 'Block $block',
                             selected: _selectedBlock == block,
                             onTap: () => _selectBlock(block),
                           ),
@@ -1139,7 +1288,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                   child: Text(
                     _selectedBlock == null
                         ? 'Select a block'
-                        : 'Selected: $_selectedBlock',
+                        : 'Selected: Block $_selectedBlock',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -1224,6 +1373,109 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   }
 }
 
+// ── One row in the Manage Blocks dialog ────────────────────────────────
+class _ManageBlockRow extends StatefulWidget {
+  final String block;
+  final int lotCount;
+  final Future<void> Function(String newLabel) onRename;
+  final Future<void> Function() onRemove;
+
+  const _ManageBlockRow({
+    required this.block,
+    required this.lotCount,
+    required this.onRename,
+    required this.onRemove,
+  });
+
+  @override
+  State<_ManageBlockRow> createState() => _ManageBlockRowState();
+}
+
+class _ManageBlockRowState extends State<_ManageBlockRow> {
+  bool _renaming = false;
+  late final TextEditingController _renameController =
+      TextEditingController(text: widget.block);
+
+  bool get _inUse => widget.lotCount > 0;
+
+  @override
+  void dispose() {
+    _renameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_renaming) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _renameController,
+                autofocus: true,
+                decoration: const InputDecoration(isDense: true),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.check, size: 18, color: _blue),
+              tooltip: 'Save',
+              onPressed: () async {
+                final newLabel = _renameController.text.trim();
+                if (newLabel.isEmpty || newLabel == widget.block) {
+                  setState(() => _renaming = false);
+                  return;
+                }
+                await widget.onRename(newLabel);
+                setState(() => _renaming = false);
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+              tooltip: 'Cancel',
+              onPressed: () => setState(() => _renaming = false),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text('Block ${widget.block}',
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+          ),
+          Text(
+            _inUse ? '${widget.lotCount} lot(s)' : 'Empty',
+            style: TextStyle(
+                fontSize: 12,
+                color: _inUse ? Colors.grey[600] : Colors.grey[400]),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            tooltip: _inUse
+                ? 'Cannot rename — this block has lots in it'
+                : 'Rename',
+            onPressed: _inUse ? null : () => setState(() => _renaming = true),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 16),
+            tooltip: _inUse
+                ? 'Cannot remove — this block has lots in it'
+                : 'Remove',
+            onPressed: _inUse ? null : () => widget.onRemove(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Small legend swatch + label row used inside the Blocks panel ──────
 class _LegendRow extends StatelessWidget {
   final Color color;
@@ -1246,138 +1498,6 @@ class _LegendRow extends StatelessWidget {
           style: const TextStyle(fontSize: 12, color: _navy),
         ),
       ],
-    );
-  }
-}
-
-// ── Zoom diagnostic snapshot ────────────────────────────────────────
-// Plain data holder — what _zoomToBlock actually computed, surfaced
-// so "it's off" can be checked against real numbers instead of
-// guessed at. Nothing here affects the zoom itself.
-class _ZoomDebugInfo {
-  final String block;
-  final int lotsFound;
-  final int lotsExcluded;
-  final Offset centerPercent; // 0..1 of the image itself
-  final double scale;
-  final Size contentSize;
-  final Size viewportSize;
-  final List<_ZoomDebugLot> lots;
-
-  const _ZoomDebugInfo({
-    required this.block,
-    required this.lotsFound,
-    required this.lotsExcluded,
-    required this.centerPercent,
-    required this.scale,
-    required this.contentSize,
-    required this.viewportSize,
-    required this.lots,
-  });
-}
-
-// Per-lot breakdown — lets you spot exactly which lot number's stored
-// points are sitting somewhere they shouldn't, instead of guessing
-// from the block-level average.
-class _ZoomDebugLot {
-  final String lotNumber;
-  final Offset centerPercent; // 0..1 of the image itself — kept for
-  // the outlier math, no longer shown directly (status is more useful
-  // to read at a glance than a raw position).
-  final bool isOutlier;
-  final LotStatus status;
-  final String? ownerName;
-
-  const _ZoomDebugLot({
-    required this.lotNumber,
-    required this.centerPercent,
-    required this.isOutlier,
-    required this.status,
-    required this.ownerName,
-  });
-
-  /// "John Doe" if occupied and named, otherwise the status itself
-  /// ("Unassigned" for vacant, so it reads clearly rather than blank).
-  String get statusLabel {
-    if (status == LotStatus.occupied) {
-      final name = ownerName?.trim() ?? '';
-      if (name.isNotEmpty) return name;
-      return 'Occupied';
-    }
-    switch (status) {
-      case LotStatus.vacant:
-        return 'Unassigned';
-      case LotStatus.forSale:
-        return 'For Sale';
-      case LotStatus.reserved:
-        return 'Reserved';
-      case LotStatus.occupied:
-        return 'Occupied'; // unreachable, handled above
-    }
-  }
-}
-
-class _ZoomDebugOverlay extends StatelessWidget {
-  final _ZoomDebugInfo info;
-
-  const _ZoomDebugOverlay({required this.info});
-
-  @override
-  Widget build(BuildContext context) {
-    String pct(double v) => '${(v * 100).toStringAsFixed(0)}%';
-    String px(double v) => v.toStringAsFixed(0);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.72),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: DefaultTextStyle(
-        style: const TextStyle(
-          fontSize: 12,
-          color: Colors.white,
-          height: 1.5,
-          fontFamily: 'monospace',
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Block ${info.block}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              '${info.lotsFound} lots found'
-              '${info.lotsExcluded > 0 ? ' · ${info.lotsExcluded} excluded (outlier)' : ''}',
-            ),
-            Text(
-              'Center: ${pct(info.centerPercent.dx)}, ${pct(info.centerPercent.dy)}',
-            ),
-            Text('Scale: ${info.scale.toStringAsFixed(2)}x'),
-            Text(
-              'Content: ${px(info.contentSize.width)}x${px(info.contentSize.height)} '
-              '· Viewport: ${px(info.viewportSize.width)}x${px(info.viewportSize.height)}',
-            ),
-            if (info.lots.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              const Text('— Lots —',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              for (final lot in info.lots)
-                Text(
-                  'Lot ${lot.lotNumber}: ${lot.statusLabel}'
-                  '${lot.isOutlier ? '  ⚠ likely misplaced' : ''}',
-                  style: TextStyle(
-                    color: lot.isOutlier ? Colors.amber : Colors.white,
-                    fontWeight:
-                        lot.isOutlier ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1448,11 +1568,13 @@ class _PolygonPainter extends CustomPainter {
   final List<LotModel> lots;
   final Size contentSize;
   final Color Function(LotStatus) colorFor;
+  final double strokeWidth;
 
   _PolygonPainter({
     required this.lots,
     required this.contentSize,
     required this.colorFor,
+    this.strokeWidth = 1.6,
   });
 
   @override
@@ -1479,14 +1601,16 @@ class _PolygonPainter extends CustomPainter {
         Paint()
           ..color = color
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.6,
+          ..strokeWidth = strokeWidth,
       );
     }
   }
 
   @override
   bool shouldRepaint(covariant _PolygonPainter oldDelegate) {
-    return oldDelegate.lots != lots || oldDelegate.contentSize != contentSize;
+    return oldDelegate.lots != lots ||
+        oldDelegate.contentSize != contentSize ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }
 

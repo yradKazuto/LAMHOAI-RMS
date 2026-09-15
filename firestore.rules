@@ -115,6 +115,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── monthly_dues_rates (per-lot monthly rate history) ────────────────────
+    // Read is open to any staff role, since both admins and accountants need
+    // to resolve the rate in effect for a given month when generating dues
+    // (see RateHistoryService.getRateForMonth). Only admins can add a new
+    // rate — matches the `settings` write policy above, since this is
+    // effectively dues configuration. Never updated or deleted: each doc is
+    // a permanent rate-history entry, same append-only pattern as audit_logs.
+    match /monthly_dues_rates/{docId} {
+      allow read: if isStaff();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
     // ── lots (Location Mapping) ───────────────────────────────────────────────
     match /lots/{docId} {
       allow read: if isStaff();

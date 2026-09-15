@@ -11,6 +11,19 @@ const _orange = Color(0xFFEF6C00);
 const _red = Color(0xFFC62828);
 const _grey = Color(0xFF757575);
 
+/// Strips a redundant leading "Block" (any casing, e.g. "Block 1",
+/// "block1") from user-typed input, so the stored value is always
+/// just the bare identifier ("1") regardless of whether the person
+/// typed "1" or "Block 1". Display code elsewhere adds the "Block "
+/// prefix itself — without this, typing "Block 1" ends up stored (and
+/// later shown) as "Block Block 1".
+String normalizeBlockLabel(String raw) {
+  final trimmed = raw.trim();
+  final stripped =
+      trimmed.replaceFirst(RegExp(r'^block\s*', caseSensitive: false), '').trim();
+  return stripped.isEmpty ? trimmed : stripped;
+}
+
 /// ================================================================
 /// OCCUPIED LOT DIALOG
 /// ================================================================
@@ -970,7 +983,7 @@ class _VacantLotDialogState
         'phase': widget.lot.phase,
 
         'block':
-            _blockController.text.trim(),
+            normalizeBlockLabel(_blockController.text),
 
         'lotNumber':
             _lotController.text.trim(),
@@ -2096,7 +2109,7 @@ class _AddLotDialogState
       await _service.createLotAtPin(
         phase: widget.phase,
         block:
-            _blockController.text.trim(),
+            normalizeBlockLabel(_blockController.text),
         lotNumber:
             _lotController.text.trim(),
         mapX: widget.mapX ?? 0,

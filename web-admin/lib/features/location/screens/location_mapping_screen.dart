@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
@@ -13,14 +14,13 @@ import '../../../core/models/member_model.dart';
 import '../../../core/routing/app_router.dart';
 import '../../members/screens/member_detail_screen.dart';
 import '../widgets/lot_dialogs.dart';
-import '../widgets/map_pin_view.dart';
 import '../widgets/simple_phase_map_view.dart';
 
 const _navy = Color(0xFF1E293B);
-const _blue = Color(0xFF1565C0);
-const _green = Color(0xFF2E7D32);
-const _orange = Color(0xFFEF6C00);
-const _grey = Color(0xFFBDBDBD);
+const _blue = Color(0xFF2563EB);
+const _green = Color(0xFF16A34A);
+const _orange = Color(0xFFF97316);
+const _purple = Color(0xFF9333EA);
 const _accent = Color(0xFF2563EB);
 
 const String kPhaseOnePolygonMap = 'Phase 1';
@@ -56,13 +56,13 @@ class _LocationMappingScreenState
   Color _colorFor(LotStatus s) {
     switch (s) {
       case LotStatus.occupied:
+        return _green;
+      case LotStatus.vacant:
         return _blue;
       case LotStatus.forSale:
-        return _green;
-      case LotStatus.reserved:
         return _orange;
-      case LotStatus.vacant:
-        return _grey;
+      case LotStatus.reserved:
+        return _purple;
     }
   }
 
@@ -228,10 +228,89 @@ class _LocationMappingScreenState
   }
 
   // ── Add a new phase (name only — image can be uploaded later) ───────────
-  Future<void> _showAddPhaseDialog(String currentUserId) async {
-    final controller = TextEditingController();
+  /// Removes a custom phase — deliberately unreachable for Phase 1
+  /// (protected in the tab UI itself, see _PhaseSelectorRow). Checks
+  /// how many lots exist for this phase first, since deleting the
+  /// phase entry alone would leave those lots as orphaned documents
+  /// with no phase to belong to; if any exist, both the phase and its
+  /// lots are deleted together, made explicit in the confirmation
+  /// text rather than silently cascading.
+  Future<void> _removePhase(PhaseMapModel phase) async {
+    final lotCount =
+        await _service.deleteLotsByPhase(phase.name, dryRun: true);
 
-    final name = await showDialog<String>(
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Remove ${phase.name}?',
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFCC2200))),
+        content: Text(
+          lotCount > 0
+              ? 'This will permanently delete the "${phase.name}" phase '
+                  'AND all $lotCount lot(s) in it. This cannot be undone.'
+              : 'This will permanently delete the "${phase.name}" phase. '
+                  'It has no lots yet. This cannot be undone.',
+          style: const TextStyle(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFCC2200),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      if (lotCount > 0) {
+        await _service.deleteLotsByPhase(phase.name);
+      }
+      await _phaseMapService.deletePhase(phase.id);
+
+      if (_selectedPhase.trim().toLowerCase() ==
+          phase.name.trim().toLowerCase()) {
+        setState(() => _selectedPhase = kPhaseOnePolygonMap);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Removed "${phase.name}" and $lotCount lot(s).')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove phase: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAddPhaseDialog(String currentUserId) async {
+    final nameController = TextEditingController();
+    final blockCountController = TextEditingController();
+
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
@@ -239,20 +318,51 @@ class _LocationMappingScreenState
         title: const Text('Add Phase',
             style: TextStyle(
                 fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'e.g. Phase 2',
-            hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-            filled: true,
-            fillColor: const Color(0xFFF7F9FC),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Phase name',
+                hintText: 'e.g. Phase 2',
+                hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                filled: true,
+                fillColor: const Color(0xFFF7F9FC),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: blockCountController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: 'Number of blocks',
+                hintText: 'e.g. 5',
+                hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                filled: true,
+                fillColor: const Color(0xFFF7F9FC),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Creates Block 1 through Block N. You can add more blocks '
+              'later from the Blocks panel.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -261,9 +371,14 @@ class _LocationMappingScreenState
           ),
           ElevatedButton(
             onPressed: () {
-              final trimmed = controller.text.trim();
-              if (trimmed.isEmpty) return;
-              Navigator.pop(dialogCtx, trimmed);
+              final trimmedName = nameController.text.trim();
+              final blockCount =
+                  int.tryParse(blockCountController.text.trim()) ?? 0;
+              if (trimmedName.isEmpty || blockCount <= 0) return;
+              Navigator.pop(dialogCtx, {
+                'name': trimmedName,
+                'blockCount': blockCount,
+              });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _navy,
@@ -277,7 +392,10 @@ class _LocationMappingScreenState
       ),
     );
 
-    if (name == null || name.isEmpty) return;
+    if (result == null) return;
+    final name = result['name'] as String;
+    final blockCount = result['blockCount'] as int;
+
     if (name.trim().toLowerCase() == kPhaseOnePolygonMap.toLowerCase()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -288,7 +406,11 @@ class _LocationMappingScreenState
       return;
     }
 
-    await _phaseMapService.createPhase(name: name, createdBy: currentUserId);
+    await _phaseMapService.createPhase(
+      name: name,
+      createdBy: currentUserId,
+      blockCount: blockCount,
+    );
 
     if (mounted) {
       setState(() => _selectedPhase = name);
@@ -456,6 +578,9 @@ class _LocationMappingScreenState
                               setState(() => _selectedPhase = p),
                           onAddPhase: () =>
                               _showAddPhaseDialog(currentUserId),
+                          onRemovePhase: role == UserRole.admin
+                              ? _removePhase
+                              : null,
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -495,22 +620,6 @@ class _LocationMappingScreenState
                             if (_showMapView) {
                               final normalizedSelected =
                                   _selectedPhase.trim().toLowerCase();
-
-                              if (normalizedSelected ==
-                                  kPhaseOnePolygonMap.toLowerCase()) {
-                                return MapPinView(
-                                  lots: lots,
-                                  canEdit: canEdit,
-                                  currentUserId:
-                                      currentUserId,
-                                  loadAssignableMembers:
-                                      _loadAssignableMembers,
-                                  targetLotId:
-                                      widget.targetLotId,
-                                  onViewMember:
-                                      _viewMemberFromLot,
-                                );
-                              }
 
                               PhaseMapModel? match;
                               for (final p in customPhases) {
@@ -758,6 +867,7 @@ class _PhaseSelectorRow extends StatelessWidget {
   final bool canEdit;
   final void Function(String phase) onSelected;
   final VoidCallback onAddPhase;
+  final void Function(PhaseMapModel phase)? onRemovePhase;
 
   const _PhaseSelectorRow({
     required this.selected,
@@ -765,14 +875,30 @@ class _PhaseSelectorRow extends StatelessWidget {
     required this.canEdit,
     required this.onSelected,
     required this.onAddPhase,
+    this.onRemovePhase,
   });
 
   @override
   Widget build(BuildContext context) {
-    final allPhaseNames = [
-      kPhaseOnePolygonMap,
-      ...customPhases.map((p) => p.name),
-    ];
+    // Phase 1 now exists as a real PhaseMapModel (created by the
+    // migration), so it's already in customPhases — no need to
+    // hardcode it as a separate tab too (that produced a duplicate).
+    // Pull it out and pin it first instead, so tab order doesn't jump
+    // around based on when each phase happened to be created.
+    final customNames = customPhases.map((p) => p.name).toList();
+    final phase1Index = customNames.indexWhere(
+      (n) => n.trim().toLowerCase() == kPhaseOnePolygonMap.toLowerCase(),
+    );
+
+    final List<String> allPhaseNames;
+    if (phase1Index != -1) {
+      final phase1Name = customNames.removeAt(phase1Index);
+      allPhaseNames = [phase1Name, ...customNames];
+    } else {
+      // Defensive fallback — shouldn't happen once Phase 1 has been
+      // migrated, but keeps the tab visible if it somehow hasn't.
+      allPhaseNames = [kPhaseOnePolygonMap, ...customNames];
+    }
 
     return SizedBox(
       height: 38,
@@ -787,8 +913,12 @@ class _PhaseSelectorRow extends StatelessWidget {
                 final name = allPhaseNames[i];
                 final isSelected =
                     name.trim().toLowerCase() == selected.trim().toLowerCase();
+                final isPhase1 =
+                    name.trim().toLowerCase() == kPhaseOnePolygonMap.toLowerCase();
+                final canRemove =
+                    onRemovePhase != null && !isPhase1;
 
-                return ChoiceChip(
+                return InputChip(
                   label: Text(name),
                   selected: isSelected,
                   onSelected: (_) => onSelected(name),
@@ -802,6 +932,18 @@ class _PhaseSelectorRow extends StatelessWidget {
                   side: BorderSide(
                     color: isSelected ? _navy : const Color(0xFFD0DBEE),
                   ),
+                  deleteIcon: const Icon(Icons.close, size: 15),
+                  deleteButtonTooltipMessage: 'Remove phase',
+                  onDeleted: canRemove
+                      ? () {
+                          final match = customPhases.firstWhere(
+                            (p) =>
+                                p.name.trim().toLowerCase() ==
+                                name.trim().toLowerCase(),
+                          );
+                          onRemovePhase!(match);
+                        }
+                      : null,
                 );
               },
             ),

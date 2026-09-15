@@ -228,7 +228,7 @@ class _LeftPanel extends StatelessWidget {
 
                 // Footer Version Tag
                 Text(
-                  '© ${DateTime.now().year} LAMHOAI · RMS v2.0',
+                  '© ${DateTime.now().year} LAMHOAI · RMS',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.45),
                     fontSize: 11.5,

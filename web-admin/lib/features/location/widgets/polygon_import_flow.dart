@@ -15,6 +15,18 @@ import '../../../core/services/lot_service.dart';
 
 const _navy = Color(0xFF1E293B);
 
+/// Strips a redundant leading "Block" (any casing) from the Block
+/// column's text, so a source file using "Block 1" and one using
+/// bare "1" both end up stored as the same bare identifier — matching
+/// normalizeBlockLabel() in lot_dialogs.dart, kept local here rather
+/// than importing a widget file into this standalone flow.
+String _normalizeBlockLabel(String raw) {
+  final trimmed = raw.trim();
+  final stripped =
+      trimmed.replaceFirst(RegExp(r'^block\s*', caseSensitive: false), '').trim();
+  return stripped.isEmpty ? trimmed : stripped;
+}
+
 /// Runs the full import flow: pick file -> parse -> confirm -> import.
 /// [imageWidth]/[imageHeight] are the phase's actual map image pixel
 /// dimensions, needed to normalize the tool's raw pixel coordinates
@@ -130,7 +142,8 @@ Map<String, List<LotPoint>> _parseWorkbook(
     final maxIdx = [blockIdx, lotIdx, xIdx, yIdx].reduce((a, b) => a > b ? a : b);
     if (row.length <= maxIdx) continue;
 
-    final block = row[blockIdx]?.value?.toString().trim() ?? '';
+    final block = _normalizeBlockLabel(
+        row[blockIdx]?.value?.toString().trim() ?? '');
     final rawLot = row[lotIdx]?.value?.toString().trim() ?? '';
     final lotNumber =
         rawLot.replaceFirst(RegExp(r'^Lot\s+', caseSensitive: false), '');

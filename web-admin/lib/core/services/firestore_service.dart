@@ -10,8 +10,9 @@ import '../models/announcement_model.dart';
 import '../models/complaint_model.dart';
 import '../models/user_model.dart';
 
-/// Outcome of a generateMembershipFees() call, for showing a confirmation
-/// summary to the admin ("Created 42, skipped 8 who already had one").
+/// Outcome of a generateMembershipFees() / generateMonthlyDues() call, for
+/// showing a confirmation summary to the admin ("Created 42, skipped 8 who
+/// already had one").
 class GenerateDuesResult {
   final int created;
   final int skipped;
@@ -186,6 +187,60 @@ class FirestoreService {
     return snap.docs.length;
   }
 
+  /// Adds the flat overdue penalty to any `dues`/`membershipFee` record
+  /// that is past its grace period and hasn't been penalized yet. Call
+  /// this alongside syncOverdueStatuses() (e.g. in a screen's initState) —
+  /// the two are separate concerns: a record flips to `overdue` display
+  /// status the moment its dueDate passes (no grace period), but the
+  /// [penaltyAmount] itself is only added once dueDate + [graceDays] has
+  /// elapsed and only if it hasn't already been applied.
+  ///
+  /// Intentionally does NOT filter on `penaltyApplied` in the query
+  /// itself — an equality filter on a field would silently exclude any
+  /// payment doc created before that field existed (Firestore equality
+  /// filters require the field to be present). Filtering client-side
+  /// after a broader dueDate query handles old and new docs correctly,
+  /// at the cost of reading somewhat more docs than strictly necessary.
+  ///
+  /// Requires a composite index on (dueDate <) — Firestore will give you
+  /// a console link to create it the first time this runs, same as the
+  /// other query methods here.
+  Future<int> applyOverduePenalties({
+    required double penaltyAmount,
+    required int    graceDays,
+  }) async {
+    if (penaltyAmount <= 0) return 0;
+
+    final cutoff = DateTime.now().subtract(Duration(days: graceDays));
+    final snap = await _payments
+        .where('dueDate', isLessThan: Timestamp.fromDate(cutoff))
+        .get();
+
+    final toPenalize = snap.docs.where((doc) {
+      final data           = doc.data() as Map<String, dynamic>;
+      final type            = PaymentTypeExt.fromString(data['type'] as String?);
+      final status           = PaymentStatusExt.fromString(data['status'] as String?);
+      final penaltyApplied   = data['penaltyApplied'] as bool? ?? false;
+      return !penaltyApplied &&
+          (type == PaymentType.dues || type == PaymentType.membershipFee) &&
+          (status == PaymentStatus.unpaid || status == PaymentStatus.overdue);
+    }).toList();
+
+    if (toPenalize.isEmpty) return 0;
+
+    final batch = _db.batch();
+    for (final doc in toPenalize) {
+      final data   = doc.data() as Map<String, dynamic>;
+      final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+      batch.update(doc.reference, {
+        'amount':         amount + penaltyAmount,
+        'penaltyApplied': true,
+      });
+    }
+    await batch.commit();
+    return toPenalize.length;
+  }
+
   // ── Membership Fee (annual, org-wide — distinct from per-lot monthly dues) ─
 
   /// Membership fee payment records for a given calendar year, keyed by
@@ -211,10 +266,20 @@ class FirestoreService {
   /// (duplicate prevention is by calendar year of dueDate). Uses a single
   /// WriteBatch — fine for typical HOA member counts, but batches cap at
   /// 500 writes, so a very large association would need chunking.
+  ///
+  /// dueDate: intended to be Jan 31 of [year], but if this is run any time
+  /// after that (e.g. the fee is generated late), the record would be born
+  /// already overdue — and, with the Stage 3 penalty flow, could start
+  /// accruing a penalty before anyone's even had a chance to pay it. To
+  /// avoid that, the due date is pushed to [generationGraceDays] days from
+  /// whenever this actually runs, but only when that gives more time than
+  /// the intended Jan 31 date would — an on-time run in January still gets
+  /// the normal Jan 31 due date.
   Future<GenerateDuesResult> generateMembershipFees({
     required int    year,
     required double amount,
     required String recordedBy,
+    int             generationGraceDays = 30,
   }) async {
     final membersSnap = await _users
         .where('role', isEqualTo: 'member')
@@ -248,8 +313,11 @@ class FirestoreService {
       );
     }
 
-    final batch   = _db.batch();
-    final dueDate = DateTime(year, 1, 31);
+    final batch = _db.batch();
+    final now   = DateTime.now();
+    final intendedDueDate = DateTime(year, 1, 31);
+    final graceDueDate    = now.add(Duration(days: generationGraceDays));
+    final dueDate = intendedDueDate.isAfter(now) ? intendedDueDate : graceDueDate;
     for (final member in toCreate) {
       final ref = _payments.doc();
       final payment = PaymentModel(
@@ -262,6 +330,102 @@ class FirestoreService {
         dueDate:    dueDate,
         recordedBy: recordedBy,
         notes:      'Auto-generated annual membership fee for $year',
+        createdAt:  DateTime.now(),
+      );
+      batch.set(ref, payment.toMap());
+    }
+    await batch.commit();
+
+    return GenerateDuesResult(
+      created: toCreate.length,
+      skipped: members.length - toCreate.length,
+      totalActiveMembers: members.length,
+    );
+  }
+
+  // ── Monthly Dues (per-lot — rate is locked to whichever month it's for) ────
+
+  /// Monthly dues payment records for a given [year]/[month], keyed by
+  /// dueDate falling within that month. Same shape as
+  /// streamMembershipFeesForYear, scoped to a month instead of a year.
+  /// Requires a composite index on (type ==, dueDate range).
+  Stream<List<PaymentModel>> streamMonthlyDuesForMonth(int year, int month) {
+    final start = DateTime(year, month, 1);
+    final end   = DateTime(year, month + 1, 1);
+    return _payments
+        .where('type', isEqualTo: PaymentType.dues.name)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dueDate', isLessThan: Timestamp.fromDate(end))
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => PaymentModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
+  }
+
+  /// Creates one unpaid monthly-dues record per active member for
+  /// [year]/[month], at [amount]. The caller is responsible for resolving
+  /// [amount] via RateHistoryService.getRateForMonth() *before* calling
+  /// this — that's what locks the obligation to the rate active when the
+  /// month began (Option A from the design discussion), independent of
+  /// whether/when it's actually paid. Skips members who already have a
+  /// dues record for that month (duplicate prevention is by calendar
+  /// month of dueDate). Uses a single WriteBatch — fine for typical HOA
+  /// member counts, but batches cap at 500 writes.
+  Future<GenerateDuesResult> generateMonthlyDues({
+    required int    year,
+    required int    month,
+    required double amount,
+    required String recordedBy,
+    int             dueDay = 15,
+  }) async {
+    final membersSnap = await _users
+        .where('role', isEqualTo: 'member')
+        .where('status', isEqualTo: MemberStatus.active.name)
+        .get();
+    final members = membersSnap.docs
+        .map((d) => MemberModel.fromMap(
+            d.data() as Map<String, dynamic>, d.id))
+        .toList();
+
+    final start = DateTime(year, month, 1);
+    final end   = DateTime(year, month + 1, 1);
+    final existingSnap = await _payments
+        .where('type', isEqualTo: PaymentType.dues.name)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dueDate', isLessThan: Timestamp.fromDate(end))
+        .get();
+    final existingUids = existingSnap.docs
+        .map((d) => (d.data() as Map<String, dynamic>)['uid'] as String? ?? '')
+        .toSet();
+
+    final toCreate = members
+        .where((m) => !existingUids.contains(m.uid))
+        .toList();
+
+    if (toCreate.isEmpty) {
+      return GenerateDuesResult(
+        created: 0,
+        skipped: members.length,
+        totalActiveMembers: members.length,
+      );
+    }
+
+    final batch   = _db.batch();
+    final dueDate = DateTime(year, month, dueDay);
+    for (final member in toCreate) {
+      final ref = _payments.doc();
+      final payment = PaymentModel(
+        id:         ref.id,
+        uid:        member.uid,
+        memberName: member.name,
+        type:       PaymentType.dues,
+        amount:     amount, // rate locked to this month, per Option A
+        status:     PaymentStatus.unpaid,
+        dueDate:    dueDate,
+        recordedBy: recordedBy,
+        notes:      'Auto-generated monthly dues for '
+            '${month.toString().padLeft(2, '0')}/$year',
         createdAt:  DateTime.now(),
       );
       batch.set(ref, payment.toMap());

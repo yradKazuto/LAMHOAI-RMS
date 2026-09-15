@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/hoa_settings_model.dart';
+import '../../../core/models/monthly_rate_model.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../core/services/rate_history_service.dart';
 import '../../../core/routing/app_router.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -26,10 +28,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _contact       = TextEditingController();
   final _email         = TextEditingController();
   final _president     = TextEditingController();
-  final _monthly       = TextEditingController();
   final _annual        = TextEditingController();
   final _assessment    = TextEditingController();
   final _penalty       = TextEditingController();
+  final _graceDays     = TextEditingController();
 
   bool _loaded = false;
 
@@ -52,10 +54,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _contact.text    = settings.contactNumber;
         _email.text      = settings.email;
         _president.text  = settings.president;
-        _monthly.text    = settings.dues.monthly.toStringAsFixed(0);
         _annual.text     = settings.dues.annual.toStringAsFixed(0);
         _assessment.text = settings.dues.specialAssessment.toStringAsFixed(0);
         _penalty.text    = settings.dues.penalty.toStringAsFixed(0);
+        _graceDays.text  = settings.dues.penaltyGraceDays.toString();
         _loaded = true;
       });
     } catch (e) {
@@ -72,9 +74,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _name.dispose(); _address.dispose();
     _contact.dispose(); _email.dispose();
-    _president.dispose(); _monthly.dispose();
+    _president.dispose();
     _annual.dispose(); _assessment.dispose();
-    _penalty.dispose();
+    _penalty.dispose(); _graceDays.dispose();
     super.dispose();
   }
 
@@ -89,10 +91,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         email:         _email.text.trim(),
         president:     _president.text.trim(),
         dues: DuesConfig(
-          monthly:           double.tryParse(_monthly.text.trim())    ?? 0,
           annual:            double.tryParse(_annual.text.trim())     ?? 0,
           specialAssessment: double.tryParse(_assessment.text.trim()) ?? 0,
           penalty:           double.tryParse(_penalty.text.trim())    ?? 0,
+          penaltyGraceDays:  int.tryParse(_graceDays.text.trim())     ?? 5,
         ),
       );
 
@@ -154,11 +156,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _DuesTab(
-                  monthly:    _monthly,
-                  annual:     _annual,
-                  assessment: _assessment,
-                  penalty:    _penalty,
+                Flexible(
+                  child: _DuesTab(
+                    annual:     _annual,
+                    assessment: _assessment,
+                    penalty:    _penalty,
+                    graceDays:  _graceDays,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Align(
@@ -359,16 +363,15 @@ class _ProfileTab extends StatelessWidget {
 }
 
 class _DuesTab extends StatelessWidget {
-  final TextEditingController monthly, annual,
-      assessment, penalty;
+  final TextEditingController annual, assessment, penalty, graceDays;
 
   static const Color _navy = Color(0xFF1E293B);
 
   const _DuesTab({
-    required this.monthly,
     required this.annual,
     required this.assessment,
     required this.penalty,
+    required this.graceDays,
   });
 
   @override
@@ -384,18 +387,12 @@ class _DuesTab extends StatelessWidget {
                 fontSize: 13, color: Colors.grey[500]),
           ),
           const SizedBox(height: 20),
+
+          // ── Monthly rate now uses history instead of a single field ──────
+          const _MonthlyRateSection(),
+          const SizedBox(height: 16),
+
           Row(children: [
-            Expanded(
-              child: _DuesField(
-                label:       'Monthly Dues',
-                hint:        '200',
-                ctrl:        monthly,
-                icon:        Icons.calendar_today_outlined,
-                color:       const Color(0xFF1A4A9C),
-                description: 'Per month per household',
-              ),
-            ),
-            const SizedBox(width: 16),
             Expanded(
               child: _DuesField(
                 label:       'Annual Dues',
@@ -406,9 +403,7 @@ class _DuesTab extends StatelessWidget {
                 description: 'Full year payment',
               ),
             ),
-          ]),
-          const SizedBox(height: 16),
-          Row(children: [
+            const SizedBox(width: 16),
             Expanded(
               child: _DuesField(
                 label:       'Special Assessment',
@@ -419,7 +414,9 @@ class _DuesTab extends StatelessWidget {
                 description: 'One-time special charge',
               ),
             ),
-            const SizedBox(width: 16),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
             Expanded(
               child: _DuesField(
                 label:       'Penalty',
@@ -427,7 +424,19 @@ class _DuesTab extends StatelessWidget {
                 ctrl:        penalty,
                 icon:        Icons.warning_amber_outlined,
                 color:       const Color(0xFFCC2200),
-                description: 'Late payment penalty',
+                description: 'Flat late payment penalty',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _DuesField(
+                label:       'Grace Period (days)',
+                hint:        '5',
+                ctrl:        graceDays,
+                icon:        Icons.hourglass_empty,
+                color:       const Color(0xFF7A6A1A),
+                description: 'Days after due date before penalty applies',
+                isWholeNumber: true,
               ),
             ),
           ]),
@@ -458,6 +467,231 @@ class _DuesTab extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Monthly rate history section ────────────────────────────────────────────
+class _MonthlyRateSection extends StatefulWidget {
+  const _MonthlyRateSection();
+
+  @override
+  State<_MonthlyRateSection> createState() => _MonthlyRateSectionState();
+}
+
+class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
+  final _rateSvc   = RateHistoryService();
+  final _newAmount = TextEditingController();
+  bool  _adding    = false;
+
+  static const Color _navy = Color(0xFF1E293B);
+
+  @override
+  void dispose() {
+    _newAmount.dispose();
+    super.dispose();
+  }
+
+  static const _monthNames = [
+    'Jan','Feb','Mar','Apr','May','Jun',
+    'Jul','Aug','Sep','Oct','Nov','Dec',
+  ];
+  String _monthLabel(DateTime d) => '${_monthNames[d.month - 1]} ${d.year}';
+
+  Future<void> _submitNewRate() async {
+    final amount = double.tryParse(_newAmount.text.trim());
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid amount.')));
+      return;
+    }
+
+    final now  = DateTime.now();
+    // Effective dates are restricted to next month onward — enforced
+    // again server-side in RateHistoryService.addMonthlyRate.
+    final next = DateTime(now.year, now.month + 1, 1);
+
+    setState(() => _adding = true);
+    try {
+      final auth = context.read<AuthProvider>();
+      await _rateSvc.addMonthlyRate(
+        amount:         amount,
+        effectiveMonth: next,
+        setBy:          auth.userModel?.uid ?? '',
+      );
+      _newAmount.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('New rate of ₱${amount.toStringAsFixed(2)} '
+                'set to start ${_monthLabel(next)}.'),
+            backgroundColor: const Color(0xFF1A7A4A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A4A9C).withOpacity(0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF1A4A9C).withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.calendar_today_outlined, size: 18, color: Color(0xFF1A4A9C)),
+              SizedBox(width: 10),
+              Text('Monthly Dues Rate',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A4A9C))),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Per month per household. New rates only take effect next month '
+            'onward — past and current months keep the rate they were billed at.',
+            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 14),
+
+          StreamBuilder<List<MonthlyRateModel>>(
+            stream: _rateSvc.streamMonthlyRates(),
+            builder: (context, snap) {
+              if (!snap.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: SizedBox(
+                      height: 18, width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                );
+              }
+
+              final rates = snap.data!;
+              if (rates.isEmpty) {
+                return Text('No rate set yet — add one below.',
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey[500]));
+              }
+
+              final now           = DateTime.now();
+              final currentOrPast = rates.where((r) => !r.effectiveStart.isAfter(now)).toList();
+              final upcoming      = rates.where((r) => r.effectiveStart.isAfter(now)).toList();
+              final current       = currentOrPast.isNotEmpty ? currentOrPast.first : null;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (current != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF1A7A4A).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Text('₱${current.amount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1A7A4A))),
+                          const SizedBox(width: 8),
+                          Text('current — since ${_monthLabel(current.effectiveStart)}',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        ],
+                      ),
+                    ),
+                  for (final r in upcoming) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E0),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Text('₱${r.amount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w700,
+                                  color: Color(0xFF7A6A1A))),
+                          const SizedBox(width: 8),
+                          Text('scheduled — starts ${_monthLabel(r.effectiveStart)}',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (currentOrPast.length > 1) ...[
+                    const SizedBox(height: 10),
+                    Text('History',
+                        style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w600,
+                            color: Colors.grey[500])),
+                    const SizedBox(height: 4),
+                    for (final r in currentOrPast.skip(1))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          '₱${r.amount.toStringAsFixed(2)} — since ${_monthLabel(r.effectiveStart)}',
+                          style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+                        ),
+                      ),
+                  ],
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _newAmount,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'New rate (₱)',
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: _adding ? null : _submitNewRate,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _navy,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: _adding
+                    ? const SizedBox(
+                        width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Add for next month'),
+              ),
+            ],
           ),
         ],
       ),
@@ -524,8 +758,9 @@ class _SettingsField extends StatelessWidget {
 class _DuesField extends StatelessWidget {
   final String                label, hint, description;
   final TextEditingController ctrl;
-  final IconData              icon;
-  final Color                 color;
+  final IconData               icon;
+  final Color                  color;
+  final bool                   isWholeNumber;
 
   static const Color _navy = Color(0xFF1E293B);
 
@@ -536,6 +771,7 @@ class _DuesField extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.description,
+    this.isWholeNumber = false,
   });
 
   @override
@@ -561,35 +797,37 @@ class _DuesField extends StatelessWidget {
               child: Icon(icon, color: color, size: 18),
             ),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: color)),
-                Text(description,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[500])),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: color)),
+                  Text(description,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[500])),
+                ],
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: ctrl,
-          keyboardType:
-              const TextInputType.numberWithOptions(
-                  decimal: true),
+          keyboardType: isWholeNumber
+              ? TextInputType.number
+              : const TextInputType.numberWithOptions(decimal: true),
           style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
               color: color),
           decoration: InputDecoration(
-            prefixText: '₱ ',
+            prefixText: isWholeNumber ? null : '₱ ',
             prefixStyle: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,

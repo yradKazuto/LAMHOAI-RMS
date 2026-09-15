@@ -3,44 +3,52 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DuesConfig {
-  final double monthly;
+  // NOTE: `monthly` removed — the monthly rate lives in the
+  // `monthly_dues_rates` collection (see MonthlyRateModel /
+  // RateHistoryService) instead of a single fixed value here.
   final double annual;
   final double specialAssessment;
   final double penalty;
 
+  // Days after a dues/membershipFee record's dueDate before the flat
+  // `penalty` amount gets added to it (see
+  // FirestoreService.applyOverduePenalties). Defaults to 5 for any
+  // settings doc saved before this field existed.
+  final int penaltyGraceDays;
+
   const DuesConfig({
-    required this.monthly,
     required this.annual,
     required this.specialAssessment,
     required this.penalty,
+    this.penaltyGraceDays = 5,
   });
 
   factory DuesConfig.fromMap(Map<String, dynamic> map) {
     return DuesConfig(
-      monthly:           (map['monthly']           as num?)?.toDouble() ?? 0,
       annual:            (map['annual']            as num?)?.toDouble() ?? 0,
       specialAssessment: (map['specialAssessment'] as num?)?.toDouble() ?? 0,
       penalty:           (map['penalty']           as num?)?.toDouble() ?? 0,
+      penaltyGraceDays:  (map['penaltyGraceDays']  as num?)?.toInt()    ?? 5,
     );
   }
 
   Map<String, dynamic> toMap() => {
-    'monthly':           monthly,
     'annual':            annual,
     'specialAssessment': specialAssessment,
     'penalty':           penalty,
+    'penaltyGraceDays':  penaltyGraceDays,
   };
 
   DuesConfig copyWith({
-    double? monthly,
     double? annual,
     double? specialAssessment,
     double? penalty,
+    int?    penaltyGraceDays,
   }) => DuesConfig(
-    monthly:           monthly           ?? this.monthly,
     annual:            annual            ?? this.annual,
     specialAssessment: specialAssessment ?? this.specialAssessment,
     penalty:           penalty           ?? this.penalty,
+    penaltyGraceDays:  penaltyGraceDays  ?? this.penaltyGraceDays,
   );
 }
 
@@ -95,10 +103,10 @@ class HoaSettingsModel {
     email:         '',
     president:     '',
     dues:          const DuesConfig(
-      monthly:           200,
       annual:            2000,
       specialAssessment: 500,
       penalty:           50,
+      penaltyGraceDays:  5,
     ),
   );
 }
