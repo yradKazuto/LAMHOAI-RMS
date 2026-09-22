@@ -117,12 +117,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   // ── Body ──────────────────────────────────────────────────────────────────
 
   Widget _buildBody(List<PaymentModel> all) {
-    double paid = 0, pending = 0, overdue = 0;
+    double paid = 0, unpaid = 0, overdue = 0;
     for (final p in all) {
-      // Use effectiveStatus (not the raw Firestore `status`) so a pending
+      // Use effectiveStatus (not the raw Firestore `status`) so an unpaid
       // payment whose dueDate has passed is counted as overdue here too —
       // this keeps the summary totals in sync with what each list item
-      // displays via statusLabel.
+      // displays via statusLabel. Waived payments are excluded from all
+      // three buckets since they're neither owed nor paid.
       switch (p.effectiveStatus) {
         case PaymentStatus.paid:
           paid += p.amount;
@@ -130,9 +131,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         case PaymentStatus.overdue:
           overdue += p.amount;
           break;
-        case PaymentStatus.pending:
-        default:
-          pending += p.amount;
+        case PaymentStatus.waived:
+          break;
+        case PaymentStatus.unpaid:
+          unpaid += p.amount;
           break;
       }
     }
@@ -144,7 +146,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          _buildSummary(paid, pending, overdue),
+          _buildSummary(paid, unpaid, overdue),
           _buildFilterRow(),
           filtered.isEmpty ? _buildEmpty() : _buildList(filtered),
           const SizedBox(height: 16),
@@ -155,7 +157,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   // ── Summary ───────────────────────────────────────────────────────────────
 
-  Widget _buildSummary(double paid, double pending, double overdue) {
+  Widget _buildSummary(double paid, double unpaid, double overdue) {
     final fmt = NumberFormat('#,##0.00', 'en_PH');
     return Container(
       margin: const EdgeInsets.all(14),
@@ -176,7 +178,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         children: [
           _sumItem('₱${fmt.format(paid)}',    'PAID',    _success),
           _divider(),
-          _sumItem('₱${fmt.format(pending)}', 'PENDING', _warning),
+          _sumItem('₱${fmt.format(unpaid)}',  'UNPAID',  _warning),
           _divider(),
           _sumItem('₱${fmt.format(overdue)}', 'OVERDUE', _danger),
         ],
@@ -307,7 +309,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    p.type == PaymentType.monthly
+                    p.type == PaymentType.dues
                         ? '${p.typeLabel} — ${DateFormat('MMMM yyyy').format(p.dueDate)}'
                         : p.typeLabel,
                     style: const TextStyle(

@@ -670,6 +670,16 @@ class _MapPinViewState extends State<MapPinView>
         final width =
             constraints.maxWidth;
 
+        // A fixed side panel leaves the map too cramped to use below
+        // this width — show the map full-width instead, with the
+        // block list moved into a "Blocks" bottom sheet opened on
+        // demand rather than a permanently docked panel.
+        if (width < 700) {
+          return _buildMapArea(
+            showBlocksButton: true,
+          );
+        }
+
         final panelWidth =
             width < 900
                 ? 190.0
@@ -697,6 +707,114 @@ class _MapPinViewState extends State<MapPinView>
           ],
         );
       },
+    );
+  }
+
+  // ============================================================
+  // BLOCK PICKER (mobile) — same block list as the desktop panel,
+  // presented as a bottom sheet opened via the "Blocks" toggle.
+  // Selecting a block closes the sheet, matching a typical mobile
+  // picker rather than staying open like the docked panel.
+  // ============================================================
+
+  void _openBlockPickerSheet() {
+    final blocks = _getBlocks();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Text(
+                'Blocks',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: _navy),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Tap a block to zoom in.',
+                style: TextStyle(
+                    fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight:
+                      MediaQuery.of(context).size.height * 0.5,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: blocks.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final block = blocks[i];
+                    return _buildBlockButton(
+                      label: block,
+                      icon: Icons.grid_view_rounded,
+                      selected: _selectedBlock == block,
+                      onTap: () {
+                        _selectBlock(block);
+                        Navigator.pop(sheetCtx);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlocksToggleButton() {
+    return Material(
+      color: Colors.white,
+      elevation: 3,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _openBlockPickerSheet,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(
+              horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.view_list_outlined,
+                  size: 17, color: _navy),
+              SizedBox(width: 7),
+              Text('Blocks',
+                  style: TextStyle(
+                      color: _navy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -974,7 +1092,7 @@ class _MapPinViewState extends State<MapPinView>
   // MAP
   // ============================================================
 
-  Widget _buildMapArea() {
+  Widget _buildMapArea({bool showBlocksButton = false}) {
     return Container(
       key: _viewportKey,
       decoration:
@@ -1071,6 +1189,13 @@ class _MapPinViewState extends State<MapPinView>
             child:
                 _buildMapStatus(),
           ),
+
+          if (showBlocksButton)
+            Positioned(
+              right: 14,
+              top: 14,
+              child: _buildBlocksToggleButton(),
+            ),
 
           Positioned(
             right: 14,

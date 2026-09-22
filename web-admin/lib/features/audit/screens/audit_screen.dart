@@ -104,48 +104,44 @@ class _AuditScreenState extends State<AuditScreen> {
             const SizedBox(height: 24),
 
             // ── Filters ────────────────────────────────────────────────────
-            Row(
-              children: [
-                SizedBox(
-                  width: 260,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Search by staff or action...',
-                      hintStyle: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[400]),
-                      prefixIcon: const Icon(
-                          Icons.search, size: 18),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding:
-                          const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12),
-                      border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFD0DBEE))),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFD0DBEE))),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                              color: _accent,
-                              width: 1.5)),
-                    ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final searchField = TextField(
+                  controller: _searchCtrl,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search by staff or action...',
+                    hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[400]),
+                    prefixIcon: const Icon(
+                        Icons.search, size: 18),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12),
+                    border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFD0DBEE))),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFD0DBEE))),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: _accent,
+                            width: 1.5)),
                   ),
-                ),
-                const SizedBox(width: 12),
-                // Action filter
-                _FilterDrop(
+                );
+
+                final actionDrop = _FilterDrop(
                   value: _actionFilter,
                   hint:  'All Actions',
                   items: [
@@ -159,10 +155,9 @@ class _AuditScreenState extends State<AuditScreen> {
                   ],
                   onChanged: (v) =>
                       setState(() => _actionFilter = v),
-                ),
-                const SizedBox(width: 12),
-                // Collection filter
-                _FilterDrop(
+                );
+
+                final collectionDrop = _FilterDrop(
                   value: _collectionFilter,
                   hint:  'All Collections',
                   items: const [
@@ -190,26 +185,68 @@ class _AuditScreenState extends State<AuditScreen> {
                   ],
                   onChanged: (v) => setState(
                       () => _collectionFilter = v),
-                ),
-                if (_searchCtrl.text.isNotEmpty ||
+                );
+
+                final hasActiveFilter =
+                    _searchCtrl.text.isNotEmpty ||
                     _actionFilter != null ||
-                    _collectionFilter != null) ...[
-                  const SizedBox(width: 10),
-                  TextButton.icon(
-                    onPressed: () => setState(() {
-                      _searchCtrl.clear();
-                      _actionFilter     = null;
-                      _collectionFilter = null;
-                    }),
-                    icon: const Icon(Icons.clear,
-                        size: 15),
-                    label: const Text('Clear'),
-                    style: TextButton.styleFrom(
-                        foregroundColor:
-                            Colors.grey[600]),
-                  ),
-                ],
-              ],
+                    _collectionFilter != null;
+
+                final clearButton = TextButton.icon(
+                  onPressed: () => setState(() {
+                    _searchCtrl.clear();
+                    _actionFilter     = null;
+                    _collectionFilter = null;
+                  }),
+                  icon: const Icon(Icons.clear,
+                      size: 15),
+                  label: const Text('Clear'),
+                  style: TextButton.styleFrom(
+                      foregroundColor:
+                          Colors.grey[600]),
+                );
+
+                // Below this, the fixed-width search box plus two
+                // dropdowns can't fit on one line — stack the search
+                // field full-width, then wrap the filters underneath.
+                final narrow = constraints.maxWidth < 560;
+
+                if (narrow) {
+                  return Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        crossAxisAlignment:
+                            WrapCrossAlignment.center,
+                        children: [
+                          actionDrop,
+                          collectionDrop,
+                          if (hasActiveFilter) clearButton,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    SizedBox(width: 260, child: searchField),
+                    const SizedBox(width: 12),
+                    actionDrop,
+                    const SizedBox(width: 12),
+                    collectionDrop,
+                    if (hasActiveFilter) ...[
+                      const SizedBox(width: 10),
+                      clearButton,
+                    ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
 
@@ -409,13 +446,19 @@ class _AuditScreenState extends State<AuditScreen> {
                                               const SizedBox(
                                                   width:
                                                       4),
-                                              Text(
-                                                log.performedByName,
-                                                style: TextStyle(
-                                                    fontSize:
-                                                        12,
-                                                    color: Colors
-                                                        .grey[500]),
+                                              Flexible(
+                                                child: Text(
+                                                  log.performedByName,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow
+                                                          .ellipsis,
+                                                  style: TextStyle(
+                                                      fontSize:
+                                                          12,
+                                                      color: Colors
+                                                          .grey[500]),
+                                                ),
                                               ),
                                               const SizedBox(
                                                   width:
@@ -430,13 +473,19 @@ class _AuditScreenState extends State<AuditScreen> {
                                               const SizedBox(
                                                   width:
                                                       4),
-                                              Text(
-                                                log.targetCollection,
-                                                style: TextStyle(
-                                                    fontSize:
-                                                        12,
-                                                    color: Colors
-                                                        .grey[500]),
+                                              Flexible(
+                                                child: Text(
+                                                  log.targetCollection,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow
+                                                          .ellipsis,
+                                                  style: TextStyle(
+                                                      fontSize:
+                                                          12,
+                                                      color: Colors
+                                                          .grey[500]),
+                                                ),
                                               ),
                                             ],
                                           ),

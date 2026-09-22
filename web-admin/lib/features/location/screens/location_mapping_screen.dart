@@ -25,6 +25,15 @@ const _accent = Color(0xFF2563EB);
 
 const String kPhaseOnePolygonMap = 'Phase 1';
 
+// Extracts the first run of digits in a string (e.g. "Block 9" -> 9,
+// "Lot 12" -> 12) so labels sort numerically instead of lexically —
+// plain string sort puts "10" before "2", which is what made the grid
+// view look randomly ordered once any phase had more than 9 lots.
+int _numericPart(String s) {
+  final match = RegExp(r'\d+').firstMatch(s);
+  return match != null ? int.parse(match.group(0)!) : 0;
+}
+
 class LocationMappingScreen extends StatefulWidget {
   /// Optional lot document ID to open/highlight when entering the map.
   final String? targetLotId;
@@ -162,6 +171,7 @@ class _LocationMappingScreenState
                     originLabel: 'Location Mapping',
                     originRoute: AppRoutes.location,
                     showBreadcrumb: false,
+                    compactHeader: true,
                   ),
                   Positioned(
                     top: 10,
@@ -450,12 +460,9 @@ class _LocationMappingScreenState
             // SMALL HEADER
             // ==================================================
 
-            Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.center,
-
-              children: [
-                Material(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final backButton = Material(
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius:
@@ -481,44 +488,43 @@ class _LocationMappingScreenState
                       ),
                     ),
                   ),
-                ),
+                );
 
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-
-                    children: [
-                      const Text(
-                        'Location Mapping',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight:
-                              FontWeight.w700,
-                          color: _navy,
-                        ),
+                final titleBlock = Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Location Mapping',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight:
+                            FontWeight.w700,
+                        color: _navy,
                       ),
-
-                      const SizedBox(height: 3),
-
-                      Text(
-                        'Subdivision lot map — '
-                        'view occupancy and availability',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color:
-                              Colors.grey[600],
-                        ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Subdivision lot map — '
+                      'view occupancy and availability',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color:
+                            Colors.grey[600],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  ],
+                );
 
                 // ==============================================
                 // MAP / GRID VIEW
                 // ==============================================
 
-                SegmentedButton<bool>(
+                final viewToggle = SegmentedButton<bool>(
                   segments: const [
                     ButtonSegment<bool>(
                       value: true,
@@ -549,8 +555,94 @@ class _LocationMappingScreenState
                           selection.first;
                     });
                   },
-                ),
-              ],
+                );
+
+                // Compact icon-only toggle for phones — same
+                // map/grid switch as the full SegmentedButton, but
+                // narrow enough (~70px) to stay inline with the
+                // title instead of needing its own row.
+                Widget compactToggleIcon({
+                  required IconData icon,
+                  required bool selected,
+                  required VoidCallback onTap,
+                }) =>
+                    InkWell(
+                      onTap: onTap,
+                      borderRadius:
+                          BorderRadius.circular(18),
+                      child: Container(
+                        padding:
+                            const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? const Color(0xFFDCE6FA)
+                              : Colors.transparent,
+                          borderRadius:
+                              BorderRadius.circular(18),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 18,
+                          color: selected
+                              ? _navy
+                              : Colors.grey[500],
+                        ),
+                      ),
+                    );
+
+                final compactToggle = Container(
+                  padding:
+                      const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F7FB),
+                    borderRadius:
+                        BorderRadius.circular(20),
+                    border: Border.all(
+                        color:
+                            const Color(0xFFD0DBEE)),
+                  ),
+                  child: Row(
+                    mainAxisSize:
+                        MainAxisSize.min,
+                    children: [
+                      compactToggleIcon(
+                        icon:
+                            Icons.map_outlined,
+                        selected: _showMapView,
+                        onTap: () => setState(
+                            () =>
+                                _showMapView =
+                                    true),
+                      ),
+                      compactToggleIcon(
+                        icon: Icons.grid_view,
+                        selected: !_showMapView,
+                        onTap: () => setState(
+                            () =>
+                                _showMapView =
+                                    false),
+                      ),
+                    ],
+                  ),
+                );
+
+                // Below this width, use the compact icon toggle so
+                // it can stay inline with the title on the same
+                // row; the full-label SegmentedButton needs the
+                // extra room only wider layouts have.
+                final narrow = constraints.maxWidth < 560;
+
+                return Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.center,
+                  children: [
+                    backButton,
+                    Expanded(child: titleBlock),
+                    const SizedBox(width: 10),
+                    narrow ? compactToggle : viewToggle,
+                  ],
+                );
+              },
             ),
 
             const SizedBox(height: 12),
@@ -679,7 +771,11 @@ class _LocationMappingScreenState
 
                             final phaseKeys =
                                 grouped.keys.toList()
-                                  ..sort();
+                                  ..sort((a, b) {
+                                    final cmp = _numericPart(a)
+                                        .compareTo(_numericPart(b));
+                                    return cmp != 0 ? cmp : a.compareTo(b);
+                                  });
 
                             return ListView.builder(
                               padding:
@@ -697,13 +793,19 @@ class _LocationMappingScreenState
 
                                 final phaseLots =
                                     grouped[phase]!
-                                      ..sort(
-                                        (a, b) =>
-                                            '${a.block}${a.lotNumber}'
-                                                .compareTo(
-                                          '${b.block}${b.lotNumber}',
-                                        ),
-                                      );
+                                      ..sort((a, b) {
+                                        var cmp = _numericPart(a.block)
+                                            .compareTo(
+                                                _numericPart(b.block));
+                                        if (cmp != 0) return cmp;
+                                        cmp = _numericPart(a.lotNumber)
+                                            .compareTo(
+                                                _numericPart(b.lotNumber));
+                                        if (cmp != 0) return cmp;
+                                        return '${a.block}${a.lotNumber}'
+                                            .compareTo(
+                                                '${b.block}${b.lotNumber}');
+                                      });
 
                                 return _PhaseSection(
                                   title: phase,

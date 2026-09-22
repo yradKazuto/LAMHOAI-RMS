@@ -103,7 +103,7 @@ class PaymentDetailScreen extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 p != null
-                    ? (p.type == PaymentType.monthly
+                    ? (p.type == PaymentType.dues
                         ? '${p.typeLabel} — ${DateFormat('MMMM yyyy').format(p.dueDate)}'
                         : p.typeLabel)
                     : '',
@@ -212,7 +212,7 @@ class PaymentDetailScreen extends StatelessWidget {
                 _row('Type', p.typeLabel),
                 _row(
                   'Period',
-                  p.type == PaymentType.monthly
+                  p.type == PaymentType.dues
                       ? DateFormat('MMMM yyyy').format(p.dueDate)
                       : DateFormat('yyyy').format(p.dueDate),
                 ),

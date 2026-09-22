@@ -34,19 +34,23 @@ class AnalyticsScreen extends StatelessWidget {
                   onPressed: () => context.go(AppRoutes.dashboard),
                 ),
                 const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Analytics',
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: _navy)),
-                    const SizedBox(height: 2),
-                    Text('Financial and membership overview',
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.grey[600])),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Analytics',
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: _navy)),
+                      const SizedBox(height: 2),
+                      Text('Financial and membership overview',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 13, color: Colors.grey[600])),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -113,40 +117,31 @@ class _SummaryTilesRow extends StatelessWidget {
             final paymentBreakdown = snap2.data?[1]
                 as PaymentStatusBreakdown?;
 
-            return Row(
-              children: [
-                Expanded(
-                  child: _SummaryTile(
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final tiles = [
+                  _SummaryTile(
                     label: 'Collected This Month',
                     value:
                         '₱${thisMonth.toStringAsFixed(0)}',
                     icon:  Icons.payments_outlined,
                     color: const Color(0xFF1A7A4A),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _SummaryTile(
+                  _SummaryTile(
                     label: 'Active Members',
                     value:
                         '${memberBreakdown?.active ?? 0}',
                     icon:  Icons.people_outline,
                     color: const Color(0xFF1A4A9C),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _SummaryTile(
+                  _SummaryTile(
                     label: 'Overdue Payments',
                     value:
                         '${paymentBreakdown?.overdue ?? 0}',
                     icon:  Icons.warning_amber_outlined,
                     color: const Color(0xFFCC2200),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _SummaryTile(
+                  _SummaryTile(
                     label: 'Compliance Rate',
                     value: memberBreakdown != null
                         ? '${memberBreakdown.complianceRate.toStringAsFixed(0)}%'
@@ -154,8 +149,38 @@ class _SummaryTilesRow extends StatelessWidget {
                     icon:  Icons.verified_outlined,
                     color: const Color(0xFF7A3A1A),
                   ),
-                ),
-              ],
+                ];
+
+                // Four tiles side-by-side leaves each one too narrow
+                // to hold its label below this width — fall back to a
+                // 2x2 grid instead.
+                if (constraints.maxWidth < 640) {
+                  return Column(
+                    children: [
+                      Row(children: [
+                        Expanded(child: tiles[0]),
+                        const SizedBox(width: 14),
+                        Expanded(child: tiles[1]),
+                      ]),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        Expanded(child: tiles[2]),
+                        const SizedBox(width: 14),
+                        Expanded(child: tiles[3]),
+                      ]),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    for (int i = 0; i < tiles.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 14),
+                      Expanded(child: tiles[i]),
+                    ],
+                  ],
+                );
+              },
             );
           },
         );
@@ -198,10 +223,14 @@ class _SummaryTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 11.5,
                       color: Colors.grey[600])),
               Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -641,24 +670,30 @@ class _PaymentComplianceCard extends StatelessWidget {
                             color: Color(0xFF1A4A9C),
                             size: 20),
                         const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            const Text('Payment Compliance Rate',
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              const Text('Payment Compliance Rate',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B))),
+                              Text(
+                                '${data.paidPercent.toStringAsFixed(1)}% of all payments are paid',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E293B))),
-                            Text(
-                              '${data.paidPercent.toStringAsFixed(1)}% of all payments are paid',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600]),
-                            ),
-                          ],
+                                    fontSize: 12,
+                                    color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         Text(
                           '${data.paidPercent.toStringAsFixed(0)}%',
                           style: const TextStyle(

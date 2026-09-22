@@ -3,6 +3,11 @@
 // Persistent frame for every authenticated route: the sidebar and top bar
 // never rebuild/reload when navigating — only the routed page (`child`)
 // swaps out underneath them. Wired up via a ShellRoute in app_router.dart.
+//
+// Responsive: at or above `_mobileBreakpoint` width the sidebar stays
+// permanently docked (original desktop/web-admin behaviour). Below it,
+// the sidebar moves into a Drawer opened via a hamburger button in the
+// top bar, and the content column takes the full width.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +27,9 @@ class AppShell extends StatelessWidget {
   });
 
   static const Color _bg = Color(0xFFF4F7FB);
+
+  // Below this width the persistent sidebar becomes a Drawer instead.
+  static const double _mobileBreakpoint = 900;
 
   // Page titles shown in the top bar for each route. Falls back to
   // 'Dashboard' for anything not listed here.
@@ -45,29 +53,55 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final title = _titles[currentPath] ?? 'Dashboard';
 
-    return Scaffold(
-      backgroundColor: _bg,
-      body: Row(
-        children: [
-          AppSidebar(
-            currentPath: currentPath,
-            role:        auth.role,
-            onSignOut:   () => auth.signOut(),
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                AppTopBar(
-                  user:  auth.userModel,
-                  title: _titles[currentPath] ?? 'Dashboard',
-                ),
-                Expanded(child: child),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < _mobileBreakpoint;
+
+        Widget buildSidebar() => AppSidebar(
+          currentPath: currentPath,
+          role:        auth.role,
+          onSignOut:   () => auth.signOut(),
+        );
+
+        if (isMobile) {
+          return Scaffold(
+            backgroundColor: _bg,
+            drawer: Drawer(width: 220, child: buildSidebar()),
+            body: Builder(
+              builder: (drawerContext) => Column(
+                children: [
+                  AppTopBar(
+                    user:  auth.userModel,
+                    title: title,
+                    showMenuButton: true,
+                    onMenuTap: () => Scaffold.of(drawerContext).openDrawer(),
+                  ),
+                  Expanded(child: child),
+                ],
+              ),
             ),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: _bg,
+          body: Row(
+            children: [
+              buildSidebar(),
+              Expanded(
+                child: Column(
+                  children: [
+                    AppTopBar(user: auth.userModel, title: title),
+                    Expanded(child: child),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

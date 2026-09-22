@@ -70,42 +70,57 @@ class DashboardScreen extends StatelessWidget {
 
 // ── Audit Log dialog ─────────────────────────────────────────────────────────
 Future<void> _openAuditLogDialog(BuildContext context) {
-  final size = MediaQuery.of(context).size;
+  final size     = MediaQuery.of(context).size;
+  final isMobile = size.width < 700;
+
   return showDialog(
     context: context,
     barrierColor: Colors.black.withOpacity(0.35),
-    builder: (context) => Dialog(
-      insetPadding: const EdgeInsets.all(40),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: SizedBox(
-        width:  size.width > 900 ? 820 : size.width * 0.92,
-        height: size.height * 0.82,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            children: [
-              const AuditScreen(),
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Material(
-                  color: Colors.white,
-                  shape: const CircleBorder(),
-                  elevation: 3,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ),
+    builder: (context) {
+      // Shared between both layouts so the close button always overlays
+      // the screen the same way.
+      final content = Stack(
+        children: [
+          const AuditScreen(),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              elevation: 3,
+              child: IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
               ),
-            ],
+            ),
+          ),
+        ],
+      );
+
+      if (isMobile) {
+        // A side-inset modal has no room left for the filter row and
+        // list once padding is subtracted on a phone — go full-screen
+        // instead of trying to shrink the desktop layout down.
+        return Dialog.fullscreen(child: content);
+      }
+
+      return Dialog(
+        insetPadding: const EdgeInsets.all(40),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: SizedBox(
+          width:  size.width > 900 ? 820 : size.width * 0.92,
+          height: size.height * 0.82,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: content,
           ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 // ── Stats row ─────────────────────────────────────────────────────────────────
@@ -139,46 +154,56 @@ class _StatsRow extends StatelessWidget {
                 .fold(
                     0.0, (sum, p) => sum + p.amount);
 
+            final cards = <Widget>[
+              _StatCard(
+                label: 'Total Members',
+                value: '${members.length}',
+                sub:   '$activeMembers active',
+                icon: Icons.people_outline,
+                color: const Color(0xFF1A4A9C),
+              ),
+              if (role == UserRole.admin ||
+                  role == UserRole.accountant) ...[
+                _StatCard(
+                  label: 'Total Collected',
+                  value:
+                      '₱${collectedTotal.toStringAsFixed(0)}',
+                  sub:   'all time',
+                  icon: Icons.payments_outlined,
+                  color: const Color(0xFF1A7A4A),
+                ),
+                _StatCard(
+                  label: 'Overdue Payments',
+                  value: '$overdueCount',
+                  sub:   'need attention',
+                  icon: Icons.warning_amber_outlined,
+                  color: const Color(0xFFCC2200),
+                ),
+              ],
+            ];
+
             return LayoutBuilder(
               builder: (context, constraints) {
+                // Below this, three cards side-by-side can't fit their
+                // text without truncating — stack them full-width instead.
+                final narrow = constraints.maxWidth < 640;
+
+                if (narrow) {
+                  return Column(
+                    children: [
+                      for (int i = 0; i < cards.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 12),
+                        cards[i],
+                      ],
+                    ],
+                  );
+                }
+
                 return Row(
                   children: [
-                    Expanded(
-                      child: _StatCard(
-                        label: 'Total Members',
-                        value: '${members.length}',
-                        sub:   '$activeMembers active',
-                        icon: Icons.people_outline,
-                        color: const Color(0xFF1A4A9C),
-                      ),
-                    ),
-                    if (role == UserRole.admin ||
-                        role ==
-                            UserRole.accountant) ...[
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: _StatCard(
-                          label: 'Total Collected',
-                          value:
-                              '₱${collectedTotal.toStringAsFixed(0)}',
-                          sub:   'all time',
-                          icon: Icons.payments_outlined,
-                          color: const Color(
-                              0xFF1A7A4A),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: _StatCard(
-                          label: 'Overdue Payments',
-                          value: '$overdueCount',
-                          sub:   'need attention',
-                          icon: Icons
-                              .warning_amber_outlined,
-                          color: const Color(
-                              0xFFCC2200),
-                        ),
-                      ),
+                    for (int i = 0; i < cards.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 14),
+                      Expanded(child: cards[i]),
                     ],
                   ],
                 );
@@ -210,6 +235,13 @@ class _StatCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(
           color: const Color(0xFFE0E8F4)),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1A4A9C).withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ],
     ),
     child: Row(
       children: [
@@ -223,24 +255,32 @@ class _StatCard extends StatelessWidget {
               Icon(icon, color: color, size: 20),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 11.5,
-                    color: Colors.grey[600])),
-            Text(value,
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: color)),
-            Text(sub,
-                style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[400])),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.grey[600])),
+              Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: color)),
+              Text(sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[400])),
+            ],
+          ),
         ),
       ],
     ),
@@ -318,6 +358,13 @@ class _RecentActivityCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: const Color(0xFFE0E8F4)),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1A4A9C).withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -464,6 +511,13 @@ class _PendingComplaintsCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: const Color(0xFFE0E8F4)),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1A4A9C).withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,15 +713,23 @@ String _timeAgo(DateTime dt) {
 class AppTopBar extends StatelessWidget {
   final UserModel? user;
   final String     title;
+  final bool         showMenuButton;
+  final VoidCallback? onMenuTap;
   static const Color _navy   = Color(0xFF1E293B);
   static const Color _accent = Color(0xFF2563EB);
-  const AppTopBar({super.key, this.user, this.title = 'Dashboard'});
+  const AppTopBar({
+    super.key,
+    this.user,
+    this.title = 'Dashboard',
+    this.showMenuButton = false,
+    this.onMenuTap,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
     height: 60,
-    padding: const EdgeInsets.symmetric(
-        horizontal: 28),
+    padding: EdgeInsets.symmetric(
+        horizontal: showMenuButton ? 16 : 28),
     decoration: const BoxDecoration(
       color: Colors.white,
       border: Border(
@@ -676,6 +738,16 @@ class AppTopBar extends StatelessWidget {
     ),
     child: Row(
       children: [
+        if (showMenuButton)
+          InkWell(
+            onTap: onMenuTap,
+            borderRadius: BorderRadius.circular(6),
+            child: const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Icon(Icons.menu,
+                  color: _navy, size: 22),
+            ),
+          ),
         Text(title,
             style: const TextStyle(
                 fontSize: 16,
@@ -697,12 +769,14 @@ class AppTopBar extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: _accent)),
           ),
-          const SizedBox(width: 10),
-          Text(user!.displayName,
-              style: const TextStyle(
-                  fontSize: 13.5,
-                  color: _navy,
-                  fontWeight: FontWeight.w500)),
+          if (!showMenuButton) ...[
+            const SizedBox(width: 10),
+            Text(user!.displayName,
+                style: const TextStyle(
+                    fontSize: 13.5,
+                    color: _navy,
+                    fontWeight: FontWeight.w500)),
+          ],
         ],
       ],
     ),

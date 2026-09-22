@@ -3,16 +3,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // Added flutter_dotenv import
 import 'core/providers/auth_provider.dart';
 import 'core/routing/app_router.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Load environment variables before initializing app or services
-  await dotenv.load(fileName: "env_config.txt");
+
+  // No more dotenv / env_config.txt — nothing this app needs at runtime
+  // is a real secret anymore (Cloudinary uploads are unsigned, and push
+  // notifications go through the send-notification serverless function,
+  // which is the only place ONESIGNAL_REST_API_KEY still lives).
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,

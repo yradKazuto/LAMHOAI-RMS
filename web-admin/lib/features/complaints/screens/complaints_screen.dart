@@ -66,11 +66,16 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   Widget build(BuildContext context) {
     final auth     = context.watch<AuthProvider>();
     final canUpdate = auth.isAdmin || auth.isOfficer;
+    final phoneScreen = MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
       backgroundColor: _bg,
       body: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: EdgeInsets.fromLTRB(
+            phoneScreen ? 16 : 28,
+            phoneScreen ? 14 : 28,
+            phoneScreen ? 16 : 28,
+            phoneScreen ? 16 : 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -101,99 +106,287 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: phoneScreen ? 14 : 24),
 
             // ── Filters ───────────────────────────────────────────────────────
-            Row(
-              children: [
-                SizedBox(
-                  width: 260,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Search member or subject...',
-                      hintStyle: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[400]),
-                      prefixIcon:
-                          const Icon(Icons.search, size: 18),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding:
-                          const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFD0DBEE))),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFD0DBEE))),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                              color: _accent, width: 1.5)),
-                    ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final searchField = TextField(
+                  controller: _searchCtrl,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search member or subject...',
+                    hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[400]),
+                    prefixIcon:
+                        const Icon(Icons.search, size: 18),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFD0DBEE))),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFD0DBEE))),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: _accent, width: 1.5)),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
+                );
+
+                final hasActiveFilter =
+                    _searchCtrl.text.isNotEmpty ||
+                    _statusFilter != null;
+
+                final clearButton = TextButton.icon(
+                  onPressed: () => setState(() {
+                    _searchCtrl.clear();
+                    _statusFilter = null;
+                  }),
+                  icon: const Icon(Icons.clear, size: 15),
+                  label: const Text('Clear'),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Colors.grey[600]),
+                );
+
+                void openFilterSheet() {
+                  String? tempStatus = _statusFilter;
+
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
+                    builder: (sheetCtx) => StatefulBuilder(
+                      builder: (sheetCtx, setSheetState) => SafeArea(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(20, 14, 20, 20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Center(
+                                child: Container(
+                                  width: 36,
+                                  height: 4,
+                                  margin:
+                                      const EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius:
+                                        BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  const Text('Filter Complaints',
+                                      style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                          color: _navy)),
+                                  const Spacer(),
+                                  if (tempStatus != null)
+                                    TextButton(
+                                      onPressed: () => setSheetState(
+                                          () => tempStatus = null),
+                                      child: const Text('Reset'),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text('Status',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[600])),
+                              const SizedBox(height: 6),
+                              SizedBox(
+                                width: double.infinity,
+                                child: Container(
+                                  height: 42,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius:
+                                        BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color:
+                                            const Color(0xFFD0DBEE)),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String?>(
+                                      value: tempStatus,
+                                      isExpanded: true,
+                                      hint: Text('All Statuses',
+                                          style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey[500])),
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF1A2B4A)),
+                                      icon: const Icon(Icons.expand_more,
+                                          size: 18),
+                                      items: [
+                                        const DropdownMenuItem(
+                                            value: null,
+                                            child: Text('All Statuses')),
+                                        ...ComplaintStatus.values.map(
+                                            (s) => DropdownMenuItem(
+                                                  value: s.name,
+                                                  child: Text(s.label),
+                                                )),
+                                      ],
+                                      onChanged: (v) => setSheetState(
+                                          () => tempStatus = v),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    setState(
+                                        () => _statusFilter = tempStatus);
+                                    Navigator.pop(sheetCtx);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _navy,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                  ),
+                                  child: const Text('Apply Filters'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                final filterButton = Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: const Color(0xFFD0DBEE)),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String?>(
-                      value: _statusFilter,
-                      hint: Text('All Statuses',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[500])),
-                      style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF1A2B4A)),
-                      icon: const Icon(Icons.expand_more,
-                          size: 18),
-                      items: [
-                        const DropdownMenuItem(
-                            value: null,
-                            child: Text('All Statuses')),
-                        ...ComplaintStatus.values.map((s) =>
-                            DropdownMenuItem(
-                              value: s.name,
-                              child: Text(s.label),
-                            )),
-                      ],
-                      onChanged: (v) =>
-                          setState(() => _statusFilter = v),
+                    onTap: openFilterSheet,
+                    child: Container(
+                      height: 42,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: _statusFilter != null
+                                ? _accent
+                                : const Color(0xFFD0DBEE)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.filter_list,
+                              size: 18,
+                              color: _statusFilter != null
+                                  ? _accent
+                                  : Colors.grey[600]),
+                          const SizedBox(width: 6),
+                          Text(
+                              _statusFilter != null
+                                  ? 'Filter (1)'
+                                  : 'Filter',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _statusFilter != null
+                                      ? _accent
+                                      : const Color(0xFF1A2B4A))),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                if (_searchCtrl.text.isNotEmpty ||
-                    _statusFilter != null) ...[
-                  const SizedBox(width: 10),
-                  TextButton.icon(
-                    onPressed: () => setState(() {
-                      _searchCtrl.clear();
-                      _statusFilter = null;
-                    }),
-                    icon: const Icon(Icons.clear, size: 15),
-                    label: const Text('Clear'),
-                    style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[600]),
-                  ),
-                ],
-              ],
+                );
+
+                // A fixed-width search box plus a dropdown can't share
+                // one line below this width — swap in the Filter
+                // button beside the search field instead.
+                final narrow = constraints.maxWidth < 560;
+
+                if (narrow) {
+                  return Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: searchField),
+                          const SizedBox(width: 10),
+                          filterButton,
+                        ],
+                      ),
+                      if (hasActiveFilter) ...[
+                        const SizedBox(height: 10),
+                        clearButton,
+                      ],
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    SizedBox(width: 260, child: searchField),
+                    const SizedBox(width: 12),
+                    _FilterPopoverButton(
+                      activeFilterCount:
+                          _statusFilter != null ? 1 : 0,
+                      panelBuilder: (context, setPanelState, close) => [
+                        _PopoverFilterField(
+                          label: 'Status',
+                          child: _FilterChipGroup<String?>(
+                            value: _statusFilter,
+                            options: [
+                              const MapEntry(null, 'All Statuses'),
+                              ...ComplaintStatus.values.map(
+                                  (s) => MapEntry(s.name, s.label)),
+                            ],
+                            onChanged: (v) {
+                              setState(() => _statusFilter = v);
+                              setPanelState(() {});
+                            },
+                          ),
+                        ),
+                      ],
+                      onReset: () =>
+                          setState(() => _statusFilter = null),
+                    ),
+                    if (hasActiveFilter) ...[
+                      const SizedBox(width: 10),
+                      clearButton,
+                    ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
 
@@ -211,70 +404,92 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                   final complaints =
                       _filtered(snap.data ?? []);
 
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: const Color(0xFFE0E8F4)),
-                    ),
-                    child: Column(
-                      children: [
-                        // Header
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 14),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF7F9FC),
-                            borderRadius:
-                                BorderRadius.vertical(
-                                    top: Radius.circular(12)),
-                          ),
-                          child: const Row(
-                            children: [
-                              Expanded(flex: 2, child: _TH('Member')),
-                              Expanded(flex: 3, child: _TH('Subject')),
-                              Expanded(flex: 2, child: _TH('Date Filed')),
-                              Expanded(flex: 2, child: _TH('Status')),
-                              SizedBox(width: 48),
-                            ],
-                          ),
-                        ),
-                        const Divider(
-                            height: 1,
-                            color: Color(0xFFE0E8F4)),
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Fixed Member/Subject/Date/Status columns can't
+                      // stay readable below this width — switch each
+                      // row to a stacked card instead.
+                      final compact = constraints.maxWidth < 700;
 
-                        if (complaints.isEmpty)
-                          const Expanded(
-                            child: Center(
-                              child: Text(
-                                  'No complaints found.',
-                                  style: TextStyle(
-                                      color: Colors.grey)),
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: const Color(0xFFE0E8F4)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF1A4A9C)
+                                  .withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
                             ),
-                          )
-                        else
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: complaints.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(
-                                      height: 1,
-                                      color:
-                                          Color(0xFFEEF2F9)),
-                              itemBuilder: (context, i) =>
-                                  _ComplaintRow(
-                                complaint:  complaints[i],
-                                canUpdate:  canUpdate,
-                                fs:         _fs,
-                                auth:       auth,
-                                statusColor: _statusColor,
-                                statusBg:    _statusBg,
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // Header (desktop/tablet column labels only —
+                            // a compact card layout has no matching
+                            // columns to label)
+                            if (!compact) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 14),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF7F9FC),
+                                  borderRadius:
+                                      BorderRadius.vertical(
+                                          top: Radius.circular(12)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Expanded(flex: 2, child: _TH('Member')),
+                                    Expanded(flex: 3, child: _TH('Subject')),
+                                    Expanded(flex: 2, child: _TH('Date Filed')),
+                                    Expanded(flex: 2, child: _TH('Status')),
+                                    SizedBox(width: 48),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ),
-                      ],
-                    ),
+                              const Divider(
+                                  height: 1,
+                                  color: Color(0xFFE0E8F4)),
+                            ],
+
+                            if (complaints.isEmpty)
+                              const Expanded(
+                                child: Center(
+                                  child: Text(
+                                      'No complaints found.',
+                                      style: TextStyle(
+                                          color: Colors.grey)),
+                                ),
+                              )
+                            else
+                              Expanded(
+                                child: ListView.separated(
+                                  itemCount: complaints.length,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(
+                                          height: 1,
+                                          color:
+                                              Color(0xFFEEF2F9)),
+                                  itemBuilder: (context, i) =>
+                                      _ComplaintRow(
+                                    complaint:  complaints[i],
+                                    canUpdate:  canUpdate,
+                                    fs:         _fs,
+                                    auth:       auth,
+                                    statusColor: _statusColor,
+                                    statusBg:    _statusBg,
+                                    compact:     compact,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -294,6 +509,7 @@ class _ComplaintRow extends StatelessWidget {
   final AuthProvider     auth;
   final Color Function(ComplaintStatus) statusColor;
   final Color Function(ComplaintStatus) statusBg;
+  final bool             compact;
 
   const _ComplaintRow({
     required this.complaint,
@@ -302,15 +518,100 @@ class _ComplaintRow extends StatelessWidget {
     required this.auth,
     required this.statusColor,
     required this.statusBg,
+    this.compact = false,
   });
 
   String _fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/'
       '${d.month.toString().padLeft(2, '0')}/${d.year}';
 
+  Widget _statusPill() => Container(
+    padding: const EdgeInsets.symmetric(
+        horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: statusBg(complaint.status),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      complaint.status.label,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          color: statusColor(complaint.status)),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    if (compact) {
+      // Stacked card — the fixed Member/Subject/Date/Status columns
+      // don't have room to stay readable at phone widths.
+      return Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+                color: statusColor(complaint.status), width: 3),
+          ),
+        ),
+        child: InkWell(
+        onTap: () => _showDetailSheet(context),
+        hoverColor: const Color(0xFFF4F7FB),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(complaint.memberName,
+                        style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E293B)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: 8),
+                  _statusPill(),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(complaint.subject,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[700]),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(_fmt(complaint.createdAt),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500])),
+                  const Spacer(),
+                  Icon(Icons.chevron_right,
+                      size: 18, color: Colors.grey[400]),
+                ],
+              ),
+            ],
+          ),
+        ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+              color: statusColor(complaint.status), width: 3),
+        ),
+      ),
+      child: InkWell(
       onTap: () => _showDetailSheet(context),
       hoverColor: const Color(0xFFF4F7FB),
       child: Padding(
@@ -344,22 +645,7 @@ class _ComplaintRow extends StatelessWidget {
             ),
             Expanded(
               flex: 2,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusBg(complaint.status),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  complaint.status.label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor(complaint.status)),
-                ),
-              ),
+              child: _statusPill(),
             ),
             SizedBox(
               width: 48,
@@ -368,6 +654,7 @@ class _ComplaintRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -728,6 +1015,277 @@ class _ComplaintDetailSheetState
       ),
     );
   }
+}
+
+// ── Filter popover button (desktop) ──────────────────────────────────────────
+// Anchors a "Filter" button to a floating panel below it via
+// CompositedTransformTarget/Follower + an OverlayEntry — a proper
+// desktop dropdown panel, rather than reusing the mobile bottom sheet
+// on a screen wide enough that a sheet sliding up from the bottom
+// edge would look out of place.
+class _FilterPopoverButton extends StatefulWidget {
+  final int activeFilterCount;
+  final List<Widget> Function(
+    BuildContext context,
+    void Function(void Function()) setPanelState,
+    VoidCallback close,
+  ) panelBuilder;
+  final VoidCallback onReset;
+
+  const _FilterPopoverButton({
+    required this.activeFilterCount,
+    required this.panelBuilder,
+    required this.onReset,
+  });
+
+  @override
+  State<_FilterPopoverButton> createState() => _FilterPopoverButtonState();
+}
+
+class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
+  static const Color _navy   = Color(0xFF1E293B);
+  static const Color _accent = Color(0xFF2563EB);
+
+  final LayerLink _link = LayerLink();
+  OverlayEntry? _entry;
+
+  void _toggle() => _entry == null ? _open() : _close();
+
+  void _open() {
+    final overlay = Overlay.of(context);
+    _entry = OverlayEntry(
+      builder: (overlayContext) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _close,
+            ),
+          ),
+          CompositedTransformFollower(
+            link: _link,
+            showWhenUnlinked: false,
+            offset: const Offset(0, 48),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                color: Colors.transparent,
+                child: GestureDetector(
+                  onTap: () {},
+                  child: StatefulBuilder(
+                    builder: (panelContext, setPanelState) => Container(
+                      width: 300,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border:
+                            Border.all(color: const Color(0xFFE0E8F4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.12),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('Filters',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: _navy)),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: () {
+                                  widget.onReset();
+                                  setPanelState(() {});
+                                },
+                                style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 0),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap),
+                                child: const Text('Reset',
+                                    style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          ...widget.panelBuilder(
+                              panelContext, setPanelState, _close),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _close,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _navy,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(8)),
+                              ),
+                              child: const Text('Done',
+                                  style: TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    overlay.insert(_entry!);
+    setState(() {});
+  }
+
+  void _close() {
+    _entry?.remove();
+    _entry = null;
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _entry?.remove();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _link,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: _toggle,
+          child: Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: widget.activeFilterCount > 0
+                      ? _accent
+                      : const Color(0xFFD0DBEE)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.filter_list,
+                    size: 18,
+                    color: widget.activeFilterCount > 0
+                        ? _accent
+                        : Colors.grey[600]),
+                const SizedBox(width: 6),
+                Text(
+                    widget.activeFilterCount > 0
+                        ? 'Filter (${widget.activeFilterCount})'
+                        : 'Filter',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: widget.activeFilterCount > 0
+                            ? _accent
+                            : const Color(0xFF1A2B4A))),
+                const SizedBox(width: 4),
+                Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// A row of tappable chips for picking one filter value — used inside
+// popover panels instead of a nested DropdownButton, since a dropdown
+// menu opening from inside a custom OverlayEntry panel can end up
+// rendering behind the panel itself. A flat chip list avoids that.
+class _FilterChipGroup<T> extends StatelessWidget {
+  final T value;
+  final List<MapEntry<T, String>> options;
+  final ValueChanged<T> onChanged;
+
+  const _FilterChipGroup({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  static const Color _accent = Color(0xFF2563EB);
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: options.map((opt) {
+      final selected = opt.key == value;
+      return InkWell(
+        onTap: () => onChanged(opt.key),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? _accent.withOpacity(0.1)
+                : const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: selected ? _accent : const Color(0xFFD0DBEE)),
+          ),
+          child: Text(opt.value,
+              style: TextStyle(
+                  fontSize: 12.5,
+                  color:
+                      selected ? _accent : const Color(0xFF1A2B4A),
+                  fontWeight:
+                      selected ? FontWeight.w600 : FontWeight.w400)),
+        ),
+      );
+    }).toList(),
+  );
+}
+
+// A labeled filter field inside a popover panel.
+class _PopoverFilterField extends StatelessWidget {
+  final String label;
+  final Widget child;
+  const _PopoverFilterField({required this.label, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600])),
+        const SizedBox(height: 5),
+        SizedBox(width: double.infinity, child: child),
+      ],
+    ),
+  );
 }
 
 class _TH extends StatelessWidget {

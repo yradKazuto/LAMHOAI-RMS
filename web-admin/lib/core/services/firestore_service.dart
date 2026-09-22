@@ -4,6 +4,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/member_model.dart';
 import '../models/payment_model.dart';
+import '../models/lot_model.dart';
 import '../models/document_model.dart';
 import '../models/staff_model.dart';
 import '../models/announcement_model.dart';
@@ -16,20 +17,80 @@ import '../models/user_model.dart';
 class GenerateDuesResult {
   final int created;
   final int skipped;
-  final int totalActiveMembers;
+
+  /// Annual fees: number of billable members. Monthly dues: number of
+  /// billable LOTS (a member with two lots counts twice).
+  final int total;
+
+  /// Monthly dues only: billable members who own no lot, so nothing could
+  /// be generated for them.
+  final int withoutLot;
 
   const GenerateDuesResult({
     required this.created,
     required this.skipped,
-    required this.totalActiveMembers,
+    required this.total,
+    this.withoutLot = 0,
   });
+}
+
+/// Compares two numbers/labels naturally ("2" < "10").
+int _naturalCompare(String a, String b) {
+  final na = int.tryParse(a.trim());
+  final nb = int.tryParse(b.trim());
+  if (na != null && nb != null) return na.compareTo(nb);
+  return a.trim().toLowerCase().compareTo(b.trim().toLowerCase());
+}
+
+/// The one ordering used everywhere a member's lots are listed. It also
+/// defines a member's "first" lot, which inherits their pre-per-lot dues
+/// records — so keep every caller on this function.
+int compareLotsForBilling(LotModel a, LotModel b) {
+  var c = _naturalCompare(a.phase, b.phase);
+  if (c != 0) return c;
+  c = _naturalCompare(a.block, b.block);
+  return c != 0 ? c : _naturalCompare(a.lotNumber, b.lotNumber);
+}
+
+class _LotBill {
+  final MemberModel member;
+  final LotModel lot;
+  const _LotBill(this.member, this.lot);
 }
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // Members who are billed dues. Delinquent members must keep being billed
+  // (excluding them stopped the very members who owe money from accruing
+  // and from showing on the dues screen); only inactive members are skipped.
+  static final List<String> _billableStatuses = [
+    MemberStatus.active.name,
+    MemberStatus.delinquent.name,
+  ];
+
   // Expose db for generating doc IDs externally
   FirebaseFirestore get db => _db;
+
+  /// Firestore caps a WriteBatch at 500 operations. Runs [write] for indexes
+  /// 0..total-1 in batches of [chunk] so bulk jobs keep working as the
+  /// association grows. Not atomic across chunks — every caller here is
+  /// safe to re-run (generators skip existing records; the sync/penalty
+  /// jobs only touch records that still need changing).
+  Future<void> _commitInChunks(
+    int total,
+    void Function(WriteBatch batch, int i) write, {
+    int chunk = 400,
+  }) async {
+    for (var start = 0; start < total; start += chunk) {
+      final end   = (start + chunk < total) ? start + chunk : total;
+      final batch = _db.batch();
+      for (var i = start; i < end; i++) {
+        write(batch, i);
+      }
+      await batch.commit();
+    }
+  }
 
   CollectionReference get _users         => _db.collection('users');
   CollectionReference get _payments      => _db.collection('payments');
@@ -171,20 +232,23 @@ class FirestoreService {
   /// Requires a composite index on (status ==, dueDate <) — Firestore will
   /// give you a console link to create it the first time this runs.
   Future<int> syncOverdueStatuses() async {
-    final now  = DateTime.now();
+    // Start of today, NOT now: dueDate is stored at midnight, so comparing
+    // with the current time flipped a record to overdue at 12:00 AM of its
+    // own due date. This matches PaymentModel.displayStatus.
+    final now   = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final snap = await _payments
         .where('status', isEqualTo: PaymentStatus.unpaid.name)
-        .where('dueDate', isLessThan: Timestamp.fromDate(now))
+        .where('dueDate', isLessThan: Timestamp.fromDate(today))
         .get();
 
     if (snap.docs.isEmpty) return 0;
 
-    final batch = _db.batch();
-    for (final doc in snap.docs) {
-      batch.update(doc.reference, {'status': PaymentStatus.overdue.name});
-    }
-    await batch.commit();
-    return snap.docs.length;
+    final docs = snap.docs;
+    await _commitInChunks(docs.length, (batch, i) {
+      batch.update(docs[i].reference, {'status': PaymentStatus.overdue.name});
+    });
+    return docs.length;
   }
 
   /// Adds the flat overdue penalty to any `dues`/`membershipFee` record
@@ -202,9 +266,11 @@ class FirestoreService {
   /// after a broader dueDate query handles old and new docs correctly,
   /// at the cost of reading somewhat more docs than strictly necessary.
   ///
-  /// Requires a composite index on (dueDate <) — Firestore will give you
-  /// a console link to create it the first time this runs, same as the
-  /// other query methods here.
+  /// The query is limited to still-open records (unpaid/overdue) so it does
+  /// not re-read every paid record in the collection each time an admin
+  /// opens Payments (that grows without bound and eats the free read
+  /// quota). Requires a composite index on (status, dueDate) — Firestore
+  /// will give you a console link the first time this runs.
   Future<int> applyOverduePenalties({
     required double penaltyAmount,
     required int    graceDays,
@@ -213,6 +279,10 @@ class FirestoreService {
 
     final cutoff = DateTime.now().subtract(Duration(days: graceDays));
     final snap = await _payments
+        .where('status', whereIn: [
+          PaymentStatus.unpaid.name,
+          PaymentStatus.overdue.name,
+        ])
         .where('dueDate', isLessThan: Timestamp.fromDate(cutoff))
         .get();
 
@@ -228,16 +298,15 @@ class FirestoreService {
 
     if (toPenalize.isEmpty) return 0;
 
-    final batch = _db.batch();
-    for (final doc in toPenalize) {
+    await _commitInChunks(toPenalize.length, (batch, i) {
+      final doc    = toPenalize[i];
       final data   = doc.data() as Map<String, dynamic>;
       final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
       batch.update(doc.reference, {
         'amount':         amount + penaltyAmount,
         'penaltyApplied': true,
       });
-    }
-    await batch.commit();
+    });
     return toPenalize.length;
   }
 
@@ -283,7 +352,7 @@ class FirestoreService {
   }) async {
     final membersSnap = await _users
         .where('role', isEqualTo: 'member')
-        .where('status', isEqualTo: MemberStatus.active.name)
+        .where('status', whereIn: _billableStatuses)
         .get();
     final members = membersSnap.docs
         .map((d) => MemberModel.fromMap(
@@ -309,16 +378,24 @@ class FirestoreService {
       return GenerateDuesResult(
         created: 0,
         skipped: members.length,
-        totalActiveMembers: members.length,
+        total: members.length,
       );
     }
 
-    final batch = _db.batch();
     final now   = DateTime.now();
     final intendedDueDate = DateTime(year, 1, 31);
     final graceDueDate    = now.add(Duration(days: generationGraceDays));
-    final dueDate = intendedDueDate.isAfter(now) ? intendedDueDate : graceDueDate;
-    for (final member in toCreate) {
+    // The year's records are looked up by dueDate falling inside [year]
+    // (see streamMembershipFeesForYear and the duplicate check above), so
+    // the pushed-back due date must never spill into the next year — a fee
+    // generated in December used to land in January and vanish from its own
+    // year's list (and could be generated a second time).
+    final lastDayOfYear = DateTime(year, 12, 31);
+    final pushedDueDate =
+        graceDueDate.isAfter(lastDayOfYear) ? lastDayOfYear : graceDueDate;
+    final dueDate = intendedDueDate.isAfter(now) ? intendedDueDate : pushedDueDate;
+    await _commitInChunks(toCreate.length, (batch, i) {
+      final member = toCreate[i];
       final ref = _payments.doc();
       final payment = PaymentModel(
         id:         ref.id,
@@ -333,13 +410,12 @@ class FirestoreService {
         createdAt:  DateTime.now(),
       );
       batch.set(ref, payment.toMap());
-    }
-    await batch.commit();
+    });
 
     return GenerateDuesResult(
       created: toCreate.length,
       skipped: members.length - toCreate.length,
-      totalActiveMembers: members.length,
+      total: members.length,
     );
   }
 
@@ -363,30 +439,50 @@ class FirestoreService {
             .toList());
   }
 
-  /// Creates one unpaid monthly-dues record per active member for
-  /// [year]/[month], at [amount]. The caller is responsible for resolving
-  /// [amount] via RateHistoryService.getRateForMonth() *before* calling
-  /// this — that's what locks the obligation to the rate active when the
-  /// month began (Option A from the design discussion), independent of
-  /// whether/when it's actually paid. Skips members who already have a
-  /// dues record for that month (duplicate prevention is by calendar
-  /// month of dueDate). Uses a single WriteBatch — fine for typical HOA
-  /// member counts, but batches cap at 500 writes.
+  /// Creates one unpaid monthly-dues record per LOT for [year]/[month], at
+  /// [amount] (every lot pays the same rate). A lot is billed to its owner
+  /// (`lot.uid`) when that owner is an active or delinquent member — a member
+  /// with two lots therefore gets two records, each carrying its `lotId`.
+  ///
+  /// [lots] is the current contents of the lots collection (the caller
+  /// fetches it, e.g. `LotService().streamLots().first`). Members who own no
+  /// lot can't be billed and are counted in `withoutLot`.
+  ///
+  /// The caller resolves [amount] via RateHistoryService.getRateForMonth()
+  /// *before* calling this — that locks the obligation to the rate active
+  /// when the month began, independent of whether/when it's paid.
+  ///
+  /// Duplicate prevention is per (member, lot, calendar month of dueDate).
+  /// A record made before per-lot billing existed has no `lotId`; it is
+  /// treated as belonging to that member's FIRST lot (compareLotsForBilling
+  /// order) so the switch doesn't re-bill the current month. Uses chunked
+  /// batches, so any number of lots works.
   Future<GenerateDuesResult> generateMonthlyDues({
     required int    year,
     required int    month,
     required double amount,
     required String recordedBy,
+    required List<LotModel> lots,
     int             dueDay = 15,
   }) async {
     final membersSnap = await _users
         .where('role', isEqualTo: 'member')
-        .where('status', isEqualTo: MemberStatus.active.name)
+        .where('status', whereIn: _billableStatuses)
         .get();
     final members = membersSnap.docs
         .map((d) => MemberModel.fromMap(
             d.data() as Map<String, dynamic>, d.id))
         .toList();
+
+    final lotsByUid = <String, List<LotModel>>{};
+    for (final lot in lots) {
+      final uid = lot.uid?.trim() ?? '';
+      if (uid.isEmpty) continue;
+      lotsByUid.putIfAbsent(uid, () => []).add(lot);
+    }
+    for (final list in lotsByUid.values) {
+      list.sort(compareLotsForBilling);
+    }
 
     final start = DateTime(year, month, 1);
     final end   = DateTime(year, month + 1, 1);
@@ -395,47 +491,79 @@ class FirestoreService {
         .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('dueDate', isLessThan: Timestamp.fromDate(end))
         .get();
-    final existingUids = existingSnap.docs
-        .map((d) => (d.data() as Map<String, dynamic>)['uid'] as String? ?? '')
-        .toSet();
 
-    final toCreate = members
-        .where((m) => !existingUids.contains(m.uid))
-        .toList();
+    final existingLotKeys = <String>{}; // "uid|lotId"
+    final legacyUids      = <String>{}; // records with no lotId
+    for (final d in existingSnap.docs) {
+      final data  = d.data() as Map<String, dynamic>;
+      final uid   = data['uid']   as String? ?? '';
+      final lotId = data['lotId'] as String? ?? '';
+      if (lotId.isEmpty) {
+        legacyUids.add(uid);
+      } else {
+        existingLotKeys.add('$uid|$lotId');
+      }
+    }
+
+    final toCreate = <_LotBill>[];
+    var billable   = 0;
+    var withoutLot = 0;
+    for (final m in members) {
+      final owned = lotsByUid[m.uid] ?? const <LotModel>[];
+      if (owned.isEmpty) {
+        withoutLot++;
+        continue;
+      }
+      for (var i = 0; i < owned.length; i++) {
+        billable++;
+        final lot = owned[i];
+        final covered = existingLotKeys.contains('${m.uid}|${lot.id}') ||
+            (i == 0 && legacyUids.contains(m.uid));
+        if (!covered) toCreate.add(_LotBill(m, lot));
+      }
+    }
 
     if (toCreate.isEmpty) {
       return GenerateDuesResult(
         created: 0,
-        skipped: members.length,
-        totalActiveMembers: members.length,
+        skipped: billable,
+        total: billable,
+        withoutLot: withoutLot,
       );
     }
 
-    final batch   = _db.batch();
     final dueDate = DateTime(year, month, dueDay);
-    for (final member in toCreate) {
-      final ref = _payments.doc();
+    final period  = '${month.toString().padLeft(2, '0')}/$year';
+    await _commitInChunks(toCreate.length, (batch, i) {
+      final bill  = toCreate[i];
+      final ref   = _payments.doc();
+      final label = buildLotLabel(
+          phase: bill.lot.phase,
+          block: bill.lot.block,
+          lotNumber: bill.lot.lotNumber);
       final payment = PaymentModel(
         id:         ref.id,
-        uid:        member.uid,
-        memberName: member.name,
+        uid:        bill.member.uid,
+        memberName: bill.member.name,
         type:       PaymentType.dues,
-        amount:     amount, // rate locked to this month, per Option A
+        amount:     amount, // rate locked to this month
         status:     PaymentStatus.unpaid,
         dueDate:    dueDate,
         recordedBy: recordedBy,
-        notes:      'Auto-generated monthly dues for '
-            '${month.toString().padLeft(2, '0')}/$year',
+        notes:      'Auto-generated monthly dues for $period'
+            '${label.isEmpty ? '' : ' — $label'}',
         createdAt:  DateTime.now(),
+        lotId:      bill.lot.id,
+        lotLabel:   label,
       );
       batch.set(ref, payment.toMap());
-    }
-    await batch.commit();
+    });
 
     return GenerateDuesResult(
       created: toCreate.length,
-      skipped: members.length - toCreate.length,
-      totalActiveMembers: members.length,
+      skipped: billable - toCreate.length,
+      total: billable,
+      withoutLot: withoutLot,
     );
   }
 

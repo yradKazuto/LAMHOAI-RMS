@@ -3,6 +3,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/hoa_settings_model.dart';
 import '../models/audit_log_model.dart';
+import '../models/hoa_settings_model.dart' show DuesConfig;
+import '../models/dues_config_history_model.dart';
 
 class SettingsService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -10,6 +12,7 @@ class SettingsService {
   static const String _settingsDoc  = 'hoa_settings';
   static const String _settingsColl = 'settings';
   static const String _auditColl    = 'audit_logs';
+  static const String _duesHistColl = 'dues_config_history';
 
   // ── HOA Settings ──────────────────────────────────────────────────────────
 
@@ -45,6 +48,44 @@ class SettingsService {
         .collection(_settingsColl)
         .doc(_settingsDoc)
         .set(settings.toMap(), SetOptions(merge: true));
+  }
+
+  // ── Dues Configuration History ───────────────────────────────────────────
+  // Tracks changes to DuesConfig (annual, specialAssessment, penalty,
+  // penaltyGraceDays) over time — separate from the monthly dues rate,
+  // which already has its own history (MonthlyRateModel).
+
+  Stream<List<DuesConfigHistoryModel>> streamDuesConfigHistory({
+    int limit = 100,
+  }) {
+    return _db
+        .collection(_duesHistColl)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => DuesConfigHistoryModel.fromMap(d.data(), d.id))
+            .toList());
+  }
+
+  /// Writes a history record. Call this ONLY when at least one DuesConfig
+  /// field actually changed — the caller (Settings screen) compares old vs
+  /// new before calling, so every row in the table represents a real
+  /// change, not a no-op save.
+  Future<void> recordDuesConfigChange(
+    DuesConfig dues, {
+    required String changedBy,
+  }) async {
+    final ref = _db.collection(_duesHistColl).doc();
+    await ref.set(DuesConfigHistoryModel(
+      id: ref.id,
+      annual: dues.annual,
+      specialAssessment: dues.specialAssessment,
+      penalty: dues.penalty,
+      penaltyGraceDays: dues.penaltyGraceDays,
+      changedBy: changedBy,
+      createdAt: DateTime.now(),
+    ).toMap());
   }
 
   // ── Audit Logs ────────────────────────────────────────────────────────────

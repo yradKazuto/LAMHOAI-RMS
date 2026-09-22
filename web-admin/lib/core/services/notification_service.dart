@@ -1,37 +1,31 @@
 // core/services/notification_service.dart
-// Sends push notifications via OneSignal's REST API — no Cloud Function,
-// no server of your own required. Also writes a notification history
-// document per member to Firestore, so NotificationsScreen shows the
-// history even independent of push delivery success.
+// Sends push notifications through a small serverless function
+// (send-notification, deployed on Vercel/Netlify — see /notify-server in
+// the project root) instead of calling OneSignal directly. That function
+// is the only place ONESIGNAL_REST_API_KEY exists now; this client only
+// ever sends its own Firebase ID token, which the function verifies and
+// checks for an admin role before it will send anything. Also writes a
+// notification history document per member to Firestore, so
+// NotificationsScreen shows the history even independent of push
+// delivery success.
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // ── OneSignal config ─────────────────────────────────────────────────────
-  // Read from .env at call time (NOT a compile-time const — dotenv loads
-  // asynchronously in main.dart before this is ever used, but the actual
-  // values aren't known until runtime, so these must be getters).
-  //
-  // .env must contain:
-  //   ONESIGNAL_APP_ID=9c051b93-8eb3-47cc-bdc3-bb783dca00c0
-  //   ONESIGNAL_REST_API_KEY=os_v2_app_...
-  //
-  // NOTE: dotenv keeps the key out of git / GitHub push protection, but
-  // it does NOT hide it from the browser at runtime — Flutter Web still
-  // bundles .env as a compiled asset, so the key remains visible to
-  // anyone inspecting network requests or the app bundle. Acceptable for
-  // a small trusted admin audience (e.g. capstone project); a
-  // public-facing admin panel should move this call behind a server you
-  // control instead.
-  static String get _oneSignalAppId => dotenv.env['ONESIGNAL_APP_ID'] ?? '';
-  static String get _oneSignalRestApiKey =>
-      dotenv.env['ONESIGNAL_REST_API_KEY'] ?? '';
-  static const String _oneSignalUrl = 'https://api.onesignal.com/notifications';
+  // ── Serverless function config ──────────────────────────────────────────
+  // Not a secret — this is just the public URL of your deployed function.
+  // Replace with your actual Vercel/Netlify deployment URL.
+  static const String _sendNotificationUrl =
+      'https://lamhoai-notify-server.vercel.app/api/send-notification';
+
+  Future<String?> _idToken() =>
+      FirebaseAuth.instance.currentUser?.getIdToken() ??
+      Future.value(null);
 
   // ── Send announcement notification to all members ──────────────────────────
   Future<NotificationResult> sendAnnouncementToAll({
@@ -56,17 +50,17 @@ class NotificationService {
         );
       }
 
+      final token = await _idToken();
       final response = await http.post(
-        Uri.parse(_oneSignalUrl),
+        Uri.parse(_sendNotificationUrl),
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Key $_oneSignalRestApiKey',
+          'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
-          'app_id': _oneSignalAppId,
-          'included_segments': ['Total Subscriptions'],
-          'headings': {'en': title},
-          'contents': {'en': body},
+          'target': 'all',
+          'title': title,
+          'body': body,
           'data': {
             'type': 'announcement',
             'announcementId': announcementId,
@@ -80,7 +74,7 @@ class NotificationService {
           sent: 0,
           failed: memberUids.length,
           message:
-              'OneSignal error (${response.statusCode}): ${response.body}',
+              'Send-notification error (${response.statusCode}): ${response.body}',
         );
       }
 
@@ -131,17 +125,18 @@ class NotificationService {
     Map<String, dynamic> extraData = const {},
   }) async {
     try {
+      final token = await _idToken();
       final response = await http.post(
-        Uri.parse(_oneSignalUrl),
+        Uri.parse(_sendNotificationUrl),
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Key $_oneSignalRestApiKey',
+          'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
-          'app_id': _oneSignalAppId,
-          'include_external_user_ids': [uid],
-          'headings': {'en': title},
-          'contents': {'en': body},
+          'target': 'user',
+          'externalUserIds': [uid],
+          'title': title,
+          'body': body,
           'data': {'type': type, ...extraData},
         }),
       );
@@ -152,7 +147,7 @@ class NotificationService {
           sent: 0,
           failed: 1,
           message:
-              'OneSignal error (${response.statusCode}): ${response.body}',
+              'Send-notification error (${response.statusCode}): ${response.body}',
         );
       }
 

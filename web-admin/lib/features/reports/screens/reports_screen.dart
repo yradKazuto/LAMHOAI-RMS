@@ -280,10 +280,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final phoneScreen = MediaQuery.of(context).size.width < 560;
+
     return Scaffold(
       backgroundColor: _bg,
-      body: Padding(
-        padding: const EdgeInsets.all(28),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+            phoneScreen ? 16 : 28,
+            phoneScreen ? 14 : 28,
+            phoneScreen ? 16 : 28,
+            phoneScreen ? 16 : 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -295,125 +301,166 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   onPressed: () => context.go(AppRoutes.dashboard),
                 ),
                 const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Reports & Export',
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: _navy)),
-                    const SizedBox(height: 2),
-                    Text('Filter and export payment records',
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.grey[600])),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Reports & Export',
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: _navy)),
+                      const SizedBox(height: 2),
+                      Text('Filter and export payment records',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 13, color: Colors.grey[600])),
+                    ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
 
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: const Color(0xFFE0E8F4)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Filters',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: _navy)),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 14,
-                    children: [
-                      _DateFilter(
-                        label: 'From Date',
-                        date:  _startDate,
-                        onTap: () => _pickDate(true),
-                      ),
-                      _DateFilter(
-                        label: 'To Date',
-                        date:  _endDate,
-                        onTap: () => _pickDate(false),
-                      ),
+            LayoutBuilder(
+              builder: (context, panelConstraints) {
+                final phoneScreen = panelConstraints.maxWidth < 560;
 
-                      _FilterDropdown(
-                        label: 'Status',
-                        value: _statusFilter?.name,
-                        hint:  'All Statuses',
-                        items: [
-                          const DropdownMenuItem(
-                              value: null,
-                              child: Text('All Statuses')),
-                          ...PaymentStatus.values.map((s) =>
-                              DropdownMenuItem(
-                                  value: s.name,
-                                  child: Text(s.label))),
-                        ],
-                        onChanged: (v) => setState(() =>
-                            _statusFilter = v == null
-                                ? null
-                                : PaymentStatusExt
-                                    .fromString(v)),
-                      ),
-
-                      _MemberDropdown(
-                        fs:           _fs,
-                        selectedId:   _memberFilter,
-                        selectedName: _memberFilterName,
-                        onSelected:   (id, name) =>
-                            setState(() {
-                              _memberFilter     = id;
-                              _memberFilterName = name;
-                            }),
-                        onClear: () => setState(() {
-                          _memberFilter     = null;
-                          _memberFilterName = null;
+                final dateFilters = [
+                  _DateFilter(
+                    label: 'From Date',
+                    date:  _startDate,
+                    onTap: () => _pickDate(true),
+                  ),
+                  _DateFilter(
+                    label: 'To Date',
+                    date:  _endDate,
+                    onTap: () => _pickDate(false),
+                  ),
+                ];
+                final otherFilters = [
+                  _FilterDropdown(
+                    label: 'Status',
+                    value: _statusFilter?.name,
+                    hint:  'All Statuses',
+                    items: [
+                      const DropdownMenuItem(
+                          value: null,
+                          child: Text('All Statuses')),
+                      ...PaymentStatus.values.map((s) =>
+                          DropdownMenuItem(
+                              value: s.name,
+                              child: Text(s.label))),
+                    ],
+                    onChanged: (v) => setState(() =>
+                        _statusFilter = v == null
+                            ? null
+                            : PaymentStatusExt
+                                .fromString(v)),
+                  ),
+                  _MemberDropdown(
+                    fs:           _fs,
+                    selectedId:   _memberFilter,
+                    selectedName: _memberFilterName,
+                    onSelected:   (id, name) =>
+                        setState(() {
+                          _memberFilter     = id;
+                          _memberFilterName = name;
                         }),
-                      ),
+                    onClear: () => setState(() {
+                      _memberFilter     = null;
+                      _memberFilterName = null;
+                    }),
+                  ),
+                ];
 
-                      if (_startDate != null ||
-                          _endDate != null ||
-                          _statusFilter != null ||
-                          _memberFilter != null)
-                        TextButton.icon(
-                          onPressed: () => setState(() {
-                            _startDate        = null;
-                            _endDate          = null;
-                            _statusFilter     = null;
-                            _memberFilter     = null;
-                            _memberFilterName = null;
-                          }),
-                          icon: const Icon(Icons.clear,
-                              size: 15),
-                          label: const Text('Clear All'),
-                          style: TextButton.styleFrom(
-                              foregroundColor:
-                                  Colors.grey[600]),
-                        ),
+                final hasFilter = _startDate != null ||
+                    _endDate != null ||
+                    _statusFilter != null ||
+                    _memberFilter != null;
+
+                return Container(
+                  padding: EdgeInsets.all(phoneScreen ? 14 : 20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: const Color(0xFFE0E8F4)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text('Filters',
+                              style: TextStyle(
+                                  fontSize: phoneScreen ? 13 : 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: _navy)),
+                          const Spacer(),
+                          if (hasFilter)
+                            TextButton.icon(
+                              onPressed: () => setState(() {
+                                _startDate        = null;
+                                _endDate          = null;
+                                _statusFilter     = null;
+                                _memberFilter     = null;
+                                _memberFilterName = null;
+                              }),
+                              icon: const Icon(Icons.clear,
+                                  size: 14),
+                              label: const Text('Clear All'),
+                              style: TextButton.styleFrom(
+                                  foregroundColor:
+                                      Colors.grey[600],
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 0),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize
+                                          .shrinkWrap),
+                            ),
+                        ],
+                      ),
+                      SizedBox(height: phoneScreen ? 10 : 16),
+                      // A horizontal 2-column grid instead of a Wrap
+                      // that just stacked every field on its own line
+                      // below the panel's usual width.
+                      Row(
+                        children: [
+                          Expanded(child: dateFilters[0]),
+                          SizedBox(width: phoneScreen ? 10 : 14),
+                          Expanded(child: dateFilters[1]),
+                        ],
+                      ),
+                      SizedBox(height: phoneScreen ? 10 : 14),
+                      Row(
+                        children: [
+                          Expanded(child: otherFilters[0]),
+                          SizedBox(width: phoneScreen ? 10 : 14),
+                          Expanded(child: otherFilters[1]),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
             const SizedBox(height: 16),
 
-            Expanded(
-              child: StreamBuilder<List<PaymentModel>>(
+            // Not wrapped in Expanded — the whole page scrolls together
+            // now (see the SingleChildScrollView in build()), so the
+            // table renders its full natural height inline instead of
+            // being its own independently-scrolling viewport.
+            StreamBuilder<List<PaymentModel>>(
                 stream: _fs.streamPayments(),
                 builder: (context, snap) {
                   if (snap.connectionState ==
                       ConnectionState.waiting) {
-                    return const Center(
-                        child: CircularProgressIndicator());
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
                   }
 
                   final payments =
@@ -423,174 +470,203 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           p.status == PaymentStatus.paid)
                       .fold(0.0, (s, p) => s + p.amount);
 
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius:
-                          BorderRadius.circular(12),
-                      border: Border.all(
-                          color: const Color(0xFFE0E8F4)),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding:
-                              const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 14),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF7F9FC),
-                            borderRadius:
-                                BorderRadius.vertical(
-                                    top: Radius.circular(
-                                        12)),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                '${payments.length} records  '
-                                '· Collected: ₱${totalCollected.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight:
-                                        FontWeight.w600,
-                                    color: _navy),
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Six fixed-flex columns can't stay readable
+                      // below this width — switch each row to a
+                      // stacked card instead.
+                      final compact = constraints.maxWidth < 700;
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius:
+                              BorderRadius.circular(12),
+                          border: Border.all(
+                              color: const Color(0xFFE0E8F4)),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 14),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF7F9FC),
+                                borderRadius:
+                                    BorderRadius.vertical(
+                                        top: Radius.circular(
+                                            12)),
                               ),
-                              const Spacer(),
-                              OutlinedButton.icon(
-                                onPressed: payments.isEmpty ||
-                                        _exporting
-                                    ? null
-                                    : () =>
-                                        _exportCsv(payments),
-                                icon: const Icon(
-                                    Icons.table_chart_outlined,
-                                    size: 16),
-                                label: const Text('CSV'),
-                                style:
-                                    OutlinedButton.styleFrom(
-                                  foregroundColor: _navy,
-                                  side: const BorderSide(
-                                      color: Color(
-                                          0xFFD0DBEE)),
-                                  shape:
-                                      RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius
-                                                  .circular(
-                                                      8)),
-                                  padding:
-                                      const EdgeInsets
-                                          .symmetric(
-                                              horizontal: 14,
-                                              vertical: 10),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              ElevatedButton.icon(
-                                onPressed: payments.isEmpty ||
-                                        _exporting
-                                    ? null
-                                    : () =>
-                                        _exportPdf(payments),
-                                icon: _exporting
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child:
-                                            CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors
-                                                    .white))
-                                    : const Icon(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${payments.length} records  '
+                                      '· Collected: ₱${totalCollected.toStringAsFixed(2)}',
+                                      maxLines: 1,
+                                      overflow:
+                                          TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight:
+                                              FontWeight.w600,
+                                          color: _navy),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  OutlinedButton.icon(
+                                    onPressed: payments
+                                                .isEmpty ||
+                                            _exporting
+                                        ? null
+                                        : () => _exportCsv(
+                                            payments),
+                                    icon: const Icon(
                                         Icons
-                                            .picture_as_pdf_outlined,
+                                            .table_chart_outlined,
                                         size: 16),
-                                label: Text(_exporting
-                                    ? 'Exporting...'
-                                    : 'PDF'),
-                                style:
-                                    ElevatedButton.styleFrom(
-                                  backgroundColor: _navy,
-                                  foregroundColor:
-                                      Colors.white,
-                                  shape:
-                                      RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius
-                                                  .circular(
-                                                      8)),
-                                  padding:
-                                      const EdgeInsets
-                                          .symmetric(
-                                              horizontal: 14,
-                                              vertical: 10),
+                                    label: const Text('CSV'),
+                                    style: OutlinedButton
+                                        .styleFrom(
+                                      foregroundColor: _navy,
+                                      side: const BorderSide(
+                                          color: Color(
+                                              0xFFD0DBEE)),
+                                      shape:
+                                          RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius
+                                                      .circular(
+                                                          8)),
+                                      padding:
+                                          const EdgeInsets
+                                              .symmetric(
+                                                  horizontal:
+                                                      14,
+                                                  vertical:
+                                                      10),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  ElevatedButton.icon(
+                                    onPressed: payments
+                                                .isEmpty ||
+                                            _exporting
+                                        ? null
+                                        : () => _exportPdf(
+                                            payments),
+                                    icon: _exporting
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child:
+                                                CircularProgressIndicator(
+                                                    strokeWidth:
+                                                        2,
+                                                    color: Colors
+                                                        .white))
+                                        : const Icon(
+                                            Icons
+                                                .picture_as_pdf_outlined,
+                                            size: 16),
+                                    label: Text(_exporting
+                                        ? 'Exporting...'
+                                        : 'PDF'),
+                                    style: ElevatedButton
+                                        .styleFrom(
+                                      backgroundColor: _navy,
+                                      foregroundColor:
+                                          Colors.white,
+                                      shape:
+                                          RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius
+                                                      .circular(
+                                                          8)),
+                                      padding:
+                                          const EdgeInsets
+                                              .symmetric(
+                                                  horizontal:
+                                                      14,
+                                                  vertical:
+                                                      10),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            if (!compact) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                        flex: 3,
+                                        child: _TH('Member')),
+                                    Expanded(
+                                        flex: 2,
+                                        child: _TH('Type')),
+                                    Expanded(
+                                        flex: 2,
+                                        child: _TH('Amount')),
+                                    Expanded(
+                                        flex: 2,
+                                        child:
+                                            _TH('Due Date')),
+                                    Expanded(
+                                        flex: 2,
+                                        child:
+                                            _TH('Paid Date')),
+                                    Expanded(
+                                        flex: 2,
+                                        child: _TH('Status')),
+                                  ],
                                 ),
                               ),
+                              const Divider(
+                                  height: 1,
+                                  color: Color(0xFFE0E8F4)),
                             ],
-                          ),
-                        ),
 
-                        const Padding(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                  flex: 3,
-                                  child: _TH('Member')),
-                              Expanded(
-                                  flex: 2,
-                                  child: _TH('Type')),
-                              Expanded(
-                                  flex: 2,
-                                  child: _TH('Amount')),
-                              Expanded(
-                                  flex: 2,
-                                  child: _TH('Due Date')),
-                              Expanded(
-                                  flex: 2,
-                                  child: _TH('Paid Date')),
-                              Expanded(
-                                  flex: 2,
-                                  child: _TH('Status')),
-                            ],
-                          ),
+                            if (payments.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 40),
+                                child: Center(
+                                  child: Text(
+                                      'No records match your filters.',
+                                      style: TextStyle(
+                                          color: Colors.grey)),
+                                ),
+                              )
+                            else
+                              ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: payments.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(
+                                        height: 1,
+                                        color: Color(
+                                            0xFFEEF2F9)),
+                                itemBuilder: (_, i) =>
+                                    _PaymentRow(
+                                        payment:
+                                            payments[i],
+                                        fmt: _fmt,
+                                        compact: compact),
+                              ),
+                          ],
                         ),
-                        const Divider(
-                            height: 1,
-                            color: Color(0xFFE0E8F4)),
-
-                        if (payments.isEmpty)
-                          const Expanded(
-                            child: Center(
-                              child: Text(
-                                  'No records match your filters.',
-                                  style: TextStyle(
-                                      color: Colors.grey)),
-                            ),
-                          )
-                        else
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: payments.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(
-                                      height: 1,
-                                      color:
-                                          Color(0xFFEEF2F9)),
-                              itemBuilder: (_, i) =>
-                                  _PaymentRow(
-                                      payment: payments[i],
-                                      fmt: _fmt),
-                            ),
-                          ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
               ),
-            ),
           ],
         ),
       ),
@@ -601,9 +677,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
 class _PaymentRow extends StatelessWidget {
   final PaymentModel payment;
   final String Function(DateTime?) fmt;
+  final bool         compact;
 
   const _PaymentRow(
-      {required this.payment, required this.fmt});
+      {required this.payment, required this.fmt, this.compact = false});
 
   Color _fg(PaymentStatus s) {
     switch (s) {
@@ -623,69 +700,125 @@ class _PaymentRow extends StatelessWidget {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Padding(
+  Widget _statusPill() => Container(
     padding: const EdgeInsets.symmetric(
-        horizontal: 20, vertical: 12),
-    child: Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: Text(payment.memberName,
+        horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: _bg(payment.displayStatus),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(payment.displayStatus.label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: _fg(payment.displayStatus))),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      // Stacked card — six fixed columns don't have room to stay
+      // readable at phone widths.
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(payment.memberName,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E293B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                const SizedBox(width: 8),
+                _statusPill(),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text(payment.type.label,
+                    style: TextStyle(
+                        fontSize: 13, color: Colors.grey[700])),
+                const SizedBox(width: 8),
+                Text(
+                  '₱${payment.amount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A2B4A)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Due ${fmt(payment.dueDate)}'
+              '${payment.paidDate != null ? '  ·  Paid ${fmt(payment.paidDate)}' : ''}',
+              style: TextStyle(
+                  fontSize: 12, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(payment.memberName,
+                style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1E293B)),
+                overflow: TextOverflow.ellipsis),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(payment.type.label,
+                style: TextStyle(
+                    fontSize: 13, color: Colors.grey[700])),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '₱${payment.amount.toStringAsFixed(2)}',
               style: const TextStyle(
                   fontSize: 13.5,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF1E293B)),
-              overflow: TextOverflow.ellipsis),
-        ),
-        Expanded(
-          flex: 2,
-          child: Text(payment.type.label,
-              style: TextStyle(
-                  fontSize: 13, color: Colors.grey[700])),
-        ),
-        Expanded(
-          flex: 2,
-          child: Text(
-            '₱${payment.amount.toStringAsFixed(2)}',
-            style: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1A2B4A)),
-          ),
-        ),
-        Expanded(
-          flex: 2,
-          child: Text(fmt(payment.dueDate),
-              style: TextStyle(
-                  fontSize: 13, color: Colors.grey[600])),
-        ),
-        Expanded(
-          flex: 2,
-          child: Text(fmt(payment.paidDate),
-              style: TextStyle(
-                  fontSize: 13, color: Colors.grey[600])),
-        ),
-        Expanded(
-          flex: 2,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _bg(payment.displayStatus),
-              borderRadius: BorderRadius.circular(20),
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A2B4A)),
             ),
-            child: Text(payment.displayStatus.label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: _fg(payment.displayStatus))),
           ),
-        ),
-      ],
-    ),
-  );
+          Expanded(
+            flex: 2,
+            child: Text(fmt(payment.dueDate),
+                style: TextStyle(
+                    fontSize: 13, color: Colors.grey[600])),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(fmt(payment.paidDate),
+                style: TextStyle(
+                    fontSize: 13, color: Colors.grey[600])),
+          ),
+          Expanded(
+            flex: 2,
+            child: _statusPill(),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TH extends StatelessWidget {
@@ -730,7 +863,6 @@ class _DateFilter extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          width: 160,
           padding: const EdgeInsets.symmetric(
               horizontal: 12, vertical: 10),
           decoration: BoxDecoration(

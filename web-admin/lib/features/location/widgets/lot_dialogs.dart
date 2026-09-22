@@ -24,6 +24,25 @@ String normalizeBlockLabel(String raw) {
   return stripped.isEmpty ? trimmed : stripped;
 }
 
+/// A dialog `content` width that fits `preferred` on a wide screen but
+/// shrinks to 90% of the viewport on a phone, where `preferred` (usually
+/// 360-480px) would run off the edge of the screen. Used by every
+/// AlertDialog in this file instead of a bare fixed SizedBox width.
+double dialogWidth(BuildContext context, double preferred) {
+  final screenWidth = MediaQuery.of(context).size.width;
+  return screenWidth > preferred + 80 ? preferred : screenWidth * 0.9;
+}
+
+/// Same idea for a dialog `content` height that has its own Expanded
+/// child (a scrollable list) and so needs a definite height to lay
+/// out — caps at 60% of the viewport instead of a bare fixed value
+/// that can be taller than a phone screen.
+double dialogHeight(BuildContext context, double preferred) {
+  final screenHeight = MediaQuery.of(context).size.height;
+  final cap = screenHeight * 0.6;
+  return preferred > cap ? cap : preferred;
+}
+
 /// ================================================================
 /// OCCUPIED LOT DIALOG
 /// ================================================================
@@ -102,7 +121,7 @@ class OccupiedLotDialog extends StatelessWidget {
       // ============================================================
 
       content: SizedBox(
-        width: 450,
+        width: dialogWidth(context, 450),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment:
@@ -341,8 +360,8 @@ class OccupiedLotDialog extends StatelessWidget {
                   'Change Owner',
                 ),
                 content: SizedBox(
-                  width: 360,
-                  height: 420,
+                  width: dialogWidth(context, 360),
+                  height: dialogHeight(context, 420),
                   child: Column(
                     children: [
                       TextField(
@@ -671,7 +690,7 @@ class _VacantLotDialogState
       ),
 
       content: SizedBox(
-        width: 480,
+        width: dialogWidth(context, 480),
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -1097,8 +1116,8 @@ class _VacantLotDialogState
                   'Assign Member',
                 ),
                 content: SizedBox(
-                  width: 360,
-                  height: 420,
+                  width: dialogWidth(context, 360),
+                  height: dialogHeight(context, 420),
                   child: Column(
                     children: [
                       TextField(
@@ -1414,7 +1433,7 @@ class _ForSaleLotDialogState
       ),
 
       content: SizedBox(
-        width: 460,
+        width: dialogWidth(context, 460),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment:
@@ -1742,8 +1761,8 @@ class _ForSaleLotDialogState
                   'Assign Member',
                 ),
                 content: SizedBox(
-                  width: 360,
-                  height: 420,
+                  width: dialogWidth(context, 360),
+                  height: dialogHeight(context, 420),
                   child: Column(
                     children: [
                       TextField(
@@ -1962,7 +1981,7 @@ class _AddLotDialogState
         ],
       ),
       content: SizedBox(
-        width: 480,
+        width: dialogWidth(context, 480),
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,

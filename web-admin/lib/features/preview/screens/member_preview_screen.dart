@@ -26,6 +26,10 @@ class _MemberPreviewScreenState
   String?        _selectedUid;
   late TabController _tabs;
 
+  final _search      = TextEditingController();
+  final _searchFocus  = FocusNode();
+  bool  _showResults  = false;
+
   static const Color _navy   = Color(0xFF0D2A5C);
   static const Color _accent = Color(0xFF2E6BE6);
   static const Color _bg     = Color(0xFFF0F4FB);
@@ -39,7 +43,28 @@ class _MemberPreviewScreenState
   @override
   void dispose() {
     _tabs.dispose();
+    _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  void _selectMember(MemberModel m) {
+    setState(() {
+      _selectedUid    = m.uid;
+      _selectedMember = m;
+      _search.text    = m.name;
+      _showResults    = false;
+    });
+    _searchFocus.unfocus();
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedUid    = null;
+      _selectedMember = null;
+      _search.clear();
+      _showResults    = false;
+    });
   }
 
   @override
@@ -66,78 +91,146 @@ class _MemberPreviewScreenState
             const SizedBox(height: 24),
 
             // ── Member selector ────────────────────────────────────────────
+            // A dropdown listed every member at once, which stops scaling
+            // once the association has more than a screenful of them — this
+            // filters as you type instead, same as the Add Payment member
+            // picker.
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: const Color(0xFFE0E8F4)),
+                border: Border.all(color: const Color(0xFFE0E8F4)),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.person_search_outlined,
-                      color: _navy, size: 20),
-                  const SizedBox(width: 12),
-                  const Text('Select Member:',
-                      style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          color: _navy)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: StreamBuilder<List<MemberModel>>(
-                      stream: _fs.streamMembers(),
-                      builder: (context, snap) {
-                        final members = snap.data ?? [];
-                        if (members.isEmpty) {
-                          return Text(
-                            'No members found.',
-                            style: TextStyle(
-                                color: Colors.grey[500]),
-                          );
-                        }
-                        return DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedUid,
-                            hint: Text(
-                              'Choose a member to preview',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey[400]),
+              child: StreamBuilder<List<MemberModel>>(
+                stream: _fs.streamMembers(),
+                builder: (context, snap) {
+                  final members = [...(snap.data ?? <MemberModel>[])]
+                    ..sort((a, b) =>
+                        a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+                  if (snap.hasData && members.isEmpty) {
+                    return Row(
+                      children: [
+                        const Icon(Icons.person_search_outlined,
+                            color: _navy, size: 20),
+                        const SizedBox(width: 12),
+                        Text('No members found.',
+                            style: TextStyle(color: Colors.grey[500])),
+                      ],
+                    );
+                  }
+
+                  final q = _search.text.trim().toLowerCase();
+                  final results = q.isEmpty
+                      ? members
+                      : members
+                          .where((m) =>
+                              m.name.toLowerCase().contains(q) ||
+                              m.lotNumber.toLowerCase().contains(q) ||
+                              m.phase.toLowerCase().contains(q))
+                          .toList();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.person_search_outlined,
+                              color: _navy, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _search,
+                              focusNode: _searchFocus,
+                              style: const TextStyle(
+                                  fontSize: 13.5, color: Color(0xFF1A2B4A)),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                hintText: 'Search by name, lot, or phase...',
+                                hintStyle: TextStyle(
+                                    fontSize: 13, color: Colors.grey[400]),
+                                suffixIcon: _search.text.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        icon: const Icon(Icons.close,
+                                            size: 16),
+                                        onPressed: _clearSelection,
+                                      ),
+                              ),
+                              onTap: () => setState(() => _showResults = true),
+                              onChanged: (v) => setState(() {
+                                _showResults = true;
+                                // Typing after a selection means the user is
+                                // looking for someone else.
+                                if (_selectedMember != null &&
+                                    v != _selectedMember!.name) {
+                                  _selectedUid    = null;
+                                  _selectedMember = null;
+                                }
+                              }),
                             ),
-                            isExpanded: true,
-                            style: const TextStyle(
-                                fontSize: 13.5,
-                                color: Color(0xFF1A2B4A)),
-                            items: members
-                                .map((m) =>
-                                    DropdownMenuItem<String>(
-                                      value: m.uid,
-                                      child: Text(
-                                          '${m.name} — Lot ${m.lotNumber}'),
-                                    ))
-                                .toList(),
-                            onChanged: (uid) {
-                              if (uid == null) return;
-                              final m = members.firstWhere(
-                                  (m) => m.uid == uid);
-                              setState(() {
-                                _selectedUid    = uid;
-                                _selectedMember = m;
-                              });
-                            },
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                  if (_selectedMember != null) ...[
-                    const SizedBox(width: 16),
-                    _StatusBadge(
-                        status: _selectedMember!.status),
-                  ],
-                ],
+                          if (_selectedMember != null) ...[
+                            const SizedBox(width: 16),
+                            _StatusBadge(status: _selectedMember!.status),
+                          ],
+                        ],
+                      ),
+                      if (_showResults) ...[
+                        const Divider(height: 20),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 240),
+                          child: results.isEmpty
+                              ? Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Text('No matching members.',
+                                      style: TextStyle(
+                                          fontSize: 12.5,
+                                          color: Colors.grey[500])),
+                                )
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: results.length,
+                                  itemBuilder: (_, i) {
+                                    final m = results[i];
+                                    return InkWell(
+                                      onTap: () => _selectMember(m),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 8, horizontal: 4),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                '${m.name}'
+                                                '${m.status == MemberStatus.inactive ? ' (inactive)' : ''}',
+                                                style: const TextStyle(
+                                                    fontSize: 13.5,
+                                                    color: Color(0xFF1A2B4A)),
+                                              ),
+                                            ),
+                                            Text(
+                                              m.lotNumber.isEmpty
+                                                  ? '—'
+                                                  : 'Lot ${m.lotNumber}',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[500]),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 16),

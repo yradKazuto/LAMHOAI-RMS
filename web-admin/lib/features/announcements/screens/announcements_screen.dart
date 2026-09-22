@@ -23,58 +23,97 @@ class AnnouncementsScreen extends StatelessWidget {
     final _fs      = FirestoreService();
     final _notif   = NotificationService();
     final canPost  = auth.isAdmin || auth.isOfficer;
+    final phoneScreen = MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
       backgroundColor: _bg,
       body: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: EdgeInsets.fromLTRB(
+            phoneScreen ? 16 : 28,
+            phoneScreen ? 14 : 28,
+            phoneScreen ? 16 : 28,
+            phoneScreen ? 16 : 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-Row(
-  children: [
-    IconButton(
-      icon: const Icon(Icons.arrow_back, color: _navy),
-      tooltip: 'Back to Dashboard',
-      onPressed: () => context.go(AppRoutes.dashboard),
-    ),
-    const SizedBox(width: 8),
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+LayoutBuilder(
+  builder: (context, constraints) {
+    final titleBlock = Row(
       children: [
-        const Text('Announcements',
-            style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: _navy)),
-        const SizedBox(height: 2),
-        Text(
-            'Post notices visible to all homeowners',
-            style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600])),
-      ],
-    ),
-    const Spacer(),
-    if (canPost)
-      ElevatedButton.icon(
-        onPressed: () => _showPostDialog(
-            context, _fs, _notif, auth),
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('Post Announcement'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _navy,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(
-              horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(8)),
+        IconButton(
+          icon: const Icon(Icons.arrow_back, color: _navy),
+          tooltip: 'Back to Dashboard',
+          onPressed: () => context.go(AppRoutes.dashboard),
         ),
-      ),
-  ],
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Announcements',
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: _navy)),
+              const SizedBox(height: 2),
+              Text(
+                  'Post notices visible to all homeowners',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600])),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final postButton = canPost
+        ? ElevatedButton.icon(
+            onPressed: () => _showPostDialog(
+                context, _fs, _notif, auth),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Post Announcement'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _navy,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(8)),
+            ),
+          )
+        : null;
+
+    // The title block plus the button's label don't both fit on one
+    // line below this width — stack the button under the title instead.
+    final narrow = constraints.maxWidth < 560;
+
+    if (narrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          titleBlock,
+          if (postButton != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+                width: double.infinity, child: postButton),
+          ],
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: titleBlock),
+        if (postButton != null) postButton,
+      ],
+    );
+  },
 ),
-            const SizedBox(height: 24),
+            SizedBox(height: phoneScreen ? 14 : 24),
 
             Expanded(
               child: StreamBuilder<List<AnnouncementModel>>(
@@ -184,8 +223,12 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
+    return LayoutBuilder(
+      builder: (context, cardConstraints) {
+        final compact = cardConstraints.maxWidth < 500;
+
+        return Container(
+      padding: EdgeInsets.all(compact ? 14 : 20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -205,9 +248,9 @@ class _AnnouncementCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final dot = Container(
                 width: 8, height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -215,18 +258,19 @@ class _AnnouncementCard extends StatelessWidget {
                       ? const Color(0xFF1A7A4A)
                       : Colors.grey[400],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(announcement.title,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: announcement.isActive
-                            ? _navy
-                            : Colors.grey[500])),
-              ),
-              Container(
+              );
+
+              final title = Text(announcement.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: announcement.isActive
+                          ? _navy
+                          : Colors.grey[500]));
+
+              final statusBadge = Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -246,57 +290,130 @@ class _AnnouncementCard extends StatelessWidget {
                           ? const Color(0xFF1A7A4A)
                           : Colors.grey),
                 ),
-              ),
-              if (canEdit) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    announcement.isActive
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 18, color: Colors.grey[500],
-                  ),
-                  tooltip: announcement.isActive
-                      ? 'Deactivate'
-                      : 'Activate',
-                  onPressed: () =>
-                      fs.toggleAnnouncementActive(
-                          announcement.id,
-                          !announcement.isActive),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined,
-                      size: 18, color: Color(0xFF2563EB)),
-                  tooltip: 'Edit',
-                  onPressed: onEdit,
-                ),
-                IconButton(
-                  icon: const Icon(
-                      Icons.notifications_outlined,
-                      size: 18, color: Color(0xFF2563EB)),
-                  tooltip: 'Resend notification',
-                  onPressed: () =>
-                      _resendNotification(context),
-                ),
-              ],
-              if (canDelete)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      size: 18, color: Color(0xFFCC2200)),
-                  tooltip: 'Delete',
-                  onPressed: () => _confirmDelete(context),
-                ),
-            ],
+              );
+
+              // Up to four full-size icon buttons (~48px each) plus the
+              // badge don't leave enough room for the title below this
+              // width — collapse the actions into a single overflow menu.
+              final narrow = constraints.maxWidth < 420;
+
+              if (narrow) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    dot,
+                    const SizedBox(width: 10),
+                    Expanded(child: title),
+                    const SizedBox(width: 8),
+                    statusBadge,
+                    if (canEdit || canDelete)
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert,
+                            size: 18,
+                            color: Colors.grey[600]),
+                        padding: EdgeInsets.zero,
+                        onSelected: (v) {
+                          switch (v) {
+                            case 'toggle':
+                              fs.toggleAnnouncementActive(
+                                  announcement.id,
+                                  !announcement.isActive);
+                              break;
+                            case 'edit':
+                              onEdit();
+                              break;
+                            case 'resend':
+                              _resendNotification(context);
+                              break;
+                            case 'delete':
+                              _confirmDelete(context);
+                              break;
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          if (canEdit) ...[
+                            PopupMenuItem(
+                              value: 'toggle',
+                              child: Text(announcement.isActive
+                                  ? 'Deactivate'
+                                  : 'Activate'),
+                            ),
+                            const PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit')),
+                            const PopupMenuItem(
+                                value: 'resend',
+                                child: Text(
+                                    'Resend notification')),
+                          ],
+                          if (canDelete)
+                            const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete')),
+                        ],
+                      ),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  dot,
+                  const SizedBox(width: 10),
+                  Expanded(child: title),
+                  statusBadge,
+                  if (canEdit) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: Icon(
+                        announcement.isActive
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 18, color: Colors.grey[500],
+                      ),
+                      tooltip: announcement.isActive
+                          ? 'Deactivate'
+                          : 'Activate',
+                      onPressed: () =>
+                          fs.toggleAnnouncementActive(
+                              announcement.id,
+                              !announcement.isActive),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined,
+                          size: 18, color: Color(0xFF2563EB)),
+                      tooltip: 'Edit',
+                      onPressed: onEdit,
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                          Icons.notifications_outlined,
+                          size: 18, color: Color(0xFF2563EB)),
+                      tooltip: 'Resend notification',
+                      onPressed: () =>
+                          _resendNotification(context),
+                    ),
+                  ],
+                  if (canDelete)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline,
+                          size: 18, color: Color(0xFFCC2200)),
+                      tooltip: 'Delete',
+                      onPressed: () => _confirmDelete(context),
+                    ),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: compact ? 6 : 10),
           Text(announcement.body,
               style: TextStyle(
-                  fontSize: 13.5,
+                  fontSize: compact ? 13 : 13.5,
                   color: announcement.isActive
                       ? const Color(0xFF1A2B4A)
                       : Colors.grey[400],
-                  height: 1.55)),
-          const SizedBox(height: 12),
+                  height: 1.5)),
+          SizedBox(height: compact ? 8 : 12),
           Row(
             children: [
               Icon(Icons.person_outline,
@@ -304,20 +421,22 @@ class _AnnouncementCard extends StatelessWidget {
               const SizedBox(width: 4),
               Text(announcement.postedByName,
                   style: TextStyle(
-                      fontSize: 12,
+                      fontSize: compact ? 11 : 12,
                       color: Colors.grey[500])),
-              const SizedBox(width: 14),
+              SizedBox(width: compact ? 10 : 14),
               Icon(Icons.calendar_today_outlined,
                   size: 13, color: Colors.grey[400]),
               const SizedBox(width: 4),
               Text(_fmt(announcement.createdAt),
                   style: TextStyle(
-                      fontSize: 12,
+                      fontSize: compact ? 11 : 12,
                       color: Colors.grey[500])),
             ],
           ),
         ],
       ),
+    );
+      },
     );
   }
 
@@ -520,12 +639,21 @@ class _PostDialogState extends State<_PostDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final dialogWidth =
+        screenSize.width > 580 ? 520.0 : screenSize.width * 0.92;
+
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(
+          horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14)),
-      child: SizedBox(
-        width: 520,
-        child: Padding(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: dialogWidth,
+          maxHeight: screenSize.height * 0.85,
+        ),
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,

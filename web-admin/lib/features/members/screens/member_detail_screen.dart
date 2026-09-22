@@ -37,12 +37,23 @@ class MemberDetailScreen extends StatefulWidget {
   /// rather than useful there.
   final bool showBreadcrumb;
 
+  /// True when embedded in a modal preview (e.g. opened from a lot on
+  /// the map): keeps the name and its action buttons on a single row
+  /// as small icon buttons regardless of width, instead of the full
+  /// page's behavior of stacking labeled buttons below the name on
+  /// narrow screens. A preview dialog is usually about as wide as a
+  /// phone screen already, so the normal narrow-layout stacking would
+  /// otherwise push the tabs and profile card further down than
+  /// necessary for a floating preview.
+  final bool compactHeader;
+
   const MemberDetailScreen({
     super.key,
     required this.member,
     this.originLabel = 'Homeowners',
     this.originRoute = AppRoutes.members,
     this.showBreadcrumb = true,
+    this.compactHeader = false,
   });
 
   @override
@@ -282,119 +293,215 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   Widget build(BuildContext context) {
     final auth    = context.watch<AuthProvider>();
     final canEdit = auth.isAdmin || auth.isOfficer;
+    final tightHeader =
+        widget.compactHeader || MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
       backgroundColor: _bg,
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+        padding: tightHeader
+            ? const EdgeInsets.fromLTRB(20, 14, 20, 0)
+            : const EdgeInsets.fromLTRB(28, 20, 28, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Breadcrumb ─────────────────────────────────────────────────
+            // ── Back button ───────────────────────────────────────────────
             if (widget.showBreadcrumb) ...[
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.go(AppRoutes.dashboard),
-                    child: Text('Dashboard',
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.grey[500])),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => Navigator.canPop(context)
+                      ? Navigator.pop(context)
+                      : context.go(widget.originRoute),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.arrow_back,
+                        color: _navy, size: 22),
                   ),
-                  Text('  /  ',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey[400])),
-                  GestureDetector(
-                    onTap: () => Navigator.canPop(context)
-                        ? Navigator.pop(context)
-                        : context.go(widget.originRoute),
-                    child: Text(widget.originLabel,
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.grey[500])),
-                  ),
-                  Text('  /  ',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey[400])),
-                  Text(widget.member.name,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: _navy)),
-                ],
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
             ],
 
             // ── Name + actions ───────────────────────────────────────────────
-            Row(
-              children: [
-                Text(widget.member.name,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final nameText = Text(widget.member.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: _navy)),
-                const Spacer(),
-                if (canEdit && !_editMode) ...[
-                  OutlinedButton.icon(
-                    onPressed: () => _sendPasswordReset(context),
-                    icon: const Icon(Icons.lock_reset_outlined,
-                        size: 16),
-                    label: const Text('Reset Password'),
-                    style: OutlinedButton.styleFrom(
-                        foregroundColor: _navy,
-                        side: const BorderSide(
-                            color: Color(0xFFD0DBEE)),
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(8))),
-                  ),
-                  const SizedBox(width: 10),
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        setState(() => _editMode = true),
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Edit Profile'),
-                    style: OutlinedButton.styleFrom(
-                        foregroundColor: _navy,
-                        side: const BorderSide(
-                            color: Color(0xFFD0DBEE)),
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(8))),
-                  ),
-                ],
-                if (_editMode) ...[
-                  TextButton(
-                    onPressed: () => setState(() {
-                      _editMode = false;
-                      _initControllers(widget.member);
-                    }),
-                    child: const Text('Cancel',
-                        style: TextStyle(color: Colors.grey)),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _saving ? null : _saveEdits,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: _navy,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 10)),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white))
-                        : const Text('Save'),
-                  ),
-                ],
-              ],
+                        color: _navy));
+
+                final actionButtons = <Widget>[
+                  if (canEdit && !_editMode) ...[
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          _sendPasswordReset(context),
+                      icon: const Icon(
+                          Icons.lock_reset_outlined,
+                          size: 16),
+                      label: const Text('Reset Password'),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: _navy,
+                          side: const BorderSide(
+                              color: Color(0xFFD0DBEE)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(8))),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          setState(() => _editMode = true),
+                      icon: const Icon(Icons.edit_outlined,
+                          size: 16),
+                      label: const Text('Edit Profile'),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: _navy,
+                          side: const BorderSide(
+                              color: Color(0xFFD0DBEE)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(8))),
+                    ),
+                  ],
+                  if (_editMode) ...[
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _editMode = false;
+                        _initControllers(widget.member);
+                      }),
+                      child: const Text('Cancel',
+                          style: TextStyle(
+                              color: Colors.grey)),
+                    ),
+                    ElevatedButton(
+                      onPressed: _saving ? null : _saveEdits,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: _navy,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(8)),
+                          padding: const EdgeInsets
+                              .symmetric(
+                                  horizontal: 20,
+                                  vertical: 10)),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child:
+                                  CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white))
+                          : const Text('Save'),
+                    ),
+                  ],
+                ];
+
+                // Compact layout: always a single row of small icon
+                // buttons instead of full labeled buttons wrapping
+                // below the name. Used both for the modal preview
+                // (compactHeader, regardless of width) and for the
+                // full page on narrow screens, where the old
+                // stack-below-name behavior pushed the tabs and
+                // profile card further down than necessary.
+                final isCompact =
+                    widget.compactHeader || constraints.maxWidth < 560;
+
+                if (isCompact) {
+                  final compactButtons = <Widget>[
+                    if (canEdit && !_editMode) ...[
+                      IconButton(
+                        onPressed: () => _sendPasswordReset(context),
+                        icon: const Icon(Icons.lock_reset_outlined,
+                            size: 20),
+                        tooltip: 'Reset Password',
+                        color: _navy,
+                        style: IconButton.styleFrom(
+                            side: const BorderSide(
+                                color: Color(0xFFD0DBEE)),
+                            shape: const CircleBorder()),
+                      ),
+                      IconButton(
+                        onPressed: () =>
+                            setState(() => _editMode = true),
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        tooltip: 'Edit Profile',
+                        color: _navy,
+                        style: IconButton.styleFrom(
+                            side: const BorderSide(
+                                color: Color(0xFFD0DBEE)),
+                            shape: const CircleBorder()),
+                      ),
+                    ],
+                    if (_editMode) ...[
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _editMode = false;
+                          _initControllers(widget.member);
+                        }),
+                        child: const Text('Cancel',
+                            style: TextStyle(color: Colors.grey)),
+                      ),
+                      ElevatedButton(
+                        onPressed: _saving ? null : _saveEdits,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: _navy,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8)),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white))
+                            : const Text('Save'),
+                      ),
+                    ],
+                  ];
+
+                  return Row(
+                    children: [
+                      Expanded(child: nameText),
+                      for (int i = 0;
+                          i < compactButtons.length;
+                          i++) ...[
+                        const SizedBox(width: 6),
+                        compactButtons[i],
+                      ],
+                      // Reserves space for the floating close "X" that
+                      // the preview dialog overlays at top-right — only
+                      // relevant there, since the full page has no such
+                      // overlay to avoid.
+                      if (widget.compactHeader)
+                        const SizedBox(width: 44),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: nameText),
+                    for (int i = 0;
+                        i < actionButtons.length;
+                        i++) ...[
+                      const SizedBox(width: 10),
+                      actionButtons[i],
+                    ],
+                  ],
+                );
+              },
             ),
-            const SizedBox(height: 18),
+            SizedBox(height: tightHeader ? 8 : 18),
 
             // ── Tabs ───────────────────────────────────────────────────────────
             TabBar(
@@ -829,34 +936,54 @@ class _MemberInfoCard extends StatelessWidget {
             style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
           ),
           const SizedBox(height: 20),
-          Row(children: [
-            Expanded(child: _DetailField(
+          LayoutBuilder(builder: (context, c) {
+            final nameField = _DetailField(
                 label: 'Full Name', controller: name,
-                readOnly: !editMode)),
-            const SizedBox(width: 16),
-            Expanded(child: _DetailField(
+                readOnly: !editMode);
+            final emailField = _DetailField(
                 label: 'Email Address', controller: email,
-                readOnly: !editMode)),
-          ]),
+                readOnly: !editMode);
+            if (c.maxWidth < 420) {
+              return Column(children: [
+                nameField,
+                const SizedBox(height: 16),
+                emailField,
+              ]);
+            }
+            return Row(children: [
+              Expanded(child: nameField),
+              const SizedBox(width: 16),
+              Expanded(child: emailField),
+            ]);
+          }),
           const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: _DetailField(
+          LayoutBuilder(builder: (context, c) {
+            final contactField = _DetailField(
                 label: 'Contact Number', controller: contact,
-                readOnly: !editMode)),
-            const SizedBox(width: 16),
-            Expanded(
-              child: editMode
-                  ? _DropdownField<MemberStatus>(
-                      label: 'Status',
-                      value: status,
-                      items: MemberStatus.values,
-                      labelOf: (v) => v.label,
-                      onChanged: onStatusChanged,
-                    )
-                  : _ReadOnlyField(
-                      label: 'Status', value: memberStatusLabel),
-            ),
-          ]),
+                readOnly: !editMode);
+            final statusField = editMode
+                ? _DropdownField<MemberStatus>(
+                    label: 'Status',
+                    value: status,
+                    items: MemberStatus.values,
+                    labelOf: (v) => v.label,
+                    onChanged: onStatusChanged,
+                  )
+                : _ReadOnlyField(
+                    label: 'Status', value: memberStatusLabel);
+            if (c.maxWidth < 420) {
+              return Column(children: [
+                contactField,
+                const SizedBox(height: 16),
+                statusField,
+              ]);
+            }
+            return Row(children: [
+              Expanded(child: contactField),
+              const SizedBox(width: 16),
+              Expanded(child: statusField),
+            ]);
+          }),
           const SizedBox(height: 16),
           _DetailField(
               label: 'Address', controller: address,
@@ -890,38 +1017,54 @@ class _PaymentsTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text('Payment History',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _navy)),
-              const Spacer(),
-              if (canRecord)
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AddPaymentScreen(
-                        preselectedMemberId: memberId,
-                        preselectedMemberName: memberName,
-                      ),
+          LayoutBuilder(builder: (context, c) {
+            const title = Text('Payment History',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _navy));
+
+            final addBtn = canRecord
+                ? ElevatedButton.icon(
+                    onPressed: () => AddPaymentScreen.show(
+                      context,
+                      preselectedMemberId: memberId,
+                      preselectedMemberName: memberName,
                     ),
-                  ),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add Payment'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _navy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                ),
-            ],
-          ),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Payment'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _navy,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                  )
+                : null;
+
+            if (c.maxWidth < 420 && addBtn != null) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  const SizedBox(height: 10),
+                  SizedBox(
+                      width: double.infinity, child: addBtn),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                title,
+                const Spacer(),
+                if (addBtn != null) addBtn,
+              ],
+            );
+          }),
           const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<List<PaymentModel>>(
@@ -936,19 +1079,31 @@ class _PaymentsTab extends StatelessWidget {
                       child: Text('No payment records found.',
                           style: TextStyle(color: Colors.grey)));
                 }
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE0E8F4)),
-                  ),
-                  child: ListView.separated(
-                    itemCount: payments.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, color: Color(0xFFEEF2F9)),
-                    itemBuilder: (_, i) =>
-                        _PaymentRow(payment: payments[i], fs: _fs),
-                  ),
+                return LayoutBuilder(
+                  builder: (context, c) {
+                    // Type/Amount/Due/Paid plus a status badge and
+                    // "Mark Paid" button can't stay readable below
+                    // this width — stack each row as a card instead.
+                    final compact = c.maxWidth < 560;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: const Color(0xFFE0E8F4)),
+                      ),
+                      child: ListView.separated(
+                        itemCount: payments.length,
+                        separatorBuilder: (_, __) => const Divider(
+                            height: 1, color: Color(0xFFEEF2F9)),
+                        itemBuilder: (_, i) => _PaymentRow(
+                            payment: payments[i],
+                            fs: _fs,
+                            compact: compact),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -981,58 +1136,77 @@ class _DocumentsTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text('Documents',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _navy)),
-              const Spacer(),
-              if (auth.isAdmin || auth.isOfficer)
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final success = await runDocumentUploadFlow(
-                        context: context,
-                        fs: _fs,
-                        cloudinary: _cloudinary,
-                        uploadedByUid: auth.userModel?.uid ?? '',
-                        uploadedByName:
-                            auth.userModel?.displayName ?? '',
-                        preselectedMemberId: memberId,
-                        preselectedMemberName: memberName,
-                      );
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Document uploaded successfully.'),
-                            backgroundColor: Color(0xFF1A7A4A),
-                          ),
+          LayoutBuilder(builder: (context, c) {
+            const title = Text('Documents',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _navy));
+
+            final uploadBtn = (auth.isAdmin || auth.isOfficer)
+                ? ElevatedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final success = await runDocumentUploadFlow(
+                          context: context,
+                          fs: _fs,
+                          cloudinary: _cloudinary,
+                          uploadedByUid: auth.userModel?.uid ?? '',
+                          uploadedByName:
+                              auth.userModel?.displayName ?? '',
+                          preselectedMemberId: memberId,
+                          preselectedMemberName: memberName,
                         );
+                        if (success && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('Document uploaded successfully.'),
+                              backgroundColor: Color(0xFF1A7A4A),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Upload failed: $e')),
+                          );
+                        }
                       }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Upload failed: $e')),
-                        );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.upload_file_outlined, size: 16),
-                  label: const Text('Upload Document'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _navy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                ),
-            ],
-          ),
+                    },
+                    icon: const Icon(Icons.upload_file_outlined, size: 16),
+                    label: const Text('Upload Document'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _navy,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                  )
+                : null;
+
+            if (c.maxWidth < 420 && uploadBtn != null) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  const SizedBox(height: 10),
+                  SizedBox(
+                      width: double.infinity, child: uploadBtn),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                title,
+                const Spacer(),
+                if (uploadBtn != null) uploadBtn,
+              ],
+            );
+          }),
           const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<List<DocumentModel>>(
@@ -1239,7 +1413,9 @@ class _DropdownField<T> extends StatelessWidget {
 class _PaymentRow extends StatelessWidget {
   final PaymentModel payment;
   final FirestoreService fs;
-  const _PaymentRow({required this.payment, required this.fs});
+  final bool compact;
+  const _PaymentRow(
+      {required this.payment, required this.fs, this.compact = false});
 
   Color _statusColor(PaymentStatus s) {
     switch (s) {
@@ -1262,8 +1438,98 @@ class _PaymentRow extends StatelessWidget {
   String _fmt(DateTime? d) => d == null ? '—' :
       '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
 
+  Future<void> _markPaid(BuildContext context) async {
+    await fs.markPaymentPaid(payment.id);
+    if (context.mounted) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      await SettingsService().logAction(
+        performedBy:      auth.userModel?.uid ?? '',
+        performedByName:  auth.userModel?.displayName ?? '',
+        action:           AuditAction.updated,
+        targetCollection: 'payments',
+        targetId:         payment.id,
+        description:
+            'Marked payment for ${payment.memberName} as paid',
+      );
+    }
+  }
+
+  Widget _statusPill() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: _statusBg(payment.status),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(payment.status.label,
+        style: TextStyle(fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: _statusColor(payment.status))),
+  );
+
+  bool get _canMarkPaid =>
+      payment.status == PaymentStatus.unpaid ||
+      payment.status == PaymentStatus.overdue;
+
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      // Stacked card — Type/Amount/Due/Paid plus a status badge and
+      // action button don't have room to stay readable at phone widths.
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(payment.type.label,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E293B)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                const SizedBox(width: 8),
+                _statusPill(),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('₱${payment.amount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A2B4A))),
+            const SizedBox(height: 4),
+            Text(
+              'Due ${_fmt(payment.dueDate)}'
+              '${payment.paidDate != null ? '  ·  Paid ${_fmt(payment.paidDate)}' : ''}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+            if (_canMarkPaid) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => _markPaid(context),
+                  style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF1A7A4A),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap),
+                  child: const Text('Mark Paid',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
@@ -1278,38 +1544,11 @@ class _PaymentRow extends StatelessWidget {
               style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
           Expanded(flex: 2, child: Text(_fmt(payment.paidDate),
               style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _statusBg(payment.status),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(payment.status.label,
-                style: TextStyle(fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: _statusColor(payment.status))),
-          ),
-          if (payment.status == PaymentStatus.unpaid ||
-              payment.status == PaymentStatus.overdue) ...[
+          _statusPill(),
+          if (_canMarkPaid) ...[
             const SizedBox(width: 10),
             TextButton(
-              onPressed: () async {
-                await fs.markPaymentPaid(payment.id);
-
-                if (context.mounted) {
-                  final auth =
-                      Provider.of<AuthProvider>(context, listen: false);
-                  await SettingsService().logAction(
-                    performedBy:      auth.userModel?.uid ?? '',
-                    performedByName:  auth.userModel?.displayName ?? '',
-                    action:           AuditAction.updated,
-                    targetCollection: 'payments',
-                    targetId:         payment.id,
-                    description:
-                        'Marked payment for ${payment.memberName} as paid',
-                  );
-                }
-              },
+              onPressed: () => _markPaid(context),
               style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF1A7A4A)),
               child: const Text('Mark Paid',
