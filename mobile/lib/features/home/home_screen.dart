@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/models/payment_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/routing/app_router.dart';
 
@@ -117,9 +118,17 @@ class HomeScreen extends StatelessWidget {
 
         if (snap.hasData) {
           for (final doc in snap.data!.docs) {
-            final d = doc.data() as Map<String, dynamic>;
-            totalDue += (d['amount'] as num?)?.toDouble() ?? 0;
-            if (d['status'] == 'overdue') overdueCount++;
+            // effectiveStatus (not the raw Firestore `status`), same as
+            // PaymentsScreen — nothing flips a record's stored status to
+            // 'overdue' server-side when its dueDate passes (that only
+            // happens when an admin opens Payments/Reports on
+            // web-admin), so trusting the raw field here under-reports
+            // overdue payments and shows a false "up to date" pill.
+            final payment = PaymentModel.fromFirestore(doc);
+            totalDue += payment.amount;
+            if (payment.effectiveStatus == PaymentStatus.overdue) {
+              overdueCount++;
+            }
           }
         }
 

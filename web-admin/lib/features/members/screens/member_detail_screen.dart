@@ -1457,13 +1457,13 @@ class _PaymentRow extends StatelessWidget {
   Widget _statusPill() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
-      color: _statusBg(payment.status),
+      color: _statusBg(payment.displayStatus),
       borderRadius: BorderRadius.circular(20),
     ),
-    child: Text(payment.status.label,
+    child: Text(payment.displayStatus.label,
         style: TextStyle(fontSize: 11.5,
             fontWeight: FontWeight.w600,
-            color: _statusColor(payment.status))),
+            color: _statusColor(payment.displayStatus))),
   );
 
   bool get _canMarkPaid =>

@@ -9,6 +9,7 @@
 // require manual digitizing work outside the app.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'lot_model.dart' show LotPoint;
 
 class PhaseMapModel {
   final String id;
@@ -27,6 +28,14 @@ class PhaseMapModel {
   /// field.
   final List<String> blocks;
 
+  /// Traced once per phase (via the "Set Boundary" tool, same
+  /// tap-to-place mechanic as digitizing a lot) to mark the outer
+  /// edge of the actual printed/scanned sketch on the uploaded image
+  /// — everything outside it is just the image's blank margin. Empty
+  /// means no boundary has been set yet, in which case digitizing is
+  /// unrestricted (today's behavior) rather than blocked everywhere.
+  final List<LotPoint> boundaryPoints;
+
   const PhaseMapModel({
     required this.id,
     required this.name,
@@ -34,9 +43,11 @@ class PhaseMapModel {
     required this.createdBy,
     required this.createdAt,
     this.blocks = const [],
+    this.boundaryPoints = const [],
   });
 
   bool get hasImage => imageUrl.trim().isNotEmpty;
+  bool get hasBoundary => boundaryPoints.length >= 3;
 
   factory PhaseMapModel.fromMap(String id, Map<String, dynamic> map) {
     return PhaseMapModel(
@@ -47,6 +58,10 @@ class PhaseMapModel {
       createdAt: map['createdAt'] as Timestamp? ?? Timestamp.now(),
       blocks: (map['blocks'] as List?)?.map((b) => b.toString()).toList() ??
           const [],
+      boundaryPoints: (map['boundaryPoints'] as List?)
+              ?.map((p) => LotPoint.fromMap(p as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 
@@ -56,12 +71,14 @@ class PhaseMapModel {
     'createdBy': createdBy,
     'createdAt': createdAt,
     'blocks': blocks,
+    'boundaryPoints': boundaryPoints.map((p) => p.toMap()).toList(),
   };
 
   PhaseMapModel copyWith({
     String? name,
     String? imageUrl,
     List<String>? blocks,
+    List<LotPoint>? boundaryPoints,
   }) {
     return PhaseMapModel(
       id: id,
@@ -70,6 +87,7 @@ class PhaseMapModel {
       createdBy: createdBy,
       createdAt: createdAt,
       blocks: blocks ?? this.blocks,
+      boundaryPoints: boundaryPoints ?? this.boundaryPoints,
     );
   }
 }

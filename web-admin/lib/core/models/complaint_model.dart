@@ -55,7 +55,12 @@ class ComplaintModel {
       id:             id,
       uid:            map['uid']            as String? ?? '',
       memberName:     map['memberName']     as String? ?? '',
-      subject:        map['subject']        as String? ?? '',
+      // The mobile app writes this field as 'title' (see
+      // SubmitComplaintScreen._submit()) — 'subject' has never actually
+      // been written by anything. Falling back to 'subject' too in case
+      // a future writer uses that key instead.
+      subject:        (map['title']    as String?) ??
+                       (map['subject']  as String?) ?? '',
       description:    map['description']    as String? ?? '',
       status:         ComplaintStatusExt.fromString(
                           map['status'] as String?),

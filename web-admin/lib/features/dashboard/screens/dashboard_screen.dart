@@ -144,9 +144,13 @@ class _StatsRow extends StatelessWidget {
                 .where((m) =>
                     m.status == MemberStatus.active)
                 .length;
+            // displayStatus, not the raw stored `status` — nothing flips
+            // a record to 'overdue' server-side when its dueDate passes,
+            // so trusting the raw field here undercounts (often to 0)
+            // until an admin has separately opened Payments or Reports.
             final overdueCount = payments
                 .where((p) =>
-                    p.status == PaymentStatus.overdue)
+                    p.displayStatus == PaymentStatus.overdue)
                 .length;
             final collectedTotal = payments
                 .where((p) =>
@@ -968,7 +972,7 @@ class AppSidebar extends StatelessWidget {
           const Divider(
               color: Color(0xFF1E3E7C), height: 1),
           InkWell(
-            onTap: onSignOut,
+            onTap: () => _confirmSignOut(context),
             child: const Padding(
               padding: EdgeInsets.symmetric(
                   horizontal: 20, vertical: 16),
@@ -989,6 +993,41 @@ class AppSidebar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
+        title: const Text('Sign Out?',
+            style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const Text(
+            'You\'ll need to sign in again to access the dashboard.',
+            style: TextStyle(fontSize: 13.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) onSignOut();
   }
 }
 

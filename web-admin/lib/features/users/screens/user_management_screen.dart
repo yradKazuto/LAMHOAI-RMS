@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../../../core/models/staff_model.dart';
 import '../../../core/models/user_model.dart';
@@ -911,16 +912,31 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
-      // Create Firebase Auth user
-      final cred = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      // Use a secondary Firebase App instance so the admin's own session
+      // is NOT affected when creating a new staff Auth account (creating
+      // a user via the primary FirebaseAuth instance signs the app in as
+      // that new user, kicking the admin out of their session).
+      final secondaryApp = await Firebase.initializeApp(
+        name:    'secondary',
+        options: Firebase.app().options,
+      );
+
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+      // 1. Create staff Auth account in secondary app
+      final cred = await secondaryAuth.createUserWithEmailAndPassword(
         email:    _email.text.trim(),
         password: _pass.text,
       );
+      final staffUid = cred.user!.uid;
 
-      // Save to Firestore
+      // 2. Sign out from secondary app and delete it
+      await secondaryAuth.signOut();
+      await secondaryApp.delete();
+
+      // 3. Save to Firestore — admin session untouched
       await widget.fs.addStaff(StaffModel(
-        uid:         cred.user!.uid,
+        uid:         staffUid,
         displayName: _name.text.trim(),
         email:       _email.text.trim(),
         role:        _role,
@@ -938,11 +954,19 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
         );
       }
     } on FirebaseAuthException catch (e) {
+      // Clean up secondary app if it exists
+      try {
+        await Firebase.app('secondary').delete();
+      } catch (_) {}
       setState(() {
         _loading = false;
         _error   = _mapAuthError(e.code);
       });
     } catch (e) {
+      // Clean up secondary app if it exists
+      try {
+        await Firebase.app('secondary').delete();
+      } catch (_) {}
       setState(() {
         _loading = false;
         _error   = 'An error occurred. Please try again.';

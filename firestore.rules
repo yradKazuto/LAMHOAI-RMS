@@ -120,12 +120,26 @@ service cloud.firestore {
     // to resolve the rate in effect for a given month when generating dues
     // (see RateHistoryService.getRateForMonth). Only admins can add a new
     // rate — matches the `settings` write policy above, since this is
-    // effectively dues configuration. Never updated or deleted: each doc is
-    // a permanent rate-history entry, same append-only pattern as audit_logs.
+    // effectively dues configuration.
+    //
+    // TEMPORARY (flag for adviser review): delete is allowed for admins so
+    // RateHistoryService.deleteScheduledRate() — "remove a scheduled rate
+    // that hasn't started yet" in Settings — actually works. The intended
+    // long-term design is fully append-only (matches audit_logs below):
+    // once decided, either
+    //   (a) keep this as-is (admins may delete not-yet-started rates), or
+    //   (b) revert to `allow update, delete: if false;` and remove the
+    //       "Remove scheduled rate" button + deleteScheduledRate() in
+    //       rate_history_service.dart / settings_screen.dart.
+    // Deleting an already-started rate is still blocked client-side in
+    // deleteScheduledRate(), but note that check is NOT enforced here at
+    // the rules level — an admin bypassing the app (e.g. via the Firebase
+    // console or a raw API call) could delete a rate that's already in use.
     match /monthly_dues_rates/{docId} {
       allow read: if isStaff();
       allow create: if isAdmin();
-      allow update, delete: if false;
+      allow delete: if isAdmin();
+      allow update: if false;
     }
 
     match /dues_config_history/{docId} {
@@ -135,11 +149,15 @@ service cloud.firestore {
     }
 
     // ── lots (Location Mapping) ───────────────────────────────────────────────
-    match /lots/{docId} {
-      allow read: if isStaff();
-      allow create, update: if isAdmin() || isOfficer();
-      allow delete: if isAdmin();
-    }
+   match /lots/{docId} {
+  allow read: if isStaff();
+  allow create: if isAdmin() || isOfficer();
+  allow update: if isAdmin()
+    || (isOfficer()
+        && !request.resource.data.diff(resource.data)
+              .affectedKeys().hasAny(['uid', 'ownerName']));
+  allow delete: if isAdmin();
+}
 
     // ── phaseMaps (Location Mapping — additional phase maps) ──────────────────
     match /phaseMaps/{docId} {

@@ -56,6 +56,12 @@ class AnalyticsService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ── Monthly collections for the last N months ─────────────────────────────
+  // Keyed by paidDate (when the cash actually came in), NOT dueDate — a
+  // payment due in September but paid in October (overdue, penalty
+  // applied) belongs in October's bar, matching getCollectedThisMonth()
+  // right above it on the Analytics screen. Filtering by dueDate instead
+  // would silently fold that payment back into September, which by the
+  // time October rolls around nobody is looking at anymore.
   Future<List<MonthlyCollection>> getMonthlyCollections({
     int months = 6,
   }) async {
@@ -70,10 +76,10 @@ class AnalyticsService {
       final snap = await _db
           .collection('payments')
           .where('status', isEqualTo: PaymentStatus.paid.name)
-          .where('dueDate',
+          .where('paidDate',
               isGreaterThanOrEqualTo:
                   Timestamp.fromDate(startOfMonth))
-          .where('dueDate',
+          .where('paidDate',
               isLessThan: Timestamp.fromDate(endOfMonth))
           .get();
 

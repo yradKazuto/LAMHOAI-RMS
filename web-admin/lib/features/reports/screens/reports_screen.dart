@@ -2,6 +2,7 @@
 // Filter payments by date range / member / status
 // Export to PDF or CSV
 
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -106,7 +107,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ];
 
       final csv   = const ListToCsvConverter().convert(rows);
-      final bytes = Uint8List.fromList(csv.codeUnits);
+      // UTF-8, not codeUnits (which truncates each UTF-16 code unit to a
+      // byte and mangles anything non-ASCII — ₱, ñ, or whatever a staff
+      // member typed into a payment's free-text Notes field). The
+      // leading BOM makes Excel auto-detect UTF-8 instead of guessing
+      // the system codepage and showing mojibake.
+      final bytes = Uint8List.fromList(utf8.encode('\uFEFF$csv'));
       final name  = 'lamhoai_payments_${DateTime.now().millisecondsSinceEpoch}.csv';
 
       await Share.shareXFiles(

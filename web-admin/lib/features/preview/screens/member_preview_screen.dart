@@ -472,16 +472,16 @@ class _PaymentsPreview extends StatelessWidget {
                                     horizontal: 10,
                                     vertical: 4),
                             decoration: BoxDecoration(
-                              color: _bg(p.status),
+                              color: _bg(p.displayStatus),
                               borderRadius:
                                   BorderRadius.circular(20),
                             ),
-                            child: Text(p.status.label,
+                            child: Text(p.displayStatus.label,
                                 style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight:
                                         FontWeight.w600,
-                                    color: _fg(p.status))),
+                                    color: _fg(p.displayStatus))),
                           ),
                         ],
                       ),

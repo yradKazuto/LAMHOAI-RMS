@@ -50,6 +50,13 @@ double dialogHeight(BuildContext context, double preferred) {
 class OccupiedLotDialog extends StatelessWidget {
   final LotModel lot;
   final bool canEdit;
+
+  /// Admin-only — separate from [canEdit] (which Officers also have).
+  /// Gates "Change Owner" / "Unassign" specifically: Officers can view
+  /// and edit a lot's other details, but member assignment is an
+  /// admin-only action.
+  final bool canAssignMembers;
+
   final String? currentUserId;
 
   final Future<void> Function()? onUnassign;
@@ -65,6 +72,7 @@ class OccupiedLotDialog extends StatelessWidget {
     super.key,
     required this.lot,
     required this.canEdit,
+    required this.canAssignMembers,
     this.currentUserId,
     this.onUnassign,
     this.loadAssignableMembers,
@@ -237,7 +245,7 @@ class OccupiedLotDialog extends StatelessWidget {
             label: const Text('View Member'),
           ),
 
-        if (canEdit &&
+        if (canAssignMembers &&
             loadAssignableMembers != null)
           TextButton.icon(
             onPressed: () async {
@@ -249,7 +257,7 @@ class OccupiedLotDialog extends StatelessWidget {
             label: const Text('Change Owner'),
           ),
 
-        if (canEdit &&
+        if (canAssignMembers &&
             onUnassign != null)
           TextButton.icon(
             onPressed: () async {
@@ -525,6 +533,10 @@ class OccupiedLotDialog extends StatelessWidget {
 class VacantLotDialog extends StatefulWidget {
   final LotModel lot;
   final bool canEdit;
+
+  /// Admin-only — see OccupiedLotDialog.canAssignMembers.
+  final bool canAssignMembers;
+
   final String currentUserId;
 
   final Future<List<MapEntry<String, String>>>
@@ -534,6 +546,7 @@ class VacantLotDialog extends StatefulWidget {
     super.key,
     required this.lot,
     required this.canEdit,
+    required this.canAssignMembers,
     required this.currentUserId,
     required this.loadAssignableMembers,
   });
@@ -806,7 +819,7 @@ class _VacantLotDialogState
 
                 const SizedBox(height: 10),
 
-                if (widget.canEdit)
+                if (widget.canAssignMembers)
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -965,7 +978,7 @@ class _VacantLotDialogState
     if (areaText.isNotEmpty) {
       area = double.tryParse(areaText);
 
-      if (area == null) {
+      if (area == null || area < 0) {
         _showError(
           'Please enter a valid lot area.',
         );
@@ -981,7 +994,7 @@ class _VacantLotDialogState
     if (priceText.isNotEmpty) {
       price = double.tryParse(priceText);
 
-      if (price == null) {
+      if (price == null || price < 0) {
         _showError(
           'Please enter a valid price.',
         );
@@ -1314,6 +1327,10 @@ class _VacantLotDialogState
 class ForSaleLotDialog extends StatefulWidget {
   final LotModel lot;
   final bool canEdit;
+
+  /// Admin-only — see OccupiedLotDialog.canAssignMembers.
+  final bool canAssignMembers;
+
   final String currentUserId;
 
   final Future<List<MapEntry<String, String>>>
@@ -1323,6 +1340,7 @@ class ForSaleLotDialog extends StatefulWidget {
     super.key,
     required this.lot,
     required this.canEdit,
+    required this.canAssignMembers,
     required this.currentUserId,
     required this.loadAssignableMembers,
   });
@@ -1549,7 +1567,7 @@ class _ForSaleLotDialogState
                   widget.lot.uid!,
                 ),
 
-              if (widget.canEdit)
+              if (widget.canAssignMembers)
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -2112,7 +2130,7 @@ class _AddLotDialogState
     if (areaText.isNotEmpty) {
       area = double.tryParse(areaText);
 
-      if (area == null) {
+      if (area == null || area < 0) {
         _showError(
           'Please enter a valid lot area.',
         );

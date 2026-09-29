@@ -208,6 +208,7 @@ class _LocationMappingScreenState
   void _openLotDialog(
     LotModel lot,
     bool canEdit,
+    bool canAssignMembers,
     String currentUserId,
   ) {
     if (lot.status == LotStatus.occupied) {
@@ -216,6 +217,7 @@ class _LocationMappingScreenState
         builder: (_) => OccupiedLotDialog(
           lot: lot,
           canEdit: canEdit,
+          canAssignMembers: canAssignMembers,
           onViewMember: () => _viewMemberFromLot(lot),
           onUnassign: () => _service.unassignOwner(
             lotId: lot.id,
@@ -229,6 +231,7 @@ class _LocationMappingScreenState
         builder: (_) => VacantLotDialog(
           lot: lot,
           canEdit: canEdit,
+          canAssignMembers: canAssignMembers,
           currentUserId: currentUserId,
           loadAssignableMembers:
               _loadAssignableMembers,
@@ -436,6 +439,11 @@ class _LocationMappingScreenState
     final canEdit =
         role == UserRole.admin ||
         role == UserRole.officer;
+
+    // Admin-only — Officers can view and edit everything else about a
+    // lot (details, drawing boundaries, price/notes) but assigning or
+    // changing which member owns a lot is admin-only.
+    final canAssignMembers = role == UserRole.admin;
 
     final currentUserId =
         auth.userModel?.uid ?? '';
@@ -738,6 +746,7 @@ class _LocationMappingScreenState
                                 phaseMap: match,
                                 lots: phaseLots,
                                 canEdit: canEdit,
+                                canAssignMembers: canAssignMembers,
                                 currentUserId: currentUserId,
                                 loadAssignableMembers:
                                     _loadAssignableMembers,
@@ -854,6 +863,7 @@ class _LocationMappingScreenState
                                             _openLotDialog(
                                           lot,
                                           canEdit,
+                                          canAssignMembers,
                                           currentUserId,
                                         ),
 

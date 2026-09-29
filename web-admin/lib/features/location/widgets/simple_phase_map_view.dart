@@ -35,6 +35,11 @@ class SimplePhaseMapView extends StatefulWidget {
   final PhaseMapModel phaseMap;
   final List<LotModel> lots; // already filtered to this phase
   final bool canEdit;
+
+  /// Admin-only — see OccupiedLotDialog.canAssignMembers. Officers get
+  /// [canEdit] (lot details, drawing, blocks) but not this.
+  final bool canAssignMembers;
+
   final String currentUserId;
   final Future<List<MapEntry<String, String>>> Function()
       loadAssignableMembers;
@@ -45,6 +50,7 @@ class SimplePhaseMapView extends StatefulWidget {
     required this.phaseMap,
     required this.lots,
     required this.canEdit,
+    required this.canAssignMembers,
     required this.currentUserId,
     required this.loadAssignableMembers,
     this.onViewMember,
@@ -91,6 +97,9 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   // ── Native digitize mode ────────────────────────────────────────────
   bool _digitizing = false;
   final List<Offset> _digitizePoints = []; // normalized 0.0-1.0 points
+
+  bool _settingBoundary = false;
+  final List<Offset> _boundaryDraftPoints = []; // normalized 0.0-1.0 points
 
   @override
   void initState() {
@@ -551,6 +560,10 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     setState(() {
       _digitizing = !_digitizing;
       _digitizePoints.clear();
+      if (_digitizing) {
+        _settingBoundary = false;
+        _boundaryDraftPoints.clear();
+      }
     });
   }
 
@@ -561,6 +574,104 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
 
   void _clearDigitizePoints() {
     setState(() => _digitizePoints.clear());
+  }
+
+  // ── Set Boundary mode controls ──────────────────────────────────────
+  // Traces the outer edge of the actual sketch once per phase, so
+  // "Digitize Lot" can tell the real subdivision area apart from the
+  // uploaded image's blank margin. Same tap-to-place mechanic as
+  // digitizing a lot, kept in its own point list so the two modes
+  // never mix state.
+  void _toggleSetBoundary() {
+    setState(() {
+      _settingBoundary = !_settingBoundary;
+      _boundaryDraftPoints
+        ..clear()
+        ..addAll(widget.phaseMap.boundaryPoints
+            .map((p) => Offset(p.x, p.y)));
+      if (_settingBoundary) {
+        _digitizing = false;
+        _digitizePoints.clear();
+      }
+    });
+  }
+
+  void _undoBoundaryPoint() {
+    if (_boundaryDraftPoints.isEmpty) return;
+    setState(() => _boundaryDraftPoints.removeLast());
+  }
+
+  void _clearBoundaryPoints() {
+    setState(() => _boundaryDraftPoints.clear());
+  }
+
+  Future<void> _saveBoundary() async {
+    if (_boundaryDraftPoints.length < 3) return;
+
+    final points =
+        _boundaryDraftPoints.map((o) => LotPoint(o.dx, o.dy)).toList();
+
+    if (LotService.isSelfIntersecting(points)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This boundary crosses itself — trace the outer edge in '
+              'order, without the line crossing back over itself.',
+            ),
+            backgroundColor: Color(0xFFCC2200),
+          ),
+        );
+      }
+      return;
+    }
+
+    await _phaseMapService.setBoundary(widget.phaseMap.id, points);
+
+    if (mounted) {
+      setState(() {
+        _settingBoundary = false;
+        _boundaryDraftPoints.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Boundary saved. "Digitize Lot" is now limited to inside it.'),
+          backgroundColor: Color(0xFF1A7A4A),
+        ),
+      );
+    }
+  }
+
+  Future<void> _clearSavedBoundary() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear property boundary?'),
+        content: const Text(
+            'Digitizing a new lot will become unrestricted again — '
+            'points can be placed anywhere on the image, including '
+            'outside the sketched area.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Clear',
+                  style: TextStyle(color: Color(0xFFCC2200)))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await _phaseMapService.setBoundary(widget.phaseMap.id, const []);
+    if (mounted) {
+      setState(() {
+        _settingBoundary = false;
+        _boundaryDraftPoints.clear();
+      });
+    }
   }
 
 Future<void> _saveDigitizedLot() async {
@@ -747,9 +858,34 @@ Future<void> _saveDigitizedLot() async {
     final nx = (local.dx / contentSize.width).clamp(0.0, 1.0);
     final ny = (local.dy / contentSize.height).clamp(0.0, 1.0);
 
+    // Set Boundary mode — every tap adds another boundary point,
+    // same as digitizing a lot but into its own point list.
+    if (_settingBoundary) {
+      setState(() => _boundaryDraftPoints.add(Offset(nx, ny)));
+      return;
+    }
+
     // Digitize mode — every tap just adds another boundary point,
-    // nothing else happens while active.
+    // nothing else happens while active. If this phase has a saved
+    // property boundary, points outside it are rejected outright —
+    // that's the actual point of tracing a boundary in the first
+    // place: keep new lots from ever being placed in the uploaded
+    // image's blank margin.
     if (_digitizing) {
+      if (widget.phaseMap.hasBoundary &&
+          !_pointInPolygon(
+              Offset(nx, ny), widget.phaseMap.boundaryPoints)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'That\'s outside the property boundary — lots can only '
+                'be traced inside the sketched area.'),
+            backgroundColor: Color(0xFFCC2200),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
       setState(() => _digitizePoints.add(Offset(nx, ny)));
       return;
     }
@@ -816,6 +952,7 @@ Future<void> _saveDigitizedLot() async {
         builder: (_) => OccupiedLotDialog(
           lot: lot,
           canEdit: widget.canEdit,
+          canAssignMembers: widget.canAssignMembers,
           onViewMember: widget.onViewMember == null
               ? null
               : () => widget.onViewMember!(lot),
@@ -831,6 +968,7 @@ Future<void> _saveDigitizedLot() async {
         builder: (_) => VacantLotDialog(
           lot: lot,
           canEdit: widget.canEdit,
+          canAssignMembers: widget.canAssignMembers,
           currentUserId: widget.currentUserId,
           loadAssignableMembers: widget.loadAssignableMembers,
         ),
@@ -1055,6 +1193,32 @@ Future<void> _saveDigitizedLot() async {
                             ),
                           ),
 
+                      // Saved property boundary — always visible once
+                      // traced, drawn under the lot polygons. Hidden
+                      // while actively editing it, since the live
+                      // draft preview below takes over at that point.
+                      if (widget.phaseMap.hasBoundary && !_settingBoundary)
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _BoundaryOutlinePainter(
+                              points: widget.phaseMap.boundaryPoints,
+                              contentSize: contentSize,
+                            ),
+                          ),
+                        ),
+
+                      // Live preview while tracing the property
+                      // boundary itself.
+                      if (_settingBoundary && _boundaryDraftPoints.isNotEmpty)
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _DigitizePreviewPainter(
+                              points: _boundaryDraftPoints,
+                              contentSize: contentSize,
+                            ),
+                          ),
+                        ),
+
                       // Live preview while digitizing a new lot boundary
                       if (_digitizing && _digitizePoints.isNotEmpty)
                         Positioned.fill(
@@ -1128,24 +1292,133 @@ Future<void> _saveDigitizedLot() async {
                 //     ),
                 //   const SizedBox(width: 8),
                 // ],
-                ElevatedButton.icon(
-                  onPressed: _toggleDigitize,
-                  icon: Icon(
-                      _digitizing
-                          ? Icons.close
-                          : Icons.edit_location_alt_outlined,
-                      size: 16),
-                  label: Text(_digitizing ? 'Stop Digitizing' : 'Digitize Lot'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _digitizing ? _orange : Colors.white,
-                    foregroundColor: _digitizing ? Colors.white : _navy,
-                    elevation: 2,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                // Single "Map Tools" dropdown when idle — collapses
+                // Digitize Lot / Set Boundary / Remove Boundary into
+                // one button instead of two side-by-side buttons.
+                // Mid-action it swaps to a plain "Stop/Cancel" button
+                // for whichever mode is active, since a dropdown menu
+                // doesn't make sense to reopen while already tracing.
+                if (!_digitizing && !_settingBoundary)
+                  PopupMenuButton<String>(
+                    tooltip: '',
+                    offset: const Offset(0, 44),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'digitize':
+                          _toggleDigitize();
+                          break;
+                        case 'boundary':
+                          _toggleSetBoundary();
+                          break;
+                        case 'remove_boundary':
+                          _clearSavedBoundary();
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'digitize',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_location_alt_outlined,
+                                size: 17, color: _navy),
+                            SizedBox(width: 10),
+                            Text('Digitize Lot',
+                                style: TextStyle(fontSize: 13.5)),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'boundary',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.crop_free,
+                                size: 17, color: _navy),
+                            const SizedBox(width: 10),
+                            Text(
+                                widget.phaseMap.hasBoundary
+                                    ? 'Edit Boundary'
+                                    : 'Set Boundary',
+                                style: const TextStyle(fontSize: 13.5)),
+                          ],
+                        ),
+                      ),
+                      if (widget.phaseMap.hasBoundary) ...[
+                        const PopupMenuDivider(),
+                        const PopupMenuItem(
+                          value: 'remove_boundary',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline,
+                                  size: 17, color: Color(0xFFCC2200)),
+                              SizedBox(width: 10),
+                              Text('Remove Boundary',
+                                  style: TextStyle(
+                                      fontSize: 13.5,
+                                      color: Color(0xFFCC2200))),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black12, blurRadius: 4),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.build_outlined, size: 16, color: _navy),
+                          SizedBox(width: 8),
+                          Text('Map Tools',
+                              style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: _navy)),
+                          SizedBox(width: 4),
+                          Icon(Icons.expand_more, size: 16, color: _navy),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                if (_digitizing)
+                  ElevatedButton.icon(
+                    onPressed: _toggleDigitize,
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Stop Digitizing'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _orange,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                if (_settingBoundary)
+                  ElevatedButton.icon(
+                    onPressed: _toggleSetBoundary,
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Cancel Boundary'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _purple,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1201,6 +1474,77 @@ Future<void> _saveDigitizedLot() async {
                             borderRadius: BorderRadius.circular(8)),
                       ),
                       child: const Text('Save Lot'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        // ── Set Boundary control panel ────────────────────────────────
+        if (_settingBoundary)
+          Positioned(
+            bottom: 16,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 10),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${_boundaryDraftPoints.length} point(s)',
+                        style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: _navy)),
+                    const SizedBox(width: 14),
+                    IconButton(
+                      onPressed: _boundaryDraftPoints.isEmpty
+                          ? null
+                          : _undoBoundaryPoint,
+                      icon: const Icon(Icons.undo, size: 18),
+                      tooltip: 'Undo last point',
+                    ),
+                    IconButton(
+                      onPressed: _boundaryDraftPoints.isEmpty
+                          ? null
+                          : _clearBoundaryPoints,
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      tooltip: 'Clear points',
+                    ),
+                    if (widget.phaseMap.hasBoundary) ...[
+                      const SizedBox(width: 2),
+                      TextButton(
+                        onPressed: _clearSavedBoundary,
+                        style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFFCC2200)),
+                        child: const Text('Remove Boundary',
+                            style: TextStyle(fontSize: 12.5)),
+                      ),
+                    ],
+                    const SizedBox(width: 6),
+                    ElevatedButton(
+                      onPressed: _boundaryDraftPoints.length >= 3
+                          ? _saveBoundary
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9333EA),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('Save Boundary'),
                     ),
                   ],
                 ),
@@ -1634,6 +1978,58 @@ class _LegendRow extends StatelessWidget {
 }
 
 // ── Live preview while tracing a new lot boundary ─────────────────────
+// Outlines the saved property boundary (once traced) so it's always
+// visible on the map, not just while editing it — a thin dashed-look
+// line distinct from both lot outlines (red) and the live tracing
+// preview (accent blue), drawn underneath the lot polygons.
+class _BoundaryOutlinePainter extends CustomPainter {
+  final List<LotPoint> points; // normalized 0.0-1.0
+  final Size contentSize;
+
+  _BoundaryOutlinePainter({required this.points, required this.contentSize});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 3) return;
+
+    final scaled = points
+        .map((p) =>
+            Offset(p.x * contentSize.width, p.y * contentSize.height))
+        .toList();
+
+    final path = Path()..moveTo(scaled.first.dx, scaled.first.dy);
+    for (final p in scaled.skip(1)) {
+      path.lineTo(p.dx, p.dy);
+    }
+    path.close();
+
+    // Hand-rolled dashes: PathMetrics gives the total length so we can
+    // step along it drawing short segments with gaps — Canvas has no
+    // built-in dashed stroke.
+    const dashLength = 8.0;
+    const gapLength = 6.0;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = distance + dashLength;
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          Paint()
+            ..color = _purple.withOpacity(0.45)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.5,
+        );
+        distance = next + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BoundaryOutlinePainter oldDelegate) {
+    return oldDelegate.points != points;
+  }
+}
+
 class _DigitizePreviewPainter extends CustomPainter {
   final List<Offset> points; // normalized 0.0-1.0
   final Size contentSize;

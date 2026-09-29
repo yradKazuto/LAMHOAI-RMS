@@ -2,6 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/phase_map_model.dart';
+import '../models/lot_model.dart' show LotPoint;
 
 /// Handles Firestore reads/writes for the `phaseMaps` collection —
 /// additional subdivision phases beyond the original hardcoded Phase 1.
@@ -132,5 +133,16 @@ class PhaseMapService {
 
   Future<void> deletePhase(String phaseMapId) async {
     await _phaseMaps.doc(phaseMapId).delete();
+  }
+
+  /// Saves the traced property boundary for a phase — everything
+  /// outside this polygon is treated as blank margin on the uploaded
+  /// image, so the "Digitize Lot" tool won't accept points there.
+  /// Pass an empty list to clear it back to unrestricted.
+  Future<void> setBoundary(
+      String phaseMapId, List<LotPoint> boundaryPoints) async {
+    await _phaseMaps.doc(phaseMapId).update({
+      'boundaryPoints': boundaryPoints.map((p) => p.toMap()).toList(),
+    });
   }
 }
