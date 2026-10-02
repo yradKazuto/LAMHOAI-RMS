@@ -1,6 +1,9 @@
 // features/reports/screens/reports_screen.dart
 // Filter payments by date range / member / status
 // Export to PDF or CSV
+// UPDATED — date range now follows the paid date for paid payments (when the
+// cash came in) and the due date for everything else, so it agrees with the
+// dashboard and Analytics "Collected" numbers.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -45,16 +48,35 @@ class _ReportsScreenState extends State<ReportsScreen> {
     _fs.syncOverdueStatuses();
   }
 
+  // The date a record is filed under in this report. Paid payments use the
+  // date the cash actually came in (paidDate) — so a September-due payment
+  // settled in October belongs to October, matching the dashboard and the
+  // Analytics collections chart. Everything else (unpaid, overdue, waived)
+  // has no payment date, so it stays under its due date.
+  DateTime _reportDate(PaymentModel p) =>
+      (p.status == PaymentStatus.paid && p.paidDate != null)
+          ? p.paidDate!
+          : p.dueDate;
+
   List<PaymentModel> _applyFilters(List<PaymentModel> all) {
+    // "To Date" is picked as midnight at the START of that day, but a
+    // paidDate carries a time of day (Mark Paid stamps DateTime.now()).
+    // Compare against the start of the NEXT day so a payment made on the
+    // To Date itself isn't cut off.
+    final endExclusive = _endDate == null
+        ? null
+        : DateTime(_endDate!.year, _endDate!.month, _endDate!.day + 1);
+
     return all.where((p) {
+      final d = _reportDate(p);
       final matchStatus = _statusFilter == null ||
           p.displayStatus == _statusFilter;
       final matchMember = _memberFilter == null ||
           p.uid == _memberFilter;
       final matchStart = _startDate == null ||
-          !p.dueDate.isBefore(_startDate!);
-      final matchEnd = _endDate == null ||
-          !p.dueDate.isAfter(_endDate!);
+          !d.isBefore(_startDate!);
+      final matchEnd = endExclusive == null ||
+          d.isBefore(endExclusive);
       return matchStatus && matchMember &&
           matchStart && matchEnd;
     }).toList();
@@ -181,6 +203,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     'Filters: '
                     '${_startDate != null ? 'From ${_fmt(_startDate)} ' : ''}'
                     '${_endDate != null ? 'To ${_fmt(_endDate)} ' : ''}'
+                    '${(_startDate != null || _endDate != null) ? '(paid payments by paid date, others by due date) ' : ''}'
                     '${_statusFilter != null ? 'Status: ${_statusFilter!.label}' : ''}',
                     style: pw.TextStyle(
                         font: font,
@@ -446,6 +469,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           SizedBox(width: phoneScreen ? 10 : 14),
                           Expanded(child: otherFilters[1]),
                         ],
+                      ),
+                      SizedBox(height: phoneScreen ? 10 : 12),
+                      Text(
+                        'Date range uses the paid date for paid payments '
+                        'and the due date for everything else.',
+                        style: TextStyle(
+                            fontSize: 11.5, color: Colors.grey[500]),
                       ),
                     ],
                   ),

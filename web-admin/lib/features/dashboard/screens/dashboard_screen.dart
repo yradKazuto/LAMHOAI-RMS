@@ -1,6 +1,7 @@
 // features/dashboard/screens/dashboard_screen.dart
 // UPDATED Phase 8 — Location Mapping added
 // UPDATED — Users & Homeowners now route to full pages inside the persistent shell
+// UPDATED — Admin + Accountant: "Collected This Month" card and Recent Payments list
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -50,6 +51,11 @@ class DashboardScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             _StatsRow(role: auth.role),
+            if (auth.role == UserRole.admin ||
+                auth.role == UserRole.accountant) ...[
+              const SizedBox(height: 28),
+              const _RecentPaymentsCard(),
+            ],
             if (auth.role == UserRole.admin ||
                 auth.role == UserRole.officer) ...[
               const SizedBox(height: 28),
@@ -158,6 +164,23 @@ class _StatsRow extends StatelessWidget {
                 .fold(
                     0.0, (sum, p) => sum + p.amount);
 
+            // Same definition the Analytics screen uses for
+            // "Collected This Month" (see
+            // AnalyticsService.getCollectedThisMonth): paid, and the
+            // paidDate — when the cash came in — falls inside the
+            // current calendar month. Computed from the stream we
+            // already have, so no extra Firestore reads.
+            final now          = DateTime.now();
+            final startOfMonth = DateTime(now.year, now.month, 1);
+            final endOfMonth   = DateTime(now.year, now.month + 1, 1);
+            final collectedThisMonth = payments.where((p) {
+              final d = p.paidDate;
+              return p.status == PaymentStatus.paid &&
+                  d != null &&
+                  !d.isBefore(startOfMonth) &&
+                  d.isBefore(endOfMonth);
+            }).fold(0.0, (sum, p) => sum + p.amount);
+
             final cards = <Widget>[
               _StatCard(
                 label: 'Total Members',
@@ -169,12 +192,12 @@ class _StatsRow extends StatelessWidget {
               if (role == UserRole.admin ||
                   role == UserRole.accountant) ...[
                 _StatCard(
-                  label: 'Total Collected',
-                  value:
-                      '₱${collectedTotal.toStringAsFixed(0)}',
-                  sub:   'all time',
+                  label: 'Collected This Month',
+                  value: _peso(collectedThisMonth),
+                  sub:   'All time ${_peso(collectedTotal)}',
                   icon: Icons.payments_outlined,
                   color: const Color(0xFF1A7A4A),
+                  onTap: () => context.go(AppRoutes.analytics),
                 ),
                 _StatCard(
                   label: 'Overdue Payments',
@@ -224,15 +247,18 @@ class _StatCard extends StatelessWidget {
   final String label, value, sub;
   final IconData icon;
   final Color    color;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.label, required this.value,
     required this.sub,   required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final card = Container(
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
       color: Colors.white,
@@ -289,6 +315,228 @@ class _StatCard extends StatelessWidget {
       ],
     ),
   );
+
+    if (onTap == null) return card;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onTap, child: card),
+    );
+  }
+}
+
+// ── Money / date helpers ─────────────────────────────────────────────────────
+String _peso(double v, {int decimals = 0}) {
+  final parts = v.abs().toStringAsFixed(decimals).split('.');
+  final intPart = parts[0];
+  final buf = StringBuffer();
+  for (int i = 0; i < intPart.length; i++) {
+    if (i > 0 && (intPart.length - i) % 3 == 0) buf.write(',');
+    buf.write(intPart[i]);
+  }
+  final dec = parts.length > 1 ? '.${parts[1]}' : '';
+  return '${v < 0 ? '-' : ''}₱$buf$dec';
+}
+
+String _fmtDate(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}/'
+    '${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+// ── Recent Payments card (Admin + Accountant) ────────────────────────────────
+// Latest payments that were actually paid, newest paid-date first. Reads only
+// a handful of documents (not the whole collection) and needs no composite
+// index: it's a single-field orderBy on paidDate, then filtered client-side.
+class _RecentPaymentsCard extends StatefulWidget {
+  const _RecentPaymentsCard();
+
+  @override
+  State<_RecentPaymentsCard> createState() => _RecentPaymentsCardState();
+}
+
+class _RecentPaymentsCardState extends State<_RecentPaymentsCard> {
+  late final Stream<List<PaymentModel>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = FirestoreService()
+        .db
+        .collection('payments')
+        .orderBy('paidDate', descending: true)
+        .limit(12)
+        .snapshots()
+        .map((snap) {
+      final list = snap.docs
+          .map((d) => PaymentModel.fromMap(d.data(), d.id))
+          .where((p) =>
+              p.status == PaymentStatus.paid && p.paidDate != null)
+          .toList();
+      // Same-day payments share a paidDate, so fall back to when the
+      // record was created to keep the order stable.
+      list.sort((a, b) {
+        final c = b.paidDate!.compareTo(a.paidDate!);
+        return c != 0 ? c : b.createdAt.compareTo(a.createdAt);
+      });
+      return list.take(8).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE0E8F4)),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1A4A9C).withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Recent Payments',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1E293B))),
+            const Spacer(),
+            TextButton(
+              onPressed: () => context.go(AppRoutes.payments),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: const Text('View all',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2563EB))),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        StreamBuilder<List<PaymentModel>>(
+          stream: _stream,
+          builder: (context, snap) {
+            if (snap.hasError) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('Could not load recent payments.',
+                    style: TextStyle(
+                        fontSize: 12.5, color: Colors.grey[500])),
+              );
+            }
+            if (snap.connectionState == ConnectionState.waiting &&
+                !snap.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                    child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2))),
+              );
+            }
+            final payments = snap.data ?? [];
+            if (payments.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('No payments recorded yet.',
+                    style: TextStyle(
+                        fontSize: 12.5, color: Colors.grey[500])),
+              );
+            }
+            return Column(
+              children: [
+                for (int i = 0; i < payments.length; i++) ...[
+                  if (i > 0)
+                    const Divider(
+                        height: 18, color: Color(0xFFEFF3FA)),
+                  _RecentPaymentRow(payment: payments[i]),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+class _RecentPaymentRow extends StatelessWidget {
+  final PaymentModel payment;
+  const _RecentPaymentRow({required this.payment});
+
+  static const Color _green = Color(0xFF1A7A4A);
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = payment.lotLabel.isNotEmpty
+        ? '${payment.type.label} · ${payment.lotLabel}'
+        : payment.type.label;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 30, height: 30,
+          decoration: BoxDecoration(
+            color: _green.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.payments_outlined,
+              size: 15, color: _green),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                payment.memberName.isNotEmpty
+                    ? payment.memberName
+                    : 'Unknown member',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A2B4A)),
+              ),
+              const SizedBox(height: 2),
+              Text(subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11.5, color: Colors.grey[600])),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(_peso(payment.amount, decimals: 2),
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: _green)),
+            const SizedBox(height: 2),
+            Text(_fmtDate(payment.paidDate!),
+                style: TextStyle(
+                    fontSize: 11, color: Colors.grey[400])),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 // ── Activity Log + Pending Complaints row ────────────────────────────────────

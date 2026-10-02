@@ -97,8 +97,12 @@ class NotificationService {
       }
       await batch.commit();
 
+      // OneSignal no longer returns a recipient count in its create
+      // response, so the server reports 0 for a broadcast. Treat 0/missing
+      // as "unknown" and show the number of member accounts we sent to.
+      final reported = (json['recipients'] as num?)?.toInt();
       final recipients =
-          (json['recipients'] as num?)?.toInt() ?? memberUids.length;
+          (reported != null && reported > 0) ? reported : memberUids.length;
 
       return NotificationResult(
         success: true,

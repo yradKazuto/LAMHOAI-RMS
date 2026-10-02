@@ -85,9 +85,33 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    final auth = context.read<AuthProvider>();
+    _tabs = TabController(
+        length: _canViewPayments(auth) ? 3 : 2, vsync: this);
     _photoUrl = widget.member.photoUrl;
     _initControllers(widget.member);
+  }
+
+  // Payments are Admin + Accountant only (matches the `payments` read rule
+  // in firestore.rules). Officers can open homeowner details but never see
+  // the Payments tab — and the tab is never built, so no payments query
+  // is ever sent for them.
+  bool _canViewPayments(AuthProvider auth) =>
+      auth.isAdmin || auth.isAccountant;
+
+  // The user doc is streamed live, so the role can change while this
+  // screen is open. A TabController whose length doesn't match the
+  // TabBar throws, so rebuild it if the tab count changes.
+  void _syncTabs(bool canViewPayments) {
+    final needed = canViewPayments ? 3 : 2;
+    if (_tabs.length == needed) return;
+    final old = _tabs;
+    _tabs = TabController(
+      length: needed,
+      vsync: this,
+      initialIndex: old.index.clamp(0, needed - 1).toInt(),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
 
   void _initControllers(MemberModel m) {
@@ -293,6 +317,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   Widget build(BuildContext context) {
     final auth    = context.watch<AuthProvider>();
     final canEdit = auth.isAdmin || auth.isOfficer;
+    final canViewPayments = _canViewPayments(auth);
+    _syncTabs(canViewPayments);
     final tightHeader =
         widget.compactHeader || MediaQuery.of(context).size.width < 560;
 
@@ -514,10 +540,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                   const EdgeInsets.only(right: 28),
               labelStyle: const TextStyle(
                   fontWeight: FontWeight.w600, fontSize: 13.5),
-              tabs: const [
-                Tab(text: 'Profile'),
-                Tab(text: 'Payments'),
-                Tab(text: 'Documents'),
+              tabs: [
+                const Tab(text: 'Profile'),
+                if (canViewPayments) const Tab(text: 'Payments'),
+                const Tab(text: 'Documents'),
               ],
             ),
             const Divider(height: 1, color: Color(0xFFE0E8F4)),
@@ -539,10 +565,11 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                     onViewLot: _viewLotOnMap,
                     onChangePhoto: _changePhoto,
                   ),
-                  _PaymentsTab(
-                      memberId: widget.member.uid,
-                      memberName: widget.member.name,
-                      auth: auth),
+                  if (canViewPayments)
+                    _PaymentsTab(
+                        memberId: widget.member.uid,
+                        memberName: widget.member.name,
+                        auth: auth),
                   _DocumentsTab(
                       memberId: widget.member.uid,
                       memberName: widget.member.name,
@@ -804,7 +831,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
             )
           else
             Column(
-              children: widget.ownedLots
+              children: ([...widget.ownedLots]..sort(_compareLots))
                   .map((lot) => Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: _OwnedLotTile(
@@ -823,7 +850,29 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
   }
 }
 
-// ── One owned-lot row (e.g. "Block 1 • Lot 1") ────────────────────────────
+// ── Ordering for the Owned Lots list: Phase, then Block, then Lot ──────────
+// Natural order, so "Block 2" sorts before "Block 10".
+int _natCompare(String a, String b) {
+  final ma = RegExp(r'\d+').firstMatch(a)?.group(0);
+  final mb = RegExp(r'\d+').firstMatch(b)?.group(0);
+  final ia = ma == null ? null : int.tryParse(ma);
+  final ib = mb == null ? null : int.tryParse(mb);
+  if (ia != null && ib != null) {
+    final c = ia.compareTo(ib);
+    if (c != 0) return c;
+  }
+  return a.toLowerCase().compareTo(b.toLowerCase());
+}
+
+int _compareLots(LotModel a, LotModel b) {
+  var c = _natCompare(a.phase, b.phase);
+  if (c != 0) return c;
+  c = _natCompare(a.block, b.block);
+  if (c != 0) return c;
+  return _natCompare(a.lotNumber, b.lotNumber);
+}
+
+// ── One owned-lot row (e.g. "Phase 1" / "Block 1 • Lot 1") ──────────────────
 class _OwnedLotTile extends StatelessWidget {
   final LotModel lot;
   final VoidCallback onTap;
@@ -836,6 +885,16 @@ class _OwnedLotTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final block = lot.block.isEmpty ? '—' : lot.block;
     final lotNo = lot.lotNumber.isEmpty ? '—' : lot.lotNumber;
+
+    // Phase is stored as the full label (e.g. "Phase 1"); tolerate a bare
+    // "1" too. Block and lot numbers repeat in every phase, so the phase
+    // is what actually tells two lots apart.
+    final rawPhase = lot.phase.trim();
+    final phaseLabel = rawPhase.isEmpty
+        ? ''
+        : (rawPhase.toLowerCase().startsWith('phase')
+            ? rawPhase
+            : 'Phase $rawPhase');
 
     return InkWell(
       onTap: onTap,
@@ -854,12 +913,27 @@ class _OwnedLotTile extends StatelessWidget {
                 size: 15, color: Color(0xFF2563EB)),
             const SizedBox(width: 8),
             Expanded(
-              child: Text('Block $block • Lot $lotNo',
-                  style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: _navy),
-                  overflow: TextOverflow.ellipsis),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (phaseLabel.isNotEmpty) ...[
+                    Text(phaseLabel,
+                        style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                            color: Color(0xFF2563EB)),
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                  ],
+                  Text('Block $block • Lot $lotNo',
+                      style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: _navy),
+                      overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ),
             Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
           ],
