@@ -15,14 +15,15 @@ import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/models/complaint_model.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../audit/screens/audit_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +31,7 @@ class DashboardScreen extends StatelessWidget {
     final user = auth.userModel;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
@@ -41,7 +42,7 @@ class DashboardScreen extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
-                  color: _navy),
+                  color: AppColors.textPrimary),
             ),
             const SizedBox(height: 4),
             Text(
@@ -51,8 +52,9 @@ class DashboardScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             _StatsRow(role: auth.role),
-            if (auth.role == UserRole.admin ||
-                auth.role == UserRole.accountant) ...[
+            // Accountants have no insights row, so their payments list sits
+            // right under the stat cards.
+            if (auth.role == UserRole.accountant) ...[
               const SizedBox(height: 28),
               const _RecentPaymentsCard(),
             ],
@@ -63,9 +65,14 @@ class DashboardScreen extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 14),
               const _ActivityAndComplaintsRow(),
+            ],
+            // Admins get it below Actionable Insights & Activity.
+            if (auth.role == UserRole.admin) ...[
+              const SizedBox(height: 28),
+              const _RecentPaymentsCard(),
             ],
           ],
         ),
@@ -259,62 +266,48 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-          color: const Color(0xFFE0E8F4)),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF1A4A9C).withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardBorderRadius,
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.space2_5),
+            decoration: BoxDecoration(
               color: color.withOpacity(0.1),
-              borderRadius:
-                  BorderRadius.circular(8)),
-          child:
-              Icon(icon, color: color, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 11.5,
-                      color: Colors.grey[600])),
-              Text(value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: color)),
-              Text(sub,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[400])),
-            ],
+              borderRadius: AppRadius.buttonBorderRadius,
+            ),
+            child: Icon(icon, color: color, size: 20),
           ),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(width: AppSpacing.space3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.label.copyWith(color: AppColors.textMuted)),
+                Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.greeting.copyWith(
+                        fontSize: 20,
+                        color: color)),
+                Text(sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
 
     if (onTap == null) return card;
     return MouseRegion(
@@ -354,6 +347,17 @@ class _RecentPaymentsCard extends StatefulWidget {
 
 class _RecentPaymentsCardState extends State<_RecentPaymentsCard> {
   late final Stream<List<PaymentModel>> _stream;
+  final ScrollController _scroll = ScrollController();
+
+  // The list scrolls inside a fixed-height box, so the dashboard page
+  // doesn't get longer as more payments come in.
+  static const double _listMaxHeight = 340;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -362,7 +366,7 @@ class _RecentPaymentsCardState extends State<_RecentPaymentsCard> {
         .db
         .collection('payments')
         .orderBy('paidDate', descending: true)
-        .limit(12)
+        .limit(25)
         .snapshots()
         .map((snap) {
       final list = snap.docs
@@ -376,35 +380,21 @@ class _RecentPaymentsCardState extends State<_RecentPaymentsCard> {
         final c = b.paidDate!.compareTo(a.paidDate!);
         return c != 0 ? c : b.createdAt.compareTo(a.createdAt);
       });
-      return list.take(8).toList();
+      return list.take(20).toList();
     });
   }
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE0E8F4)),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF1A4A9C).withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
+    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+    decoration: AppComponents.cardDecoration(),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Text('Recent Payments',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B))),
+            Text('Recent Payments',
+                style: AppTypography.cardTitle.copyWith(color: AppColors.textPrimary)),
             const Spacer(),
             TextButton(
               onPressed: () => context.go(AppRoutes.payments),
@@ -412,15 +402,12 @@ class _RecentPaymentsCardState extends State<_RecentPaymentsCard> {
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(0, 0),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              child: const Text('View all',
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2563EB))),
+              child: Text('View all',
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.primary)),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppSpacing.space1_5),
         StreamBuilder<List<PaymentModel>>(
           stream: _stream,
           builder: (context, snap) {
@@ -453,15 +440,28 @@ class _RecentPaymentsCardState extends State<_RecentPaymentsCard> {
                         fontSize: 12.5, color: Colors.grey[500])),
               );
             }
-            return Column(
-              children: [
-                for (int i = 0; i < payments.length; i++) ...[
-                  if (i > 0)
-                    const Divider(
-                        height: 18, color: Color(0xFFEFF3FA)),
-                  _RecentPaymentRow(payment: payments[i]),
-                ],
-              ],
+            // Grows with the content up to _listMaxHeight, then scrolls.
+            return ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxHeight: _listMaxHeight),
+              child: Scrollbar(
+                controller: _scroll,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < payments.length; i++) ...[
+                        if (i > 0)
+                          const Divider(
+                              height: 18, color: Color(0xFFEFF3FA)),
+                        _RecentPaymentRow(payment: payments[i]),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             );
           },
         ),
@@ -473,8 +473,6 @@ class _RecentPaymentsCardState extends State<_RecentPaymentsCard> {
 class _RecentPaymentRow extends StatelessWidget {
   final PaymentModel payment;
   const _RecentPaymentRow({required this.payment});
-
-  static const Color _green = Color(0xFF1A7A4A);
 
   @override
   Widget build(BuildContext context) {
@@ -488,13 +486,13 @@ class _RecentPaymentRow extends StatelessWidget {
         Container(
           width: 30, height: 30,
           decoration: BoxDecoration(
-            color: _green.withOpacity(0.1),
+            color: AppColors.success.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
           child: const Icon(Icons.payments_outlined,
-              size: 15, color: _green),
+              size: 15, color: AppColors.success),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.space2_5),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,33 +503,27 @@ class _RecentPaymentRow extends StatelessWidget {
                     : 'Unknown member',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A2B4A)),
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
               ),
               const SizedBox(height: 2),
               Text(subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 11.5, color: Colors.grey[600])),
+                  style: AppTypography.caption),
             ],
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.space2_5),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(_peso(payment.amount, decimals: 2),
-                style: const TextStyle(
-                    fontSize: 12.5,
+                style: AppTypography.bodyMedium.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: _green)),
+                    color: AppColors.success)),
             const SizedBox(height: 2),
             Text(_fmtDate(payment.paidDate!),
-                style: TextStyle(
-                    fontSize: 11, color: Colors.grey[400])),
+                style: AppTypography.label),
           ],
         ),
       ],
@@ -583,12 +575,12 @@ class _RecentActivityCard extends StatelessWidget {
 
   Color _actionColor(AuditAction a) {
     switch (a) {
-      case AuditAction.created:       return const Color(0xFF1A7A4A);
-      case AuditAction.updated:       return const Color(0xFF1A4A9C);
-      case AuditAction.deleted:       return const Color(0xFFCC2200);
-      case AuditAction.statusChanged: return const Color(0xFF7A6A1A);
+      case AuditAction.created:       return AppColors.success;
+      case AuditAction.updated:       return AppColors.primary;
+      case AuditAction.deleted:       return AppColors.danger;
+      case AuditAction.statusChanged: return AppColors.warning;
       case AuditAction.roleChanged:   return const Color(0xFF5A1A7A);
-      case AuditAction.login:         return const Color(0xFF5A7099);
+      case AuditAction.login:         return AppColors.textSecondary;
     }
   }
 
@@ -605,46 +597,28 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE0E8F4)),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF1A4A9C).withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
+    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+    decoration: AppComponents.cardDecoration(),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Text('Recent Activity Log',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B))),
+            Text('Recent Activity Log',
+                style: AppTypography.cardTitle.copyWith(color: AppColors.textPrimary)),
             const Spacer(),
             TextButton(
               onPressed: () => _openAuditLogDialog(context),
               style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(0, 0),
-                  tapTargetSize:
-                      MaterialTapTargetSize.shrinkWrap),
-              child: const Text('View all',
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2563EB))),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: Text('View all',
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.primary)),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppSpacing.space1_5),
         StreamBuilder<List<AuditLogModel>>(
           stream: svc.streamAuditLogs(limit: 5),
           builder: (context, snap) {
@@ -704,13 +678,10 @@ class _ActivityRow extends StatelessWidget {
     children: [
       Container(
         width: 30, height: 30,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
+        decoration: AppComponents.iconBoxDecoration(color),
         child: Icon(icon, size: 15, color: color),
       ),
-      const SizedBox(width: 10),
+      const SizedBox(width: AppSpacing.space2_5),
       Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -721,20 +692,15 @@ class _ActivityRow extends StatelessWidget {
                     text: log.performedByName.isNotEmpty
                         ? log.performedByName
                         : 'Someone',
-                    style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A2B4A))),
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
                 TextSpan(
                     text: ' ${log.description}',
-                    style: TextStyle(
-                        fontSize: 12.5, color: Colors.grey[700])),
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
               ]),
             ),
             const SizedBox(height: 2),
             Text(_timeAgo(log.createdAt),
-                style: TextStyle(
-                    fontSize: 11, color: Colors.grey[400])),
+                style: AppTypography.caption),
           ],
         ),
       ),
@@ -749,55 +715,37 @@ class _PendingComplaintsCard extends StatelessWidget {
 
   Color _statusColor(ComplaintStatus s) {
     switch (s) {
-      case ComplaintStatus.pending:   return const Color(0xFF7A6A1A);
-      case ComplaintStatus.reviewing: return const Color(0xFF1A4A9C);
-      case ComplaintStatus.resolved:  return const Color(0xFF1A7A4A);
-      case ComplaintStatus.rejected:  return const Color(0xFFCC2200);
+      case ComplaintStatus.pending:   return AppColors.warning;
+      case ComplaintStatus.reviewing: return AppColors.primary;
+      case ComplaintStatus.resolved:  return AppColors.success;
+      case ComplaintStatus.rejected:  return AppColors.danger;
     }
   }
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE0E8F4)),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF1A4A9C).withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
+    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+    decoration: AppComponents.cardDecoration(),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Text('Pending Complaints',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B))),
+            Text('Pending Complaints',
+                style: AppTypography.cardTitle.copyWith(color: AppColors.textPrimary)),
             const Spacer(),
             TextButton(
               onPressed: () => context.go(AppRoutes.complaints),
               style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(0, 0),
-                  tapTargetSize:
-                      MaterialTapTargetSize.shrinkWrap),
-              child: const Text('View all',
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2563EB))),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: Text('View all',
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.primary)),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: AppSpacing.space2_5),
         StreamBuilder<List<ComplaintModel>>(
           stream: fs.streamComplaints(),
           builder: (context, snap) {
@@ -893,16 +841,14 @@ class _StatusDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
     children: [
       Container(
         width: 7, height: 7,
-        decoration:
-            BoxDecoration(color: color, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
-      const SizedBox(width: 5),
+      const SizedBox(width: AppSpacing.space1),
       Text(label,
-          style: TextStyle(fontSize: 11.5, color: Colors.grey[600])),
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
     ],
   );
 }
@@ -919,10 +865,9 @@ class _ComplaintRow extends StatelessWidget {
       Container(
         margin: const EdgeInsets.only(top: 4),
         width: 6, height: 6,
-        decoration:
-            BoxDecoration(color: color, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpacing.space1),
       Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -932,21 +877,17 @@ class _ComplaintRow extends StatelessWidget {
                     : '(No subject)',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A2B4A))),
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
             Text(complaint.memberName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 11.5, color: Colors.grey[500])),
+                style: AppTypography.caption),
           ],
         ),
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpacing.space1),
       Text(_timeAgo(complaint.createdAt),
-          style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+          style: AppTypography.caption),
     ],
   );
 }
@@ -967,8 +908,8 @@ class AppTopBar extends StatelessWidget {
   final String     title;
   final bool         showMenuButton;
   final VoidCallback? onMenuTap;
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
+  
+  
   const AppTopBar({
     super.key,
     this.user,
@@ -997,21 +938,21 @@ class AppTopBar extends StatelessWidget {
             child: const Padding(
               padding: EdgeInsets.only(right: 12),
               child: Icon(Icons.menu,
-                  color: _navy, size: 22),
+                  color: AppColors.textPrimary, size: 22),
             ),
           ),
         Text(title,
             style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: _navy)),
+                color: AppColors.textPrimary)),
         const Spacer(),
         if (user != null) ...[
           Container(
             padding: const EdgeInsets.symmetric(
                 horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: _accent.withOpacity(0.1),
+              color: AppColors.primary.withOpacity(0.1),
               borderRadius:
                   BorderRadius.circular(20),
             ),
@@ -1019,14 +960,14 @@ class AppTopBar extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: _accent)),
+                    color: AppColors.primary)),
           ),
           if (!showMenuButton) ...[
             const SizedBox(width: 10),
             Text(user!.displayName,
                 style: const TextStyle(
                     fontSize: 13.5,
-                    color: _navy,
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500)),
           ],
         ],
@@ -1161,6 +1102,17 @@ class AppSidebar extends StatelessWidget {
                           .go(AppRoutes.complaints),
                     ),
                   if (role == UserRole.admin ||
+                      role == UserRole.officer)
+                    _NavItem(
+                      icon:     Icons
+                          .feedback_outlined,
+                      label:    'Feedback',
+                      selected: currentPath ==
+                          AppRoutes.feedback,
+                      onTap: () => context
+                          .go(AppRoutes.feedback),
+                    ),
+                  if (role == UserRole.admin ||
                       role == UserRole.accountant) ...[
                     _NavItem(
                       icon: Icons.bar_chart_outlined,
@@ -1215,6 +1167,14 @@ class AppSidebar extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+
+          // Help & Onboarding — visible to every role
+          _NavItem(
+            icon: Icons.help_outline,
+            label: 'Help',
+            selected: currentPath == AppRoutes.help,
+            onTap: () => context.go(AppRoutes.help),
           ),
 
           const Divider(

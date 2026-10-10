@@ -8,8 +8,8 @@ import '../../../core/models/staff_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
-import '../../../core/models/audit_log_model.dart';
-import '../../../core/services/settings_service.dart';
+import '../../../core/theme/design_tokens.dart';
+import '../../../core/widgets/app_filter_controls.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -26,10 +26,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   String  _searchQuery  = '';
   String? _roleFilter;
   String? _statusFilter;
-
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void dispose() {
@@ -54,7 +50,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -70,7 +66,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
-                            color: _navy)),
+                            color: AppColors.textPrimary)),
                     const SizedBox(height: 2),
                     Text('Manage admin panel staff accounts',
                         maxLines: 1,
@@ -88,8 +84,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       size: 18),
                   label: const Text('Add Staff'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _navy,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.primaryHeader,
+                    foregroundColor: AppColors.textInverted,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -145,17 +141,17 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     enabledBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     focusedBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: _accent, width: 1.5)),
+                            color: AppColors.primary, width: 1.5)),
                   ),
                 );
 
@@ -221,7 +217,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                       style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w700,
-                                          color: _navy)),
+                                          color: AppColors.textPrimary)),
                                   const Spacer(),
                                   if (tempRole != null ||
                                       tempStatus != null)
@@ -303,7 +299,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                     Navigator.pop(sheetCtx);
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _navy,
+                                    backgroundColor: AppColors.primaryHeader,
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
@@ -344,8 +340,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color: activeFilterCount > 0
-                                ? _accent
-                                : const Color(0xFFD0DBEE)),
+                                ? AppColors.primary
+                                : AppColors.borderStrong),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -353,7 +349,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           Icon(Icons.filter_list,
                               size: 18,
                               color: activeFilterCount > 0
-                                  ? _accent
+                                  ? AppColors.primary
                                   : Colors.grey[600]),
                           const SizedBox(width: 6),
                           Text(
@@ -364,8 +360,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: activeFilterCount > 0
-                                      ? _accent
-                                      : const Color(0xFF1A2B4A))),
+                                      ? AppColors.primary
+                                      : AppColors.textPrimary)),
                         ],
                       ),
                     ),
@@ -396,12 +392,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   children: [
                     SizedBox(width: 280, child: searchField),
                     const SizedBox(width: 12),
-                    _FilterPopoverButton(
+                    AppFilterPopoverButton(
                       activeFilterCount: activeFilterCount,
                       panelBuilder: (context, setPanelState, close) => [
-                        _PopoverFilterField(
+                        AppPopoverFilterField(
                           label: 'Role',
-                          child: _FilterChipGroup<String?>(
+                          child: AppFilterChipGroup<String?>(
                             value: _roleFilter,
                             options: const [
                               MapEntry(null, 'All Roles'),
@@ -415,9 +411,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                             },
                           ),
                         ),
-                        _PopoverFilterField(
+                        AppPopoverFilterField(
                           label: 'Status',
-                          child: _FilterChipGroup<String?>(
+                          child: AppFilterChipGroup<String?>(
                             value: _statusFilter,
                             options: const [
                               MapEntry(null, 'All Statuses'),
@@ -477,7 +473,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: const Color(0xFFE0E8F4)),
+                              color: AppColors.border),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFF1A4A9C)
@@ -510,7 +506,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               ),
                               const Divider(
                                   height: 1,
-                                  color: Color(0xFFE0E8F4)),
+                                  color: AppColors.border),
                             ],
 
                             if (staff.isEmpty)
@@ -571,8 +567,7 @@ class _StaffRow extends StatelessWidget {
   final BuildContext   context;
   final bool           compact;
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   const _StaffRow({
     required this.staff,
     required this.fs,
@@ -898,8 +893,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
   bool     _loading = false;
   String?  _error;
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   @override
   void dispose() {
     _name.dispose();
@@ -996,10 +990,10 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
         const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(
@@ -1037,7 +1031,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                     style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: _navy)),
+                        color: AppColors.textPrimary)),
                 const SizedBox(height: 4),
                 Text(
                   'Creates a Firebase Auth account and staff profile.',
@@ -1051,7 +1045,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF0EE),
+                      color: AppColors.dangerBg,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                           color: const Color(0xFFCC2200)
@@ -1128,7 +1122,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                   value: _role,
                   style: const TextStyle(
                       fontSize: 13.5,
-                      color: Color(0xFF1A2B4A)),
+                      color: AppColors.textPrimary),
                   decoration: _dec(''),
                   items: [
                     UserRole.admin,
@@ -1159,7 +1153,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                     ElevatedButton(
                       onPressed: _loading ? null : _submit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _navy,
+                        backgroundColor: AppColors.primaryHeader,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius:
@@ -1214,9 +1208,6 @@ class _FilterPopoverButton extends StatefulWidget {
 }
 
 class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-
   final LayerLink _link = LayerLink();
   OverlayEntry? _entry;
 
@@ -1251,7 +1242,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border:
-                            Border.all(color: const Color(0xFFE0E8F4)),
+                            Border.all(color: AppColors.border),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.12),
@@ -1270,7 +1261,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                                   style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: _navy)),
+                                      color: AppColors.textPrimary)),
                               const Spacer(),
                               TextButton(
                                 onPressed: () {
@@ -1296,7 +1287,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                             child: ElevatedButton(
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _navy,
+                                backgroundColor: AppColors.primaryHeader,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
@@ -1352,8 +1343,8 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                   color: widget.activeFilterCount > 0
-                      ? _accent
-                      : const Color(0xFFD0DBEE)),
+                      ? AppColors.primary
+                      : AppColors.borderStrong),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1361,7 +1352,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                 Icon(Icons.filter_list,
                     size: 18,
                     color: widget.activeFilterCount > 0
-                        ? _accent
+                        ? AppColors.primary
                         : Colors.grey[600]),
                 const SizedBox(width: 6),
                 Text(
@@ -1372,8 +1363,8 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: widget.activeFilterCount > 0
-                            ? _accent
-                            : const Color(0xFF1A2B4A))),
+                            ? AppColors.primary
+                            : AppColors.textPrimary)),
                 const SizedBox(width: 4),
                 Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
               ],
@@ -1385,7 +1376,6 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
   }
 }
 
-// A labeled filter field inside a popover panel.
 // A row of tappable chips for picking one filter value — used inside
 // popover panels instead of a nested DropdownButton, since a dropdown
 // menu opening from inside a custom OverlayEntry panel can end up
@@ -1393,7 +1383,6 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
 // Overlay, and the dropdown's route doesn't reliably stack above a
 // plain OverlayEntry). A flat chip list avoids that entirely and is
 // a one-click selection instead of open-menu-then-click.
-class _FilterChipGroup<T> extends StatelessWidget {
   final T value;
   final List<MapEntry<T, String>> options;
   final ValueChanged<T> onChanged;
@@ -1404,8 +1393,7 @@ class _FilterChipGroup<T> extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const Color _accent = Color(0xFF2563EB);
-
+  
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 8,
@@ -1420,45 +1408,22 @@ class _FilterChipGroup<T> extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: selected
-                ? _accent.withOpacity(0.1)
+                ? AppColors.primary.withOpacity(0.1)
                 : const Color(0xFFF7F9FC),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: selected ? _accent : const Color(0xFFD0DBEE)),
+                color: selected ? AppColors.primary : AppColors.borderStrong),
           ),
           child: Text(opt.value,
               style: TextStyle(
                   fontSize: 12.5,
                   color:
-                      selected ? _accent : const Color(0xFF1A2B4A),
+                      selected ? AppColors.primary : AppColors.textPrimary,
                   fontWeight:
                       selected ? FontWeight.w600 : FontWeight.w400)),
         ),
       );
     }).toList(),
-  );
-}
-
-class _PopoverFilterField extends StatelessWidget {
-  final String label;
-  final Widget child;
-  const _PopoverFilterField({required this.label, required this.child});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600])),
-        const SizedBox(height: 5),
-        SizedBox(width: double.infinity, child: child),
-      ],
-    ),
   );
 }
 
@@ -1482,7 +1447,7 @@ class _DropdownFilter extends StatelessWidget {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0xFFD0DBEE)),
+      border: Border.all(color: AppColors.borderStrong),
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String?>(
@@ -1490,7 +1455,7 @@ class _DropdownFilter extends StatelessWidget {
         hint: Text(hint,
             style: TextStyle(fontSize: 13, color: Colors.grey[500])),
         style: const TextStyle(
-            fontSize: 13, color: Color(0xFF1A2B4A)),
+            fontSize: 13, color: AppColors.textPrimary),
         icon: const Icon(Icons.expand_more, size: 18),
         items: items,
         onChanged: onChanged,
@@ -1508,7 +1473,7 @@ class _TH extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099),
+          color: AppColors.textSecondary,
           letterSpacing: 0.4));
 }
 

@@ -14,28 +14,32 @@ import '../../features/documents/screens/documents_screen.dart';
 import '../../features/users/screens/user_management_screen.dart';
 import '../../features/announcements/screens/announcements_screen.dart';
 import '../../features/complaints/screens/complaints_screen.dart';
+import '../../features/feedback/screens/feedback_screen.dart';
 import '../../features/analytics/screens/analytics_screen.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/audit/screens/audit_screen.dart';
 import '../../features/preview/screens/member_preview_screen.dart';
 import '../../features/location/screens/location_mapping_screen.dart';
+import '../../features/help/screens/help_screen.dart';
 
 class AppRoutes {
-  static const login         = '/login';
-  static const dashboard     = '/dashboard';
-  static const members       = '/members';
-  static const payments      = '/payments';
-  static const documents     = '/documents';
-  static const users         = '/users';
-  static const announcements = '/announcements';
-  static const complaints    = '/complaints';
-  static const analytics     = '/analytics';
-  static const reports       = '/reports';
-  static const settings      = '/settings';
-  static const audit         = '/audit';
-  static const preview       = '/preview';
-  static const location      = '/location';
+  static const login          = '/login';
+  static const dashboard      = '/dashboard';
+  static const members        = '/members';
+  static const payments       = '/payments';
+  static const documents      = '/documents';
+  static const users          = '/users';
+  static const announcements  = '/announcements';
+  static const complaints     = '/complaints';
+  static const feedback       = '/feedback';
+  static const analytics      = '/analytics';
+  static const reports        = '/reports';
+  static const settings       = '/settings';
+  static const audit          = '/audit';
+  static const preview        = '/preview';
+  static const location       = '/location';
+  static const help           = '/help';
 }
 
 GoRouter createRouter(AuthProvider authProvider) {
@@ -115,6 +119,13 @@ GoRouter createRouter(AuthProvider authProvider) {
         return AppRoutes.dashboard;
       }
 
+      // Feedback — Admin + Officer
+      if (path.startsWith(AppRoutes.feedback) &&
+          role != UserRole.admin &&
+          role != UserRole.officer) {
+        return AppRoutes.dashboard;
+      }
+
       // Location Mapping — Admin + Officer
       if (path.startsWith(AppRoutes.location) &&
           role != UserRole.admin &&
@@ -174,6 +185,11 @@ GoRouter createRouter(AuthProvider authProvider) {
             builder: (_, __) => const ComplaintsScreen(),
           ),
           GoRoute(
+            path: AppRoutes.feedback,
+            name: 'feedback',
+            builder: (_, __) => const FeedbackScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.analytics,
             name: 'analytics',
             builder: (_, __) => const AnalyticsScreen(),
@@ -198,6 +214,11 @@ GoRouter createRouter(AuthProvider authProvider) {
             name: 'preview',
             builder: (_, __) =>
                 const MemberPreviewScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.help,
+            name: 'help',
+            builder: (_, __) => const HelpScreen(),
           ),
         ],
       ),
