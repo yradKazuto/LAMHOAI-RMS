@@ -1,6 +1,7 @@
 // features/users/screens/user_management_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
@@ -668,7 +669,9 @@ class _StaffRow extends StatelessWidget {
     if (compact) {
       // Stacked card — Name/Email/Role/Status plus a 100px action
       // column don't have room to stay readable at phone widths.
-      return Container(
+      return InkWell(
+      onTap: () => _showStaffDetailDialog(context, staff),
+      child: Container(
         decoration: BoxDecoration(
           border: Border(
             left: BorderSide(
@@ -715,54 +718,58 @@ class _StaffRow extends StatelessWidget {
           ],
         ),
         ),
-      );
+      ),
+    );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(
-            color: staff.isActive
-                ? const Color(0xFF1A7A4A)
-                : Colors.transparent,
-            width: 3,
+    return InkWell(
+      onTap: () => _showStaffDetailDialog(context, staff),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: staff.isActive
+                  ? const Color(0xFF1A7A4A)
+                  : Colors.transparent,
+              width: 3,
+            ),
           ),
         ),
-      ),
-      child: Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          // Name
-          Expanded(flex: 3, child: _avatarAndName(isSelf)),
-          // Email
-          Expanded(
-            flex: 3,
-            child: Text(staff.email,
-                style: TextStyle(
-                    fontSize: 13, color: Colors.grey[600]),
-                overflow: TextOverflow.ellipsis),
-          ),
-          // Role
-          Expanded(
-            flex: 2,
-            child: _RoleBadge(role: staff.role),
-          ),
-          // Status
-          Expanded(flex: 2, child: _statusPill()),
-          // Actions
-          SizedBox(
-            width: 100,
-            child: isSelf
-                ? null
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: _actionButtons(isSelf),
-                  ),
-          ),
-        ],
-      ),
+        child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            // Name
+            Expanded(flex: 3, child: _avatarAndName(isSelf)),
+            // Email
+            Expanded(
+              flex: 3,
+              child: Text(staff.email,
+                  style: TextStyle(
+                      fontSize: 13, color: Colors.grey[600]),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            // Role
+            Expanded(
+              flex: 2,
+              child: _RoleBadge(role: staff.role),
+            ),
+            // Status
+            Expanded(flex: 2, child: _statusPill()),
+            // Actions
+            SizedBox(
+              width: 100,
+              child: isSelf
+                  ? null
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: _actionButtons(isSelf),
+                    ),
+            ),
+          ],
+        ),
+        ),
       ),
     );
   }
@@ -873,6 +880,218 @@ class _StaffRow extends StatelessWidget {
     if (confirm == true) {
       await fs.setStaffActive(s.uid, !s.isActive);
     }
+  }
+
+  void _showStaffDetailDialog(BuildContext context, StaffModel staff) {
+    showDialog(
+      context: context,
+      builder: (context) => _StaffDetailDialog(staff: staff),
+    );
+  }
+}
+
+class _StaffDetailDialog extends StatelessWidget {
+  final StaffModel staff;
+  const _StaffDetailDialog({required this.staff});
+
+  String _fmt(DateTime dt) =>
+      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final dialogWidth =
+        screenSize.width > 540 ? 480.0 : screenSize.width * 0.92;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: dialogWidth),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with Background
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primaryHeader.withOpacity(0.05),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: AppColors.primaryHeader.withOpacity(0.1),
+                    child: Text(
+                      staff.displayName.isNotEmpty
+                          ? staff.displayName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryHeader,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          staff.displayName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        _RoleBadge(role: staff.role),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    color: Colors.grey,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Info Body
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  _DetailRow(
+                    icon: Icons.email_outlined,
+                    label: 'Email Address',
+                    value: staff.email,
+                  ),
+                  const SizedBox(height: 16),
+                  _DetailRow(
+                    icon: Icons.fingerprint,
+                    label: 'User ID',
+                    value: staff.uid,
+                    isCopyable: true,
+                  ),
+                  const SizedBox(height: 16),
+                  _DetailRow(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Account Created',
+                    value: _fmt(staff.createdAt),
+                  ),
+                  const SizedBox(height: 16),
+                  _DetailRow(
+                    icon: staff.isActive
+                        ? Icons.check_circle_outline
+                        : Icons.cancel_outlined,
+                    label: 'Status',
+                    value: staff.isActive ? 'Active' : 'Inactive',
+                    valueColor: staff.isActive
+                        ? const Color(0xFF1A7A4A)
+                        : const Color(0xFFCC2200),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Actions Footer
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryHeader,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Close'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool isCopyable;
+  final Color? valueColor;
+
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.isCopyable = false,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: Colors.grey[400]),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: valueColor ?? AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (isCopyable)
+                    InkWell(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: value));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('ID copied to clipboard')),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(Icons.copy, size: 14, color: AppColors.primary),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1376,56 +1595,6 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
   }
 }
 
-// A row of tappable chips for picking one filter value — used inside
-// popover panels instead of a nested DropdownButton, since a dropdown
-// menu opening from inside a custom OverlayEntry panel can end up
-// rendering behind the panel itself (both insert into the same
-// Overlay, and the dropdown's route doesn't reliably stack above a
-// plain OverlayEntry). A flat chip list avoids that entirely and is
-// a one-click selection instead of open-menu-then-click.
-  final T value;
-  final List<MapEntry<T, String>> options;
-  final ValueChanged<T> onChanged;
-
-  const _FilterChipGroup({
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: options.map((opt) {
-      final selected = opt.key == value;
-      return InkWell(
-        onTap: () => onChanged(opt.key),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.primary.withOpacity(0.1)
-                : const Color(0xFFF7F9FC),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-                color: selected ? AppColors.primary : AppColors.borderStrong),
-          ),
-          child: Text(opt.value,
-              style: TextStyle(
-                  fontSize: 12.5,
-                  color:
-                      selected ? AppColors.primary : AppColors.textPrimary,
-                  fontWeight:
-                      selected ? FontWeight.w600 : FontWeight.w400)),
-        ),
-      );
-    }).toList(),
-  );
-}
 
 class _DropdownFilter extends StatelessWidget {
   final String?                         value;
