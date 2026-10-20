@@ -15,15 +15,17 @@ import '../../../core/routing/app_router.dart';
 import '../../members/screens/member_detail_screen.dart';
 import '../widgets/lot_dialogs.dart';
 import '../widgets/simple_phase_map_view.dart';
+import '../../../core/theme/design_tokens.dart';
 
-const _navy = Color(0xFF1E293B);
-const _blue = Color(0xFF2563EB);
-const _green = Color(0xFF16A34A);
-const _orange = Color(0xFFF97316);
-const _purple = Color(0xFF9333EA);
-const _accent = Color(0xFF2563EB);
+
 
 const String kPhaseOnePolygonMap = 'Phase 1';
+
+const Color _blue = AppColors.primary;
+const Color _green = AppColors.success;
+const Color _orange = AppColors.warning;
+const Color _purple = AppColors.primary; // Placeholder for purple mapping
+
 
 // Extracts the first run of digits in a string (e.g. "Block 9" -> 9,
 // "Lot 12" -> 12) so labels sort numerically instead of lexically —
@@ -262,7 +264,7 @@ class _LocationMappingScreenState
             style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFFCC2200))),
+                color: AppColors.danger)),
         content: Text(
           lotCount > 0
               ? 'This will permanently delete the "${phase.name}" phase '
@@ -279,7 +281,7 @@ class _LocationMappingScreenState
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFCC2200),
+              backgroundColor: AppColors.danger,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -330,7 +332,7 @@ class _LocationMappingScreenState
             borderRadius: BorderRadius.circular(12)),
         title: const Text('Add Phase',
             style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
+                fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,12 +345,12 @@ class _LocationMappingScreenState
                 hintText: 'e.g. Phase 2',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
                 filled: true,
-                fillColor: const Color(0xFFF7F9FC),
+                fillColor: AppColors.background,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+                    borderSide: const BorderSide(color: AppColors.borderStrong)),
               ),
             ),
             const SizedBox(height: 14),
@@ -361,12 +363,12 @@ class _LocationMappingScreenState
                 hintText: 'e.g. 5',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
                 filled: true,
-                fillColor: const Color(0xFFF7F9FC),
+                fillColor: AppColors.background,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+                    borderSide: const BorderSide(color: AppColors.borderStrong)),
               ),
             ),
             const SizedBox(height: 6),
@@ -394,7 +396,7 @@ class _LocationMappingScreenState
               });
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: _navy,
+              backgroundColor: AppColors.textPrimary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -491,7 +493,7 @@ class _LocationMappingScreenState
                       ),
                       child: Icon(
                         Icons.arrow_back,
-                        color: _navy,
+                        color: AppColors.textPrimary,
                         size: 22,
                       ),
                     ),
@@ -510,7 +512,7 @@ class _LocationMappingScreenState
                         fontSize: 20,
                         fontWeight:
                             FontWeight.w700,
-                        color: _navy,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -583,7 +585,7 @@ class _LocationMappingScreenState
                             const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: selected
-                              ? const Color(0xFFDCE6FA)
+                              ? AppPrimitiveColors.blue100
                               : Colors.transparent,
                           borderRadius:
                               BorderRadius.circular(18),
@@ -592,7 +594,7 @@ class _LocationMappingScreenState
                           icon,
                           size: 18,
                           color: selected
-                              ? _navy
+                              ? AppColors.textPrimary
                               : Colors.grey[500],
                         ),
                       ),
@@ -602,12 +604,12 @@ class _LocationMappingScreenState
                   padding:
                       const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF4F7FB),
+                    color: AppColors.background,
                     borderRadius:
                         BorderRadius.circular(20),
                     border: Border.all(
                         color:
-                            const Color(0xFFD0DBEE)),
+                            AppColors.borderStrong),
                   ),
                   child: Row(
                     mainAxisSize:
@@ -926,7 +928,7 @@ class _LocationMappingScreenState
                                                       FontWeight
                                                           .w600,
                                                   color:
-                                                      _navy,
+                                                      AppColors.textPrimary,
                                                 ),
                                               ),
 
@@ -1034,7 +1036,7 @@ class _PhaseSelectorRow extends StatelessWidget {
                   label: Text(name),
                   selected: isSelected,
                   onSelected: (_) => onSelected(name),
-                  selectedColor: _navy,
+                  selectedColor: AppColors.textPrimary,
                   labelStyle: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
@@ -1042,7 +1044,7 @@ class _PhaseSelectorRow extends StatelessWidget {
                   ),
                   backgroundColor: Colors.white,
                   side: BorderSide(
-                    color: isSelected ? _navy : const Color(0xFFD0DBEE),
+                    color: isSelected ? AppColors.textPrimary : AppColors.borderStrong,
                   ),
                   deleteIcon: const Icon(Icons.close, size: 15),
                   deleteButtonTooltipMessage: 'Remove phase',
@@ -1067,8 +1069,8 @@ class _PhaseSelectorRow extends StatelessWidget {
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add Phase'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _accent,
-                side: const BorderSide(color: _accent),
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 shape: RoundedRectangleBorder(
@@ -1118,7 +1120,7 @@ class _PhaseSection
 
         border: Border.all(
           color:
-              const Color(0xFFE0E8F4),
+              AppColors.border,
         ),
       ),
 
@@ -1134,7 +1136,7 @@ class _PhaseSection
               fontSize: 14,
               fontWeight:
                   FontWeight.w700,
-              color: _navy,
+              color: AppColors.textPrimary,
             ),
           ),
 

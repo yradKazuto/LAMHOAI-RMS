@@ -12,6 +12,8 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/lot_service.dart';
 import '../../../core/services/rate_history_service.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class AddPaymentScreen extends StatefulWidget {
   final String? preselectedMemberId;
@@ -73,7 +75,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   LotModel?      _selectedLot;
   bool           _lotsLoading  = false;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
+  
 
   @override
   void initState() {
@@ -246,7 +248,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       lastDate: isDueDate ? DateTime(now.year + 5, 12, 31) : today,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: _navy),
+          colorScheme: const ColorScheme.light(primary: AppColors.textPrimary),
         ),
         child: child!,
       ),
@@ -389,7 +391,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                               style: TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w700,
-                                  color: _navy)),
+                                  color: AppColors.textPrimary)),
                         ),
                         IconButton(
                           tooltip: 'Close',
@@ -440,7 +442,8 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                         child: _FormDropdown<PaymentStatus>(
                           label: 'Status',
                           value: _status,
-                          items: PaymentStatus.values,
+                          items: PaymentStatus.values.where((s) => s != PaymentStatus.waived)
+                              .toList(),
                           labelOf: (v) => v.label,
                           onChanged: (v) => setState(() {
                             _status = v;
@@ -591,7 +594,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                         ElevatedButton(
                           onPressed: _loading ? null : _submit,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _navy,
+                            backgroundColor: AppColors.textPrimary,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),

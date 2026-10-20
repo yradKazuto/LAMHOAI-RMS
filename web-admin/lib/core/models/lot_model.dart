@@ -1,28 +1,29 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/utils/enum_utils.dart';
+
 /// Status of a single lot/parcel in the subdivision map.
 enum LotStatus { occupied, vacant, forSale, reserved }
 
-extension LotStatusX on LotStatus {
-  String get label {
-    switch (this) {
-      case LotStatus.occupied:
-        return 'Occupied';
-      case LotStatus.vacant:
-        return 'Vacant';
-      case LotStatus.forSale:
-        return 'For Sale';
-      case LotStatus.reserved:
-        return 'Reserved';
-    }
-  }
+const Map<LotStatus, String> _lotStatusLabels = {
+  LotStatus.occupied: 'Occupied',
+  LotStatus.vacant: 'Vacant',
+  LotStatus.forSale: 'For Sale',
+  LotStatus.reserved: 'Reserved',
+};
 
-  static LotStatus fromString(String value) {
-    return LotStatus.values.firstWhere(
-      (e) => e.name == value,
-      orElse: () => LotStatus.vacant,
-    );
-  }
+const Map<String, LotStatus> _lotStatusLookup = {
+  'occupied': LotStatus.occupied,
+  'vacant': LotStatus.vacant,
+  'forsale': LotStatus.forSale,
+  'reserved': LotStatus.reserved,
+};
+
+extension LotStatusX on LotStatus {
+  String get label => enumLabel(this, _lotStatusLabels);
+
+  static LotStatus fromString(String value) =>
+      enumFromString(value, _lotStatusLookup, defaultValue: LotStatus.vacant);
 }
 
 /// A single normalized (0.0–1.0) point in a lot's digitized polygon

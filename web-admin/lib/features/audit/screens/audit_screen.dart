@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class AuditScreen extends StatefulWidget {
   const AuditScreen({super.key});
@@ -17,9 +19,9 @@ class _AuditScreenState extends State<AuditScreen> {
   String?      _actionFilter;
   String?      _collectionFilter;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   void dispose() {
@@ -84,7 +86,7 @@ class _AuditScreenState extends State<AuditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -95,7 +97,7 @@ class _AuditScreenState extends State<AuditScreen> {
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: _navy)),
+                    color: AppColors.textPrimary)),
             const SizedBox(height: 2),
             Text('Track all admin actions and changes',
                 style: TextStyle(
@@ -136,7 +138,7 @@ class _AuditScreenState extends State<AuditScreen> {
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: _accent,
+                            color: AppColors.primary,
                             width: 1.5)),
                   ),
                 );
@@ -353,7 +355,7 @@ class _AuditScreenState extends State<AuditScreen> {
                                     fontSize: 13,
                                     fontWeight:
                                         FontWeight.w600,
-                                    color: _navy),
+                                    color: AppColors.textPrimary),
                               ),
                               const Spacer(),
                               Text(

@@ -9,6 +9,7 @@ import '../models/document_model.dart';
 import '../models/staff_model.dart';
 import '../models/announcement_model.dart';
 import '../models/complaint_model.dart';
+import '../models/feedback_model.dart';
 import '../models/user_model.dart';
 
 /// Outcome of a generateMembershipFees() / generateMonthlyDues() call, for
@@ -682,6 +683,37 @@ class FirestoreService {
       'resolvedBy':     resolvedBy,
       'resolutionNote': resolutionNote,
       'updatedAt':      Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // FEEDBACK
+  // ════════════════════════════════════════════════════════════════════════════
+
+  late final CollectionReference<Map<String, dynamic>> _feedbacks =
+      FirebaseFirestore.instance.collection('feedback');
+
+  Stream<List<FeedbackModel>> streamFeedback() {
+    return _feedbacks
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => FeedbackModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
+  }
+
+  Future<void> updateFeedbackStatus({
+    required String          feedbackId,
+    required FeedbackStatus  status,
+    required String          resolvedBy,
+    required String          resolutionNote,
+  }) async {
+    await _feedbacks.doc(feedbackId).update({
+      'status':           status.name,
+      'resolvedBy':       resolvedBy,
+      'resolutionNote':   resolutionNote,
+      'updatedAt':        Timestamp.fromDate(DateTime.now()),
     });
   }
 }

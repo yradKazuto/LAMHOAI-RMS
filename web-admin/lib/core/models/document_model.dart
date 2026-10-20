@@ -2,26 +2,28 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/utils/enum_utils.dart';
+
 enum DocumentType { propertyTitle, governmentId, proofOfResidency, other }
 
-extension DocumentTypeExt on DocumentType {
-  String get label {
-    switch (this) {
-      case DocumentType.propertyTitle:     return 'Property Title';
-      case DocumentType.governmentId:      return 'Government ID';
-      case DocumentType.proofOfResidency:  return 'Proof of Residency';
-      case DocumentType.other:             return 'Other';
-    }
-  }
+const Map<DocumentType, String> _documentTypeLabels = {
+  DocumentType.propertyTitle: 'Property Title',
+  DocumentType.governmentId: 'Government ID',
+  DocumentType.proofOfResidency: 'Proof of Residency',
+  DocumentType.other: 'Other',
+};
 
-  static DocumentType fromString(String? v) {
-    switch (v) {
-      case 'propertyTitle':    return DocumentType.propertyTitle;
-      case 'governmentId':     return DocumentType.governmentId;
-      case 'proofOfResidency': return DocumentType.proofOfResidency;
-      default:                 return DocumentType.other;
-    }
-  }
+const Map<String, DocumentType> _documentTypeLookup = {
+  'propertytitle': DocumentType.propertyTitle,
+  'governmentid': DocumentType.governmentId,
+  'proofofresidency': DocumentType.proofOfResidency,
+};
+
+extension DocumentTypeExt on DocumentType {
+  String get label => enumLabel(this, _documentTypeLabels);
+
+  static DocumentType fromString(String? v) =>
+      enumFromString(v, _documentTypeLookup, defaultValue: DocumentType.other);
 }
 
 class DocumentModel {

@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/lot_model.dart';
 import '../../../core/services/lot_service.dart';
+import '../../../core/theme/design_tokens.dart';
 
-const _navy = Color(0xFF1E293B);
-const _blue = Color(0xFF1565C0);
-const _green = Color(0xFF2E7D32);
-const _orange = Color(0xFFEF6C00);
-const _red = Color(0xFFC62828);
-const _grey = Color(0xFF757575);
+
+const Color _blue = AppColors.primary;
+const Color _green = AppColors.success;
+const Color _orange = AppColors.warning;
+const Color _red = AppColors.danger;
+const Color _grey = AppPrimitiveColors.gray500;
 
 /// Strips a redundant leading "Block" (any casing, e.g. "Block 1",
 /// "block1") from user-typed input, so the stored value is always
@@ -115,7 +116,7 @@ class OccupiedLotDialog extends StatelessWidget {
             child: Text(
               'Lot ${lot.lotNumber}',
               style: const TextStyle(
-                color: _navy,
+                color: AppColors.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
               ),
@@ -693,7 +694,7 @@ class _VacantLotDialogState
             child: Text(
               'Lot ${widget.lot.lotNumber}',
               style: const TextStyle(
-                color: _navy,
+                color: AppColors.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
               ),
@@ -1441,7 +1442,7 @@ class _ForSaleLotDialogState
             child: Text(
               'Lot ${widget.lot.lotNumber}',
               style: const TextStyle(
-                color: _navy,
+                color: AppColors.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
               ),
@@ -2192,7 +2193,7 @@ Widget _sectionTitle(
   return Text(
     title,
     style: const TextStyle(
-      color: _navy,
+      color: AppColors.textPrimary,
       fontSize: 14,
       fontWeight: FontWeight.w700,
     ),

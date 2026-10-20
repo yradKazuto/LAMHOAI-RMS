@@ -17,8 +17,10 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/payment_model.dart';
+import '../../../core/models/member_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/routing/app_router.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -38,9 +40,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String?        _memberFilterName;
   bool           _exporting = false;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   void initState() {
@@ -98,15 +100,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme:
-              const ColorScheme.light(primary: _navy),
+              ColorScheme.fromSeed(seedColor: AppColors.primary),
         ),
         child: child!,
       ),
     );
     if (picked != null) {
       setState(() {
-        if (isStart) _startDate = picked;
-        else         _endDate   = picked;
+        if (isStart) {
+          _startDate = picked;
+        } else {
+          _endDate = picked;
+        }
       });
     }
   }
@@ -312,7 +317,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final phoneScreen = MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
             phoneScreen ? 16 : 28,
@@ -325,7 +330,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
                   tooltip: 'Back to Dashboard',
                   onPressed: () => context.go(AppRoutes.dashboard),
                 ),
@@ -334,17 +339,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Reports & Export',
-                          style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: _navy)),
-                      const SizedBox(height: 2),
+                      Text('Reports & Export',
+                          style: AppTypography.greeting),
+                      const SizedBox(height: AppSpacing.space0_5),
                       Text('Filter and export payment records',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 13, color: Colors.grey[600])),
+                          style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -377,7 +378,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       const DropdownMenuItem(
                           value: null,
                           child: Text('All Statuses')),
-                      ...PaymentStatus.values.map((s) =>
+                      ...PaymentStatus.values.where((s) => s != PaymentStatus.waived).map((s) =>
                           DropdownMenuItem(
                               value: s.name,
                               child: Text(s.label))),
@@ -412,10 +413,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 return Container(
                   padding: EdgeInsets.all(phoneScreen ? 14 : 20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: const Color(0xFFE0E8F4)),
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.cardBorderRadius,
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,10 +423,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       Row(
                         children: [
                           Text('Filters',
-                              style: TextStyle(
+                              style: AppTypography.sectionHeader.copyWith(
                                   fontSize: phoneScreen ? 13 : 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: _navy)),
+                                  color: AppColors.textPrimary)),
                           const Spacer(),
                           if (hasFilter)
                             TextButton.icon(
@@ -437,17 +436,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 _memberFilter     = null;
                                 _memberFilterName = null;
                               }),
-                              icon: const Icon(Icons.clear,
-                                  size: 14),
-                              label: const Text('Clear All'),
+                              icon: const Icon(Icons.clear, size: 14),
+                              label: Text('Clear All', style: AppTypography.button),
                               style: TextButton.styleFrom(
-                                  foregroundColor:
-                                      Colors.grey[600],
+                                  foregroundColor: AppColors.textMuted,
                                   padding: EdgeInsets.zero,
-                                  minimumSize: const Size(0, 0),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize
-                                          .shrinkWrap),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                             ),
                         ],
                       ),
@@ -529,11 +524,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                       horizontal: 20,
                                       vertical: 14),
                               decoration: const BoxDecoration(
-                                color: Color(0xFFF7F9FC),
-                                borderRadius:
-                                    BorderRadius.vertical(
-                                        top: Radius.circular(
-                                            12)),
+                                color: AppColors.surfaceAlt,
+                                borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(AppRadius.lg)),
                               ),
                               child: Row(
                                 children: [
@@ -544,11 +537,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                       maxLines: 1,
                                       overflow:
                                           TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight:
-                                              FontWeight.w600,
-                                          color: _navy),
+                                      style: AppTypography.cardTitle.copyWith(
+                                          color: AppColors.textPrimary),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
@@ -566,7 +556,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                     label: const Text('CSV'),
                                     style: OutlinedButton
                                         .styleFrom(
-                                      foregroundColor: _navy,
+                                      foregroundColor: AppColors.textPrimary,
                                       side: const BorderSide(
                                           color: Color(
                                               0xFFD0DBEE)),
@@ -612,7 +602,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                         : 'PDF'),
                                     style: ElevatedButton
                                         .styleFrom(
-                                      backgroundColor: _navy,
+                                      backgroundColor: AppColors.textPrimary,
                                       foregroundColor:
                                           Colors.white,
                                       shape:
@@ -666,17 +656,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               ),
                               const Divider(
                                   height: 1,
-                                  color: Color(0xFFE0E8F4)),
+                                  color: AppColors.border),
                             ],
 
                             if (payments.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 40),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 40),
                                 child: Center(
                                   child: Text(
                                       'No records match your filters.',
-                                      style: TextStyle(
-                                          color: Colors.grey)),
+                                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted)),
                                 ),
                               )
                             else
@@ -687,8 +676,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 separatorBuilder: (_, __) =>
                                     const Divider(
                                         height: 1,
-                                        color: Color(
-                                            0xFFEEF2F9)),
+                                        color: AppColors.border),
                                 itemBuilder: (_, i) =>
                                     _PaymentRow(
                                         payment:
@@ -720,33 +708,32 @@ class _PaymentRow extends StatelessWidget {
 
   Color _fg(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFF1A7A4A);
-      case PaymentStatus.unpaid:  return const Color(0xFF7A6A1A);
-      case PaymentStatus.overdue: return const Color(0xFFCC2200);
-      case PaymentStatus.waived:  return const Color(0xFF5A7099);
+      case PaymentStatus.paid:    return AppColors.success;
+      case PaymentStatus.unpaid:  return AppColors.warning;
+      case PaymentStatus.overdue: return AppColors.danger;
+      case PaymentStatus.waived:  return AppColors.textSecondary;
     }
   }
 
   Color _bg(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
-      case PaymentStatus.unpaid:  return const Color(0xFFFFF8E0);
-      case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF4F7FB);
+      case PaymentStatus.paid:    return AppColors.successBg;
+      case PaymentStatus.unpaid:  return AppColors.warningBg;
+      case PaymentStatus.overdue: return AppColors.dangerBg;
+      case PaymentStatus.waived:  return AppColors.background;
     }
   }
 
   Widget _statusPill() => Container(
     padding: const EdgeInsets.symmetric(
-        horizontal: 10, vertical: 4),
+        horizontal: AppSpacing.space2_5, vertical: AppSpacing.space1),
     decoration: BoxDecoration(
       color: _bg(payment.displayStatus),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppRadius.pillBorderRadius,
     ),
     child: Text(payment.displayStatus.label,
         textAlign: TextAlign.center,
-        style: TextStyle(
-            fontSize: 11.5,
+        style: AppTypography.caption.copyWith(
             fontWeight: FontWeight.w600,
             color: _fg(payment.displayStatus))),
   );
@@ -758,7 +745,7 @@ class _PaymentRow extends StatelessWidget {
       // readable at phone widths.
       return Padding(
         padding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 12),
+            horizontal: AppSpacing.space4, vertical: AppSpacing.space3),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -766,39 +753,35 @@ class _PaymentRow extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(payment.memberName,
-                      style: const TextStyle(
-                          fontSize: 13.5,
+                      style: AppTypography.bodyMedium.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E293B)),
+                          color: AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.space1),
                 _statusPill(),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.space1),
             Row(
               children: [
                 Text(payment.type.label,
-                    style: TextStyle(
-                        fontSize: 13, color: Colors.grey[700])),
-                const SizedBox(width: 8),
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                const SizedBox(width: AppSpacing.space1),
                 Text(
                   '₱${payment.amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                      fontSize: 13.5,
+                  style: AppTypography.bodyMedium.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A2B4A)),
+                      color: AppColors.textPrimary),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.space1),
             Text(
               'Due ${fmt(payment.dueDate)}'
               '${payment.paidDate != null ? '  ·  Paid ${fmt(payment.paidDate)}' : ''}',
-              style: TextStyle(
-                  fontSize: 12, color: Colors.grey[500]),
+              style: AppTypography.caption,
             ),
           ],
         ),
@@ -807,45 +790,39 @@ class _PaymentRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: 20, vertical: 12),
+          horizontal: AppSpacing.cardPadding, vertical: AppSpacing.space3),
       child: Row(
         children: [
           Expanded(
             flex: 3,
             child: Text(payment.memberName,
-                style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF1E293B)),
+                style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.textPrimary),
                 overflow: TextOverflow.ellipsis),
           ),
           Expanded(
             flex: 2,
             child: Text(payment.type.label,
-                style: TextStyle(
-                    fontSize: 13, color: Colors.grey[700])),
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
           ),
           Expanded(
             flex: 2,
             child: Text(
               '₱${payment.amount.toStringAsFixed(2)}',
-              style: const TextStyle(
-                  fontSize: 13.5,
+              style: AppTypography.bodyMedium.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A2B4A)),
+                  color: AppColors.textPrimary),
             ),
           ),
           Expanded(
             flex: 2,
             child: Text(fmt(payment.dueDate),
-                style: TextStyle(
-                    fontSize: 13, color: Colors.grey[600])),
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
           ),
           Expanded(
             flex: 2,
             child: Text(fmt(payment.paidDate),
-                style: TextStyle(
-                    fontSize: 13, color: Colors.grey[600])),
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
           ),
           Expanded(
             flex: 2,
@@ -862,11 +839,9 @@ class _TH extends StatelessWidget {
   const _TH(this.text);
   @override
   Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
-          fontSize: 12,
+      style: AppTypography.bodyMedium.copyWith(
           fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099),
-          letterSpacing: 0.4));
+          color: AppColors.textMuted));
 }
 
 class _DateFilter extends StatelessWidget {
@@ -874,7 +849,7 @@ class _DateFilter extends StatelessWidget {
   final DateTime? date;
   final VoidCallback onTap;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   const _DateFilter({
     required this.label, required this.date,
@@ -889,36 +864,30 @@ class _DateFilter extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label,
-          style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: _navy)),
-      const SizedBox(height: 6),
+      Text(label, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+      const SizedBox(height: AppSpacing.space1),
       InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.buttonBorderRadius,
         child: Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 10),
+              horizontal: AppSpacing.space3, vertical: AppSpacing.space2),
           decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
-            borderRadius: BorderRadius.circular(8),
-            border:
-                Border.all(color: const Color(0xFFD0DBEE)),
+            color: AppColors.surfaceAlt,
+            borderRadius: AppRadius.buttonBorderRadius,
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [
               Icon(Icons.calendar_today_outlined,
-                  size: 15, color: Colors.grey[500]),
-              const SizedBox(width: 8),
+                  size: 15, color: AppColors.textMuted),
+              const SizedBox(width: AppSpacing.space2),
               Text(
                 date != null ? _fmt(date!) : 'Select date',
-                style: TextStyle(
-                    fontSize: 13,
+                style: AppTypography.bodyMedium.copyWith(
                     color: date != null
-                        ? const Color(0xFF1A2B4A)
-                        : Colors.grey[400]),
+                        ? AppColors.textPrimary
+                        : AppColors.textMuted),
               ),
             ],
           ),
@@ -934,7 +903,7 @@ class _FilterDropdown extends StatelessWidget {
   final List<DropdownMenuItem<String?>> items;
   final void Function(String?) onChanged;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   const _FilterDropdown({
     required this.label, required this.hint,
@@ -946,32 +915,21 @@ class _FilterDropdown extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label,
-          style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: _navy)),
-      const SizedBox(height: 6),
+      Text(label, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+      const SizedBox(height: AppSpacing.space1),
       Container(
         height: 42,
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space3),
         decoration: BoxDecoration(
-          color: const Color(0xFFF7F9FC),
-          borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: const Color(0xFFD0DBEE)),
+          color: AppColors.surfaceAlt,
+          borderRadius: AppRadius.buttonBorderRadius,
+          border: Border.all(color: AppColors.border),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
             value: value,
-            hint: Text(hint,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[400])),
-            style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF1A2B4A)),
+            hint: Text(hint, style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted)),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
             icon: const Icon(Icons.expand_more, size: 18),
             items: items,
             onChanged: onChanged,
@@ -988,8 +946,6 @@ class _MemberDropdown extends StatelessWidget {
   final String?           selectedName;
   final void Function(String id, String name) onSelected;
   final VoidCallback      onClear;
-
-  static const Color _navy = Color(0xFF1E293B);
 
   const _MemberDropdown({
     required this.fs,
@@ -1008,58 +964,63 @@ class _MemberDropdown extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Member',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _navy)),
-            const SizedBox(height: 6),
-            Container(
+            Text('Member', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            const SizedBox(height: AppSpacing.space1),
+            SizedBox(
               height: 42,
-              width: 200,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F9FC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFFD0DBEE)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String?>(
-                  value: selectedId,
-                  hint: Text('All Members',
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[400])),
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF1A2B4A)),
-                  icon: const Icon(Icons.expand_more,
-                      size: 18),
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('All Members')),
-                    ...members.map((m) =>
-                        DropdownMenuItem<String?>(
-                          value: m.uid,
-                          child: Text(m.name,
-                              overflow:
-                                  TextOverflow.ellipsis),
-                        )),
-                  ],
-                  onChanged: (v) {
-                    if (v == null) {
-                      onClear();
-                    } else {
-                      final m = members
-                          .firstWhere((m) => m.uid == v);
-                      onSelected(m.uid, m.name);
-                    }
-                  },
-                ),
+              width: 220,
+              child: Autocomplete<MemberModel>(
+                displayStringForOption: (m) => m.name,
+                optionsBuilder: (textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return members;
+                  }
+                  return members.where((m) =>
+                      m.name.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                },
+                onSelected: (m) => onSelected(m.uid, m.name),
+                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                  if (selectedId == null && controller.text.isNotEmpty) {
+                    controller.clear();
+                  } else if (selectedName != null && controller.text != selectedName) {
+                    controller.text = selectedName!;
+                  }
+                  return TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    onEditingComplete: onEditingComplete,
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Search member...',
+                      hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
+                      filled: true,
+                      fillColor: AppColors.surfaceAlt,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      prefixIcon: const Icon(Icons.search, size: 16),
+                      suffixIcon: selectedId != null
+                          ? IconButton(
+                              icon: const Icon(Icons.close, size: 16),
+                              onPressed: () {
+                                controller.clear();
+                                onClear();
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: AppRadius.buttonBorderRadius,
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: AppRadius.buttonBorderRadius,
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: AppRadius.buttonBorderRadius,
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

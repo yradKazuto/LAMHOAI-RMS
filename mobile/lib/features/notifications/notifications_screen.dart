@@ -127,17 +127,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
-                onTap: () =>
-                    context.canPop() ? context.pop() : context.go('/home'),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
-                    SizedBox(width: 4),
-                    Text('Back', style: TextStyle(fontSize: 10, color: _blue200)),
-                  ],
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    onTap: () =>
+                        context.canPop() ? context.pop() : context.go('/home'),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
+                        SizedBox(width: 4),
+                        Text('Back',
+                            style: TextStyle(fontSize: 10, color: _blue200)),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _markAllAsRead,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Mark all as read',
+                        style: TextStyle(fontSize: 10, color: Colors.white)),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               const Text(
@@ -159,6 +174,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _markAllAsRead() async {
+    final uid = context.read<AuthProvider>().user?.uid;
+    if (uid == null) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+    final query = await FirebaseFirestore.instance
+        .collection('notifications')
+        .where('uid', isEqualTo: uid)
+        .where('isRead', isEqualTo: false)
+        .get();
+
+    final done = <String>[];
+    try {
+      for (var doc in query.docs) {
+        batch.update(doc.reference, {'isRead': true});
+        done.add(doc.id);
+      }
+      await batch.commit();
+    } catch (e) {
+      // Roll back local state on failure so UI doesn't report success for docs
+      // that weren't actually updated.
+      for (final id in done) {
+        setState(() {
+          _locallyRead.remove(id);
+        });
+      }
+      return;
+    }
+    setState(() => _locallyRead.addAll(done));
   }
 
   // ── Filter row ────────────────────────────────────────────────────────────

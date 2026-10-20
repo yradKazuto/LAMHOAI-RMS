@@ -1,33 +1,27 @@
 // core/models/user_model.dart
 
+import '../../../core/utils/enum_utils.dart';
+
 enum UserRole { admin, accountant, officer, unknown }
 
-extension UserRoleExtension on UserRole {
-  String get label {
-    switch (this) {
-      case UserRole.admin:
-        return 'Admin';
-      case UserRole.accountant:
-        return 'Accountant';
-      case UserRole.officer:
-        return 'Officer';
-      case UserRole.unknown:
-        return 'Unknown';
-    }
-  }
+const Map<UserRole, String> _userRoleLabels = {
+  UserRole.admin: 'Admin',
+  UserRole.accountant: 'Accountant',
+  UserRole.officer: 'Officer',
+  UserRole.unknown: 'Unknown',
+};
 
-  static UserRole fromString(String? value) {
-    switch (value?.toLowerCase()) {
-      case 'admin':
-        return UserRole.admin;
-      case 'accountant':
-        return UserRole.accountant;
-      case 'officer':
-        return UserRole.officer;
-      default:
-        return UserRole.unknown;
-    }
-  }
+const Map<String, UserRole> _userRoleLookup = {
+  'admin': UserRole.admin,
+  'accountant': UserRole.accountant,
+  'officer': UserRole.officer,
+};
+
+extension UserRoleExtension on UserRole {
+  String get label => enumLabel(this, _userRoleLabels);
+
+  static UserRole fromString(String? value) =>
+      enumFromString(value, _userRoleLookup, defaultValue: UserRole.unknown);
 }
 
 class UserModel {

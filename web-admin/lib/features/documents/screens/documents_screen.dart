@@ -15,6 +15,8 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../widgets/document_upload_flow.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class DocumentsScreen extends StatefulWidget {
   final String? filterMemberId;
@@ -40,9 +42,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   bool          _uploading   = false;
   String?       _uploadError;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
   static const Color _red    = Color(0xFFCC2200);
 
   @override
@@ -105,19 +107,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final isFiltered = widget.filterMemberId != null;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       appBar: isFiltered
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: _navy),
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
                 onPressed: () => Navigator.pop(context),
               ),
               title: Text(
                 'Documents — ${widget.filterMemberName ?? ''}',
                 style: const TextStyle(
-                    color: _navy,
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 17),
               ),
@@ -139,7 +141,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                           style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
-                              color: _navy)),
+                              color: AppColors.textPrimary)),
                       const SizedBox(height: 2),
                       Text(
                         'Property titles, IDs, and uploaded files',
@@ -245,7 +247,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
-                              color: _accent, width: 1.5)),
+                              color: AppColors.primary, width: 1.5)),
                     ),
                   ),
                 ),
@@ -345,7 +347,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 class _UploadButton extends StatelessWidget {
   final bool uploading;
   final VoidCallback onTap;
-  static const Color _navy = Color(0xFF1E293B);
+  
   const _UploadButton({required this.uploading, required this.onTap});
 
   @override
@@ -359,9 +361,9 @@ class _UploadButton extends StatelessWidget {
         : const Icon(Icons.upload_file_outlined, size: 18),
     label: Text(uploading ? 'Uploading…' : 'Upload Document'),
     style: ElevatedButton.styleFrom(
-      backgroundColor: _navy,
+      backgroundColor: AppColors.textPrimary,
       foregroundColor: Colors.white,
-      disabledBackgroundColor: _navy.withOpacity(0.5),
+      disabledBackgroundColor: AppColors.textPrimary.withOpacity(0.5),
       padding: const EdgeInsets.symmetric(
           horizontal: 20, vertical: 14),
       shape: RoundedRectangleBorder(

@@ -9,13 +9,15 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/routing/app_router.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class AnnouncementsScreen extends StatelessWidget {
   const AnnouncementsScreen({super.key});
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +28,7 @@ class AnnouncementsScreen extends StatelessWidget {
     final phoneScreen = MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: EdgeInsets.fromLTRB(
             phoneScreen ? 16 : 28,
@@ -41,7 +43,7 @@ LayoutBuilder(
     final titleBlock = Row(
       children: [
         IconButton(
-          icon: const Icon(Icons.arrow_back, color: _navy),
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           tooltip: 'Back to Dashboard',
           onPressed: () => context.go(AppRoutes.dashboard),
         ),
@@ -54,7 +56,7 @@ LayoutBuilder(
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 2),
               Text(
                   'Post notices visible to all homeowners',
@@ -76,7 +78,7 @@ LayoutBuilder(
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Post Announcement'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _navy,
+              backgroundColor: AppColors.textPrimary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(
                   horizontal: 20, vertical: 14),
@@ -158,15 +160,19 @@ LayoutBuilder(
                     itemCount: items.length,
                     separatorBuilder: (_, __) =>
                         const SizedBox(height: 12),
-                    itemBuilder: (_, i) => _AnnouncementCard(
-                      announcement: items[i],
-                      canEdit:      canPost,
-                      canDelete:    auth.isAdmin,
-                      fs:           _fs,
-                      notif:        _notif,
-                      onEdit: () => _showPostDialog(
-                        context, _fs, _notif, auth,
-                        existing: items[i],
+                    itemBuilder: (_, i) => InkWell(
+                      onTap: () => _showAnnouncementDetail(context, items[i]),
+                      borderRadius: BorderRadius.circular(12),
+                      child: _AnnouncementCard(
+                        announcement: items[i],
+                        canEdit:      canPost,
+                        canDelete:    auth.isAdmin,
+                        fs:           _fs,
+                        notif:        _notif,
+                        onEdit: () => _showPostDialog(
+                          context, _fs, _notif, auth,
+                          existing: items[i],
+                        ),
                       ),
                     ),
                   );
@@ -196,6 +202,75 @@ LayoutBuilder(
       ),
     );
   }
+
+  void _showAnnouncementDetail(BuildContext context, AnnouncementModel item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: item.isActive ? const Color(0xFF1A7A4A) : Colors.grey,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item.title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 14, color: Colors.grey[500]),
+                    const SizedBox(width: 4),
+                    Text(item.postedByName, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    const SizedBox(width: 16),
+                    Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey[500]),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${item.createdAt.day.toString().padLeft(2, '0')}/${item.createdAt.month.toString().padLeft(2, '0')}/${item.createdAt.year}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Text(
+                  item.body,
+                  style: const TextStyle(fontSize: 14, height: 1.6, color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.textInverted,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AnnouncementCard extends StatelessWidget {
@@ -206,7 +281,7 @@ class _AnnouncementCard extends StatelessWidget {
   final NotificationService notif;
   final VoidCallback       onEdit;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   const _AnnouncementCard({
     required this.announcement,
@@ -267,7 +342,7 @@ class _AnnouncementCard extends StatelessWidget {
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: announcement.isActive
-                          ? _navy
+                          ? AppColors.textPrimary
                           : Colors.grey[500]));
 
               final statusBadge = Container(
@@ -525,7 +600,7 @@ class _PostDialogState extends State<_PostDialog> {
   bool _loading  = false;
   int  _tokenCount = 0;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   bool get _isEdit => widget.existing != null;
 
@@ -666,7 +741,7 @@ class _PostDialogState extends State<_PostDialog> {
                 style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: _navy),
+                    color: AppColors.textPrimary),
               ),
               const SizedBox(height: 20),
 
@@ -674,7 +749,7 @@ class _PostDialogState extends State<_PostDialog> {
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               TextField(
                 controller: _title,
@@ -688,7 +763,7 @@ class _PostDialogState extends State<_PostDialog> {
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               TextField(
                 controller: _body,
@@ -763,7 +838,7 @@ class _PostDialogState extends State<_PostDialog> {
                     onPressed:
                         _loading ? null : _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _navy,
+                      backgroundColor: AppColors.textPrimary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius:

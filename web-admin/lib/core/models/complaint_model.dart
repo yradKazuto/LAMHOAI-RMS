@@ -2,26 +2,29 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/utils/enum_utils.dart';
+
 enum ComplaintStatus { pending, reviewing, resolved, rejected }
 
-extension ComplaintStatusExt on ComplaintStatus {
-  String get label {
-    switch (this) {
-      case ComplaintStatus.pending:   return 'Pending';
-      case ComplaintStatus.reviewing: return 'Reviewing';
-      case ComplaintStatus.resolved:  return 'Resolved';
-      case ComplaintStatus.rejected:  return 'Rejected';
-    }
-  }
+const Map<ComplaintStatus, String> _complaintStatusLabels = {
+  ComplaintStatus.pending: 'Pending',
+  ComplaintStatus.reviewing: 'Reviewing',
+  ComplaintStatus.resolved: 'Resolved',
+  ComplaintStatus.rejected: 'Rejected',
+};
 
-  static ComplaintStatus fromString(String? v) {
-    switch (v?.toLowerCase()) {
-      case 'reviewing': return ComplaintStatus.reviewing;
-      case 'resolved':  return ComplaintStatus.resolved;
-      case 'rejected':  return ComplaintStatus.rejected;
-      default:          return ComplaintStatus.pending;
-    }
-  }
+const Map<String, ComplaintStatus> _complaintStatusLookup = {
+  'pending': ComplaintStatus.pending,
+  'reviewing': ComplaintStatus.reviewing,
+  'resolved': ComplaintStatus.resolved,
+  'rejected': ComplaintStatus.rejected,
+};
+
+extension ComplaintStatusExt on ComplaintStatus {
+  String get label => enumLabel(this, _complaintStatusLabels);
+
+  static ComplaintStatus fromString(String? v) =>
+      enumFromString(v, _complaintStatusLookup, defaultValue: ComplaintStatus.pending);
 }
 
 class ComplaintModel {

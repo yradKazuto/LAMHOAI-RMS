@@ -2,10 +2,57 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/enum_utils.dart';
+
 // Kept in sync with web-admin/lib/core/models/payment_model.dart — the
 // admin app is the source of truth for what gets written to Firestore.
 enum PaymentStatus { paid, unpaid, overdue, waived }
-enum PaymentType   { dues, membershipFee, penalty, specialAssessment, other }
+enum PaymentType   { dues, membershipFee, lotPayment, penalty, specialAssessment, other }
+
+const Map<PaymentStatus, String> _paymentStatusLabels = {
+  PaymentStatus.paid: 'Paid',
+  PaymentStatus.unpaid: 'Unpaid',
+  PaymentStatus.overdue: 'Overdue',
+  PaymentStatus.waived: 'Waived',
+};
+
+const Map<String, PaymentStatus> _paymentStatusLookup = {
+  'paid': PaymentStatus.paid,
+  'unpaid': PaymentStatus.unpaid,
+  'overdue': PaymentStatus.overdue,
+  'waived': PaymentStatus.waived,
+};
+
+const Map<PaymentType, String> _paymentTypeLabels = {
+  PaymentType.dues: 'Monthly Dues',
+  PaymentType.membershipFee: 'Membership Fee',
+  PaymentType.lotPayment: 'Lot Amortization',
+  PaymentType.penalty: 'Penalty',
+  PaymentType.specialAssessment: 'Special Assessment',
+  PaymentType.other: 'Other',
+};
+
+const Map<String, PaymentType> _paymentTypeLookup = {
+  'dues': PaymentType.dues,
+  'membershipfee': PaymentType.membershipFee,
+  'lotpayment': PaymentType.lotPayment,
+  'penalty': PaymentType.penalty,
+  'specialassessment': PaymentType.specialAssessment,
+};
+
+extension PaymentStatusExt on PaymentStatus {
+  String get label => enumLabel(this, _paymentStatusLabels);
+
+  static PaymentStatus fromString(String? v) =>
+      enumFromString(v, _paymentStatusLookup, defaultValue: PaymentStatus.unpaid);
+}
+
+extension PaymentTypeExt on PaymentType {
+  String get label => enumLabel(this, _paymentTypeLabels);
+
+  static PaymentType fromString(String? v) =>
+      enumFromString(v, _paymentTypeLookup, defaultValue: PaymentType.other);
+}
 
 class PaymentModel {
   final String   id;
@@ -38,9 +85,9 @@ class PaymentModel {
       id:         doc.id,
       memberId:   d['uid']   as String? ?? '',
       memberName: d['memberName'] as String? ?? '',
-      type:       _typeFromString(d['type']   as String?),
+      type:       PaymentTypeExt.fromString(d['type']   as String?),
       amount:     (d['amount'] as num?)?.toDouble() ?? 0.0,
-      status:     _statusFromString(d['status'] as String?),
+      status:     PaymentStatusExt.fromString(d['status'] as String?),
       dueDate:    (d['dueDate']   as Timestamp?)?.toDate() ?? DateTime.now(),
       paidDate:   (d['paidDate']  as Timestamp?)?.toDate(),
       recordedBy: d['recordedBy'] as String?,
@@ -50,15 +97,8 @@ class PaymentModel {
 
   // ── Derived helpers ───────────────────────────────────────────────────────
 
-  String get typeLabel {
-    switch (type) {
-      case PaymentType.dues:              return 'Monthly Dues';
-      case PaymentType.membershipFee:     return 'Membership Fee';
-      case PaymentType.penalty:           return 'Penalty';
-      case PaymentType.specialAssessment: return 'Special Assessment';
-      case PaymentType.other:             return 'Other';
-    }
-  }
+  /// Display label for the payment type (e.g. 'Monthly Dues').
+  String get typeLabel => type.label;
 
   /// The status as it should actually be displayed right now.
   ///
@@ -70,40 +110,19 @@ class PaymentModel {
   /// mirrors `PaymentDisplayStatus.displayStatus` in the web-admin app so
   /// both apps show the same thing for the same record.
   PaymentStatus get effectiveStatus {
-    if (status == PaymentStatus.unpaid && dueDate.isBefore(DateTime.now())) {
+    // Compare against the START of today so a record is not "overdue" on
+    // its own due date (dueDate is stored at midnight, so comparing with
+    // DateTime.now() flipped it to overdue at 12:00 AM of the due day).
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    if (status == PaymentStatus.unpaid && dueDate.isBefore(startOfToday)) {
       return PaymentStatus.overdue;
     }
     return status;
   }
 
-  String get statusLabel {
-    switch (effectiveStatus) {
-      case PaymentStatus.paid:    return 'Paid';
-      case PaymentStatus.unpaid:  return 'Unpaid';
-      case PaymentStatus.overdue: return 'Overdue';
-      case PaymentStatus.waived:  return 'Waived';
-    }
-  }
+  /// Display label for the status (e.g. 'Paid', 'Overdue').
+  String get statusLabel => effectiveStatus.label;
 
   // ── Serialization ─────────────────────────────────────────────────────────
-
-  static PaymentStatus _statusFromString(String? v) {
-    switch (v?.toLowerCase()) {
-      case 'paid':    return PaymentStatus.paid;
-      case 'unpaid':  return PaymentStatus.unpaid;
-      case 'overdue': return PaymentStatus.overdue;
-      case 'waived':  return PaymentStatus.waived;
-      default:        return PaymentStatus.unpaid;
-    }
-  }
-
-  static PaymentType _typeFromString(String? v) {
-    switch (v) {
-      case 'dues':              return PaymentType.dues;
-      case 'membershipFee':     return PaymentType.membershipFee;
-      case 'penalty':           return PaymentType.penalty;
-      case 'specialAssessment': return PaymentType.specialAssessment;
-      default:                  return PaymentType.other;
-    }
-  }
 }

@@ -21,15 +21,15 @@ import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/phase_map_service.dart';
 import '../../documents/widgets/document_upload_flow.dart' show documentMimeType;
 import 'lot_dialogs.dart';
+import '../../../core/theme/design_tokens.dart';
+
 // import 'polygon_import_flow.dart'; // TODO: re-enable once `excel` package is added (flutter pub add excel)
 
-const _navy = Color(0xFF1E293B);
-const _blue = Color(0xFF2563EB);
-const _green = Color(0xFF16A34A);
-const _orange = Color(0xFFF97316);
-const _purple = Color(0xFF9333EA);
-const _grey = Color(0xFF9E9E9E);
-const _accent = Color(0xFF2563EB);
+const Color _blue = AppColors.primary;
+const Color _green = AppColors.success;
+const Color _orange = AppColors.warning;
+const Color _purple = AppColors.primary;
+const Color _grey = AppPrimitiveColors.gray500;
 
 class SimplePhaseMapView extends StatefulWidget {
   final PhaseMapModel phaseMap;
@@ -226,7 +226,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             title: Text('Manage Blocks — ${widget.phaseMap.name}',
                 style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
+                    fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
             content: SizedBox(
               width: 380,
               child: Column(
@@ -290,7 +290,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                           if (mounted) setState(() {});
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _navy,
+                          backgroundColor: AppColors.textPrimary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
@@ -732,7 +732,7 @@ Future<void> _saveDigitizedLot() async {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           title: const Text('Save Lot Boundary',
               style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
+                  fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -779,7 +779,7 @@ Future<void> _saveDigitizedLot() async {
                 Navigator.pop(dialogCtx, true);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _navy,
+                backgroundColor: AppColors.textPrimary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
@@ -1282,7 +1282,7 @@ Future<void> _saveDigitizedLot() async {
                 //       label: const Text('Import Excel'),
                 //       style: ElevatedButton.styleFrom(
                 //         backgroundColor: Colors.white,
-                //         foregroundColor: _accent,
+                //         foregroundColor: AppColors.primary,
                 //         elevation: 2,
                 //         padding: const EdgeInsets.symmetric(
                 //             horizontal: 14, vertical: 10),
@@ -1323,7 +1323,7 @@ Future<void> _saveDigitizedLot() async {
                         child: Row(
                           children: [
                             Icon(Icons.edit_location_alt_outlined,
-                                size: 17, color: _navy),
+                                size: 17, color: AppColors.textPrimary),
                             SizedBox(width: 10),
                             Text('Digitize Lot',
                                 style: TextStyle(fontSize: 13.5)),
@@ -1335,7 +1335,7 @@ Future<void> _saveDigitizedLot() async {
                         child: Row(
                           children: [
                             const Icon(Icons.crop_free,
-                                size: 17, color: _navy),
+                                size: 17, color: AppColors.textPrimary),
                             const SizedBox(width: 10),
                             Text(
                                 widget.phaseMap.hasBoundary
@@ -1376,15 +1376,15 @@ Future<void> _saveDigitizedLot() async {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.build_outlined, size: 16, color: _navy),
+                          Icon(Icons.build_outlined, size: 16, color: AppColors.textPrimary),
                           SizedBox(width: 8),
                           Text('Map Tools',
                               style: TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w600,
-                                  color: _navy)),
+                                  color: AppColors.textPrimary)),
                           SizedBox(width: 4),
-                          Icon(Icons.expand_more, size: 16, color: _navy),
+                          Icon(Icons.expand_more, size: 16, color: AppColors.textPrimary),
                         ],
                       ),
                     ),
@@ -1446,7 +1446,7 @@ Future<void> _saveDigitizedLot() async {
                         style: const TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
-                            color: _navy)),
+                            color: AppColors.textPrimary)),
                     const SizedBox(width: 14),
                     IconButton(
                       onPressed:
@@ -1466,7 +1466,7 @@ Future<void> _saveDigitizedLot() async {
                           ? _saveDigitizedLot
                           : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _navy,
+                        backgroundColor: AppColors.textPrimary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
@@ -1505,7 +1505,7 @@ Future<void> _saveDigitizedLot() async {
                         style: const TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
-                            color: _navy)),
+                            color: AppColors.textPrimary)),
                     const SizedBox(width: 14),
                     IconButton(
                       onPressed: _boundaryDraftPoints.isEmpty
@@ -1607,7 +1607,7 @@ Future<void> _saveDigitizedLot() async {
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: _navy),
+                      color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1658,11 +1658,11 @@ Future<void> _saveDigitizedLot() async {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.view_list_outlined, size: 17, color: _navy),
+              Icon(Icons.view_list_outlined, size: 17, color: AppColors.textPrimary),
               SizedBox(width: 7),
               Text('Blocks',
                   style: TextStyle(
-                      color: _navy,
+                      color: AppColors.textPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700)),
             ],
@@ -1692,7 +1692,7 @@ Future<void> _saveDigitizedLot() async {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: _navy,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const Spacer(),
@@ -1757,7 +1757,7 @@ Future<void> _saveDigitizedLot() async {
             ),
             child: Row(
               children: [
-                const Icon(Icons.filter_alt_outlined, size: 16, color: _navy),
+                const Icon(Icons.filter_alt_outlined, size: 16, color: AppColors.textPrimary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1767,7 +1767,7 @@ Future<void> _saveDigitizedLot() async {
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: _navy,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
@@ -1818,7 +1818,7 @@ Future<void> _saveDigitizedLot() async {
             color: selected ? const Color(0xFFE8F0FE) : const Color(0xFFF8F9FB),
             borderRadius: BorderRadius.circular(9),
             border: Border.all(
-              color: selected ? _accent : const Color(0xFFE2E5E9),
+              color: selected ? AppColors.primary : const Color(0xFFE2E5E9),
               width: selected ? 1.4 : 1,
             ),
           ),
@@ -1827,7 +1827,7 @@ Future<void> _saveDigitizedLot() async {
               Icon(
                 Icons.grid_view_rounded,
                 size: 16,
-                color: selected ? _accent : Colors.grey[500],
+                color: selected ? AppColors.primary : Colors.grey[500],
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1836,7 +1836,7 @@ Future<void> _saveDigitizedLot() async {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? _navy : Colors.grey[800],
+                    color: selected ? AppColors.textPrimary : Colors.grey[800],
                   ),
                 ),
               ),
@@ -1970,7 +1970,7 @@ class _LegendRow extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: _navy),
+          style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
         ),
       ],
     );
@@ -2054,14 +2054,14 @@ class _DigitizePreviewPainter extends CustomPainter {
         canvas.drawPath(
           path,
           Paint()
-            ..color = _accent.withOpacity(0.25)
+            ..color = AppColors.primary.withOpacity(0.25)
             ..style = PaintingStyle.fill,
         );
       }
       canvas.drawPath(
         path,
         Paint()
-          ..color = _accent
+          ..color = AppColors.primary
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.2,
       );
@@ -2229,7 +2229,7 @@ class _EmptyMapState extends StatelessWidget {
           const SizedBox(height: 16),
           Text('No map uploaded yet for $phaseName',
               style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600, color: _navy)),
+                  fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           const SizedBox(height: 6),
           Text(
             'Upload the subdivision map image for this phase\n'
@@ -2260,7 +2260,7 @@ class _EmptyMapState extends StatelessWidget {
                 icon: const Icon(Icons.upload_outlined, size: 18),
                 label: const Text('Upload Map Image'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _navy,
+                  backgroundColor: AppColors.textPrimary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 12),

@@ -8,6 +8,8 @@ import '../../../core/models/document_model.dart';
 import '../../../core/models/announcement_model.dart';
 import '../../../core/models/complaint_model.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class MemberPreviewScreen extends StatefulWidget {
   const MemberPreviewScreen({super.key});
@@ -30,9 +32,9 @@ class _MemberPreviewScreenState
   final _searchFocus  = FocusNode();
   bool  _showResults  = false;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  
+  
+  
 
   @override
   void initState() {
@@ -70,7 +72,7 @@ class _MemberPreviewScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -81,7 +83,7 @@ class _MemberPreviewScreenState
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: _navy)),
+                    color: AppColors.textPrimary)),
             const SizedBox(height: 2),
             Text(
                 'Preview what a member sees on the mobile app',
@@ -113,7 +115,7 @@ class _MemberPreviewScreenState
                     return Row(
                       children: [
                         const Icon(Icons.person_search_outlined,
-                            color: _navy, size: 20),
+                            color: AppColors.textPrimary, size: 20),
                         const SizedBox(width: 12),
                         Text('No members found.',
                             style: TextStyle(color: Colors.grey[500])),
@@ -137,7 +139,7 @@ class _MemberPreviewScreenState
                       Row(
                         children: [
                           const Icon(Icons.person_search_outlined,
-                              color: _navy, size: 20),
+                              color: AppColors.textPrimary, size: 20),
                           const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
@@ -298,9 +300,9 @@ class _MemberPreviewScreenState
                 ),
                 child: TabBar(
                   controller: _tabs,
-                  labelColor: _navy,
+                  labelColor: AppColors.textPrimary,
                   unselectedLabelColor: Colors.grey,
-                  indicatorColor: _accent,
+                  indicatorColor: AppColors.primary,
                   dividerColor: Colors.transparent,
                   labelStyle: const TextStyle(
                       fontWeight: FontWeight.w600,

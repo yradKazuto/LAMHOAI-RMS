@@ -45,8 +45,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       await context.read<AuthProvider>().resetPassword(_emailCtrl.text.trim());
       if (mounted) setState(() => _state = 'sent');
-    } catch (_) {
-      if (mounted) setState(() => _state = 'idle');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _state = 'idle');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), duration: const Duration(seconds: 5)),
+        );
+      }
     }
   }
 

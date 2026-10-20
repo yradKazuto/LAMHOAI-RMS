@@ -10,6 +10,8 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/routing/app_router.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class ComplaintsScreen extends StatefulWidget {
   const ComplaintsScreen({super.key});
@@ -22,9 +24,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   final _searchCtrl  = TextEditingController();
   String?           _statusFilter;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   void dispose() {
@@ -69,7 +71,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
     final phoneScreen = MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: EdgeInsets.fromLTRB(
             phoneScreen ? 16 : 28,
@@ -83,7 +85,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
             Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
                   tooltip: 'Back to Dashboard',
                   onPressed: () => context.go(AppRoutes.dashboard),
                 ),
@@ -95,7 +97,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                         style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
-                            color: _navy)),
+                            color: AppColors.textPrimary)),
                     const SizedBox(height: 2),
                     Text(
                         'Review and resolve homeowner complaints',
@@ -140,7 +142,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: _accent, width: 1.5)),
+                            color: AppColors.primary, width: 1.5)),
                   ),
                 );
 
@@ -197,7 +199,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                       style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w700,
-                                          color: _navy)),
+                                          color: AppColors.textPrimary)),
                                   const Spacer(),
                                   if (tempStatus != null)
                                     TextButton(
@@ -267,7 +269,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                     Navigator.pop(sheetCtx);
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _navy,
+                                    backgroundColor: AppColors.textPrimary,
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
@@ -300,7 +302,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color: _statusFilter != null
-                                ? _accent
+                                ? AppColors.primary
                                 : const Color(0xFFD0DBEE)),
                       ),
                       child: Row(
@@ -309,7 +311,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                           Icon(Icons.filter_list,
                               size: 18,
                               color: _statusFilter != null
-                                  ? _accent
+                                  ? AppColors.primary
                                   : Colors.grey[600]),
                           const SizedBox(width: 6),
                           Text(
@@ -320,7 +322,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: _statusFilter != null
-                                      ? _accent
+                                      ? AppColors.primary
                                       : const Color(0xFF1A2B4A))),
                         ],
                       ),
@@ -706,7 +708,7 @@ class _ComplaintDetailSheetState
   final _notif    = NotificationService();
   bool _loading   = false;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   @override
   void initState() {
@@ -834,7 +836,7 @@ class _ComplaintDetailSheetState
                       style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: _navy)),
+                          color: AppColors.textPrimary)),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -871,7 +873,7 @@ class _ComplaintDetailSheetState
                 style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
-                    color: _navy)),
+                    color: AppColors.textPrimary)),
             const SizedBox(height: 6),
             Expanded(
               child: SingleChildScrollView(
@@ -905,7 +907,7 @@ class _ComplaintDetailSheetState
                           style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
-                              color: _navy)),
+                              color: AppColors.textPrimary)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -935,7 +937,7 @@ class _ComplaintDetailSheetState
                           style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
-                              color: _navy)),
+                              color: AppColors.textPrimary)),
                       const SizedBox(height: 6),
                       TextField(
                         controller: _noteCtrl,
@@ -981,7 +983,7 @@ class _ComplaintDetailSheetState
                           onPressed:
                               _loading ? null : _updateStatus,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _navy,
+                            backgroundColor: AppColors.textPrimary,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                                 borderRadius:
@@ -1043,8 +1045,8 @@ class _FilterPopoverButton extends StatefulWidget {
 }
 
 class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
+  
+  
 
   final LayerLink _link = LayerLink();
   OverlayEntry? _entry;
@@ -1099,7 +1101,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                                   style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: _navy)),
+                                      color: AppColors.textPrimary)),
                               const Spacer(),
                               TextButton(
                                 onPressed: () {
@@ -1125,7 +1127,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                             child: ElevatedButton(
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _navy,
+                                backgroundColor: AppColors.textPrimary,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
@@ -1181,7 +1183,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                   color: widget.activeFilterCount > 0
-                      ? _accent
+                      ? AppColors.primary
                       : const Color(0xFFD0DBEE)),
             ),
             child: Row(
@@ -1190,7 +1192,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                 Icon(Icons.filter_list,
                     size: 18,
                     color: widget.activeFilterCount > 0
-                        ? _accent
+                        ? AppColors.primary
                         : Colors.grey[600]),
                 const SizedBox(width: 6),
                 Text(
@@ -1201,7 +1203,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: widget.activeFilterCount > 0
-                            ? _accent
+                            ? AppColors.primary
                             : const Color(0xFF1A2B4A))),
                 const SizedBox(width: 4),
                 Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
@@ -1229,7 +1231,7 @@ class _FilterChipGroup<T> extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const Color _accent = Color(0xFF2563EB);
+  
 
   @override
   Widget build(BuildContext context) => Wrap(
@@ -1245,17 +1247,17 @@ class _FilterChipGroup<T> extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: selected
-                ? _accent.withOpacity(0.1)
+                ? AppColors.primary.withOpacity(0.1)
                 : const Color(0xFFF7F9FC),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: selected ? _accent : const Color(0xFFD0DBEE)),
+                color: selected ? AppColors.primary : const Color(0xFFD0DBEE)),
           ),
           child: Text(opt.value,
               style: TextStyle(
                   fontSize: 12.5,
                   color:
-                      selected ? _accent : const Color(0xFF1A2B4A),
+                      selected ? AppColors.primary : const Color(0xFF1A2B4A),
                   fontWeight:
                       selected ? FontWeight.w600 : FontWeight.w400)),
         ),

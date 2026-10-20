@@ -39,6 +39,8 @@ import '../../../core/services/lot_service.dart';
 import '../../../core/services/rate_history_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 enum _DuesMode { annual, monthly }
 
@@ -70,9 +72,9 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
   late Stream<List<PaymentModel>> _annualStream;
   late Stream<List<PaymentModel>> _monthlyStream;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
-  static const Color _bg     = Color(0xFFF0F4FB);
+  
+  
+  
 
   static const _monthNames = [
     'January','February','March','April','May','June',
@@ -153,7 +155,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                 ? 'Generate Membership Dues'
                 : 'Generate Monthly Dues',
             style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700, color: _navy)),
+                fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         content: Text(
           _mode == _DuesMode.annual
               ? 'Create an unpaid ₱${amount.toStringAsFixed(2)} membership '
@@ -176,7 +178,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _navy,
+              backgroundColor: AppColors.textPrimary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -267,7 +269,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
     final phoneScreen = MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
             phoneScreen ? 16 : 28,
@@ -283,7 +285,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                 final titleBlock = Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, color: _navy),
+                      icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
                       tooltip: 'Back to Payments',
                       onPressed: () => Navigator.pop(context),
                     ),
@@ -301,7 +303,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                               style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w700,
-                                  color: _navy)),
+                                  color: AppColors.textPrimary)),
                           const SizedBox(height: 2),
                           Text(
                               _mode == _DuesMode.annual
@@ -332,7 +334,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                             ? 'Generating...'
                             : 'Generate Dues'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _navy,
+                          backgroundColor: AppColors.textPrimary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 14),
@@ -469,7 +471,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                         setState(() => _unpaidOnly = v ?? false),
                     canRecord: canRecord,
                     fs:        _fs,
-                    accent:    _accent,
+                    accent:    AppColors.primary,
                   ),
                   _DuesBody(
                     membersStream:  _membersStream,
@@ -482,7 +484,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                         setState(() => _unpaidOnly = v ?? false),
                     canRecord: canRecord,
                     fs:        _fs,
-                    accent:    _accent,
+                    accent:    AppColors.primary,
                   ),
                 ],
               ),
@@ -499,7 +501,7 @@ class _ModeButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  
 
   const _ModeButton({
     required this.label, required this.selected, required this.onTap});
@@ -512,7 +514,7 @@ class _ModeButton extends StatelessWidget {
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: BoxDecoration(
-        color: selected ? _navy : Colors.transparent,
+        color: selected ? AppColors.textPrimary : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.center,

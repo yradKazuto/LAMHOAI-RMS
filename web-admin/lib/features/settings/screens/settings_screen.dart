@@ -12,6 +12,8 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/rate_history_service.dart';
 import '../../../core/routing/app_router.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -37,9 +39,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _loaded = false;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   void initState() {
@@ -246,7 +248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
-                            color: _navy)),
+                            color: AppColors.textPrimary)),
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
@@ -333,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     ));
                                   },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _navy,
+                              backgroundColor: AppColors.textPrimary,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
@@ -363,7 +365,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -375,7 +377,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back,
-                          color: _navy),
+                          color: AppColors.textPrimary),
                       tooltip: 'Close',
                       onPressed: () {
                         if (Navigator.of(context).canPop()) {
@@ -395,7 +397,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w700,
-                                  color: _navy)),
+                                  color: AppColors.textPrimary)),
                           const SizedBox(height: 2),
                           Text(
                               'HOA profile and dues configuration',
@@ -413,7 +415,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final saveButton = ElevatedButton(
                   onPressed: _saving ? null : _save,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _navy,
+                    backgroundColor: AppColors.textPrimary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 14),
@@ -483,7 +485,7 @@ class _ProfileTab extends StatelessWidget {
       email, president;
   final VoidCallback onOpenDuesConfig;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   const _ProfileTab({
     required this.name,
@@ -512,7 +514,7 @@ class _ProfileTab extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: _navy)),
+                    color: AppColors.textPrimary)),
             const SizedBox(height: 20),
             _SettingsField(
               label: 'Association Name',
@@ -585,7 +587,7 @@ class _ProfileTab extends StatelessWidget {
 class _DuesTab extends StatelessWidget {
   final TextEditingController annual, assessment, penalty, graceDays;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   const _DuesTab({
     required this.annual,
@@ -721,7 +723,7 @@ class _DuesTab extends StatelessWidget {
 class _DuesConfigHistoryTable extends StatelessWidget {
   const _DuesConfigHistoryTable();
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   static const _monthNames = [
     'Jan','Feb','Mar','Apr','May','Jun',
@@ -778,7 +780,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
                             style: const TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
-                                color: _navy)),
+                                color: AppColors.textPrimary)),
                         if (history[i].changedBy.isNotEmpty)
                           Text(history[i].changedBy,
                               maxLines: 1,
@@ -833,7 +835,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: _navy)),
+                              color: AppColors.textPrimary)),
                     ),
                     if (history[i].changedBy.isNotEmpty)
                       Flexible(
@@ -874,11 +876,11 @@ class _DuesConfigHistoryTable extends StatelessWidget {
       children: [
         const Row(
           children: [
-            Icon(Icons.history, size: 18, color: _navy),
+            Icon(Icons.history, size: 18, color: AppColors.textPrimary),
             SizedBox(width: 10),
             Text('Configuration History',
                 style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600, color: _navy)),
+                    fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           ],
         ),
         const SizedBox(height: 4),
@@ -997,7 +999,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
       _rateSvc.streamMonthlyRates().asBroadcastStream();
   StreamSubscription<List<MonthlyRateModel>>? _sub;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   @override
   void initState() {
@@ -1305,7 +1307,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
             child: ElevatedButton(
               onPressed: _adding ? null : _submitNewRate,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _navy,
+                backgroundColor: AppColors.textPrimary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1337,7 +1339,7 @@ class _SettingsField extends StatelessWidget {
   final TextEditingController ctrl;
   final int                   maxLines;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   const _SettingsField({
     required this.label,
@@ -1354,7 +1356,7 @@ class _SettingsField extends StatelessWidget {
           style: const TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
-              color: _navy)),
+              color: AppColors.textPrimary)),
       const SizedBox(height: 6),
       TextFormField(
         controller: ctrl,
@@ -1395,7 +1397,7 @@ class _DuesField extends StatelessWidget {
   final Color                  color;
   final bool                   isWholeNumber;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   const _DuesField({
     required this.label,

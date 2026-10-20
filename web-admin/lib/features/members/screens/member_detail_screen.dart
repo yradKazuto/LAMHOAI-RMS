@@ -18,6 +18,7 @@ import '../../../core/services/settings_service.dart';
 import '../../../core/services/lot_service.dart';
 import '../../payments/screens/add_payment_screen.dart';
 import '../../documents/widgets/document_upload_flow.dart';
+import '../../../core/theme/design_tokens.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final MemberModel member;
@@ -78,11 +79,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   late TextEditingController _address;
   late MemberStatus _status;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
-
-  @override
+@override
   void initState() {
     super.initState();
     final auth = context.read<AuthProvider>();
@@ -152,7 +149,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B))),
+                color: AppColors.textPrimary)),
         content: Text(
           'Send a password reset email to:\n$email',
           style: const TextStyle(fontSize: 13.5),
@@ -170,7 +167,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                 Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  const Color(0xFF1E293B),
+                  AppColors.textPrimary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius:
@@ -193,7 +190,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             content: Text(
                 'Password reset email sent to $email'),
             backgroundColor:
-                const Color(0xFF1A7A4A),
+                AppColors.success,
           ),
         );
       }
@@ -204,7 +201,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             content: Text(
                 'Failed to send reset email: ${e.message}'),
             backgroundColor:
-                const Color(0xFFCC2200),
+                AppColors.danger,
           ),
         );
       }
@@ -228,7 +225,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Member updated successfully.'),
-            backgroundColor: Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -298,7 +295,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Profile photo updated.'),
-            backgroundColor: Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -323,7 +320,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         widget.compactHeader || MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: tightHeader
             ? const EdgeInsets.fromLTRB(20, 14, 20, 0)
@@ -343,7 +340,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                   child: const Padding(
                     padding: EdgeInsets.all(4),
                     child: Icon(Icons.arrow_back,
-                        color: _navy, size: 22),
+                        color: AppColors.textPrimary, size: 22),
                   ),
                 ),
               ),
@@ -359,7 +356,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                     style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: _navy));
+                        color: AppColors.textPrimary));
 
                 final actionButtons = <Widget>[
                   if (canEdit && !_editMode) ...[
@@ -371,9 +368,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                           size: 16),
                       label: const Text('Reset Password'),
                       style: OutlinedButton.styleFrom(
-                          foregroundColor: _navy,
+                          foregroundColor: AppColors.textPrimary,
                           side: const BorderSide(
-                              color: Color(0xFFD0DBEE)),
+                              color: AppColors.borderStrong),
                           shape: RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius.circular(8))),
@@ -385,9 +382,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                           size: 16),
                       label: const Text('Edit Profile'),
                       style: OutlinedButton.styleFrom(
-                          foregroundColor: _navy,
+                          foregroundColor: AppColors.textPrimary,
                           side: const BorderSide(
-                              color: Color(0xFFD0DBEE)),
+                              color: AppColors.borderStrong),
                           shape: RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius.circular(8))),
@@ -406,7 +403,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                     ElevatedButton(
                       onPressed: _saving ? null : _saveEdits,
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: _navy,
+                          backgroundColor: AppColors.textPrimary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                               borderRadius:
@@ -446,10 +443,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                         icon: const Icon(Icons.lock_reset_outlined,
                             size: 20),
                         tooltip: 'Reset Password',
-                        color: _navy,
+                        color: AppColors.textPrimary,
                         style: IconButton.styleFrom(
                             side: const BorderSide(
-                                color: Color(0xFFD0DBEE)),
+                                color: AppColors.borderStrong),
                             shape: const CircleBorder()),
                       ),
                       IconButton(
@@ -457,10 +454,10 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                             setState(() => _editMode = true),
                         icon: const Icon(Icons.edit_outlined, size: 20),
                         tooltip: 'Edit Profile',
-                        color: _navy,
+                        color: AppColors.textPrimary,
                         style: IconButton.styleFrom(
                             side: const BorderSide(
-                                color: Color(0xFFD0DBEE)),
+                                color: AppColors.borderStrong),
                             shape: const CircleBorder()),
                       ),
                     ],
@@ -476,7 +473,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                       ElevatedButton(
                         onPressed: _saving ? null : _saveEdits,
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: _navy,
+                            backgroundColor: AppColors.textPrimary,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                                 borderRadius:
@@ -533,9 +530,9 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             TabBar(
               controller: _tabs,
               isScrollable: true,
-              labelColor: _navy,
+              labelColor: AppColors.textPrimary,
               unselectedLabelColor: Colors.grey,
-              indicatorColor: _accent,
+              indicatorColor: AppColors.primary,
               labelPadding:
                   const EdgeInsets.only(right: 28),
               labelStyle: const TextStyle(
@@ -546,7 +543,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                 const Tab(text: 'Documents'),
               ],
             ),
-            const Divider(height: 1, color: Color(0xFFE0E8F4)),
+            const Divider(height: 1, color: AppColors.border),
             Expanded(
               child: TabBarView(
                 controller: _tabs,
@@ -599,8 +596,7 @@ class _ProfileTab extends StatelessWidget {
     required void Function(bool uploading) onUploadingChanged,
   }) onChangePhoto;
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   const _ProfileTab({
     required this.member, required this.photoUrl, required this.editMode,
     required this.canEditPhoto, required this.lotService,
@@ -697,8 +693,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
   bool _uploading = false;
   double _progress = 0;
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   String _fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/'
       '${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -712,7 +707,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -723,7 +718,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
               CircleAvatar(
                 radius: 52,
                 backgroundColor:
-                    const Color(0xFF2563EB).withOpacity(0.12),
+                    AppColors.primary.withOpacity(0.12),
                 backgroundImage: widget.photoUrl.isNotEmpty
                     ? NetworkImage(widget.photoUrl)
                     : null,
@@ -735,7 +730,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                         style: const TextStyle(
                             fontSize: 34,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF2563EB)),
+                            color: AppColors.primary),
                       )
                     : null,
               ),
@@ -776,7 +771,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB),
+                        color: AppColors.primary,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
@@ -794,7 +789,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
               style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  color: _navy)),
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text(member.email,
               textAlign: TextAlign.center,
@@ -803,7 +798,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
           _StatusBadge(status: member.status),
 
           const SizedBox(height: 20),
-          const Divider(color: Color(0xFFE0E8F4)),
+          const Divider(color: AppColors.border),
           const SizedBox(height: 16),
 
           // ── Owned Lots ─────────────────────────────────────────────────
@@ -879,8 +874,7 @@ class _OwnedLotTile extends StatelessWidget {
 
   const _OwnedLotTile({required this.lot, required this.onTap});
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   @override
   Widget build(BuildContext context) {
     final block = lot.block.isEmpty ? '—' : lot.block;
@@ -903,14 +897,14 @@ class _OwnedLotTile extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF4F7FB),
+          color: AppColors.background,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFD0DBEE)),
+          border: Border.all(color: AppColors.borderStrong),
         ),
         child: Row(
           children: [
             const Icon(Icons.location_on_outlined,
-                size: 15, color: Color(0xFF2563EB)),
+                size: 15, color: AppColors.primary),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -922,7 +916,7 @@ class _OwnedLotTile extends StatelessWidget {
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.3,
-                            color: Color(0xFF2563EB)),
+                            color: AppColors.primary),
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
                   ],
@@ -930,7 +924,7 @@ class _OwnedLotTile extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
-                          color: _navy),
+                          color: AppColors.textPrimary),
                       overflow: TextOverflow.ellipsis),
                 ],
               ),
@@ -960,7 +954,7 @@ class _SidebarRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF1A2B4A)),
+                color: AppColors.textPrimary),
             overflow: TextOverflow.ellipsis),
       ),
     ],
@@ -975,8 +969,7 @@ class _MemberInfoCard extends StatelessWidget {
   final String memberStatusLabel;
   final void Function(MemberStatus) onStatusChanged;
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   const _MemberInfoCard({
     required this.editMode,
     required this.name, required this.email,
@@ -993,7 +986,7 @@ class _MemberInfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1002,7 +995,7 @@ class _MemberInfoCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _navy)),
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text(
             'Lot ownership is managed from Location Mapping — '
@@ -1080,8 +1073,7 @@ class _PaymentsTab extends StatelessWidget {
     required this.auth,
   });
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   @override
   Widget build(BuildContext context) {
     final canRecord = auth.isAdmin || auth.isAccountant;
@@ -1096,7 +1088,7 @@ class _PaymentsTab extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: _navy));
+                    color: AppColors.textPrimary));
 
             final addBtn = canRecord
                 ? ElevatedButton.icon(
@@ -1108,7 +1100,7 @@ class _PaymentsTab extends StatelessWidget {
                     icon: const Icon(Icons.add, size: 16),
                     label: const Text('Add Payment'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _navy,
+                      backgroundColor: AppColors.textPrimary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius:
@@ -1165,12 +1157,12 @@ class _PaymentsTab extends StatelessWidget {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: const Color(0xFFE0E8F4)),
+                            color: AppColors.border),
                       ),
                       child: ListView.separated(
                         itemCount: payments.length,
                         separatorBuilder: (_, __) => const Divider(
-                            height: 1, color: Color(0xFFEEF2F9)),
+                            height: 1, color: AppPrimitiveColors.navy100),
                         itemBuilder: (_, i) => _PaymentRow(
                             payment: payments[i],
                             fs: _fs,
@@ -1201,8 +1193,7 @@ class _DocumentsTab extends StatelessWidget {
     required this.auth,
   });
 
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1215,7 +1206,7 @@ class _DocumentsTab extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: _navy));
+                    color: AppColors.textPrimary));
 
             final uploadBtn = (auth.isAdmin || auth.isOfficer)
                 ? ElevatedButton.icon(
@@ -1236,7 +1227,7 @@ class _DocumentsTab extends StatelessWidget {
                             const SnackBar(
                               content:
                                   Text('Document uploaded successfully.'),
-                              backgroundColor: Color(0xFF1A7A4A),
+                              backgroundColor: AppColors.success,
                             ),
                           );
                         }
@@ -1251,7 +1242,7 @@ class _DocumentsTab extends StatelessWidget {
                     icon: const Icon(Icons.upload_file_outlined, size: 16),
                     label: const Text('Upload Document'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _navy,
+                      backgroundColor: AppColors.textPrimary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -1325,17 +1316,17 @@ class _StatusBadge extends StatelessWidget {
 
   Color get _fg {
     switch (status) {
-      case MemberStatus.active:     return const Color(0xFF1A7A4A);
-      case MemberStatus.inactive:   return const Color(0xFF7A6A1A);
-      case MemberStatus.delinquent: return const Color(0xFFCC2200);
+      case MemberStatus.active:     return AppColors.success;
+      case MemberStatus.inactive:   return AppColors.warning;
+      case MemberStatus.delinquent: return AppColors.danger;
     }
   }
 
   Color get _bg {
     switch (status) {
-      case MemberStatus.active:     return const Color(0xFFEAF7F0);
-      case MemberStatus.inactive:   return const Color(0xFFFFF8E0);
-      case MemberStatus.delinquent: return const Color(0xFFFFF0EE);
+      case MemberStatus.active:     return AppColors.successBg;
+      case MemberStatus.inactive:   return AppColors.warningBg;
+      case MemberStatus.delinquent: return AppColors.dangerBg;
     }
   }
 
@@ -1355,8 +1346,7 @@ class _DetailField extends StatelessWidget {
   final TextEditingController controller;
   final bool readOnly;
   final int maxLines;
-  static const Color _navy = Color(0xFF1E293B);
-
+  
   const _DetailField({
     required this.label,
     required this.controller,
@@ -1370,33 +1360,33 @@ class _DetailField extends StatelessWidget {
     children: [
       Text(label, style: const TextStyle(
           fontSize: 11.5, fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099))),
+          color: AppColors.textSecondary)),
       const SizedBox(height: 5),
       TextFormField(
         controller: controller,
         readOnly: readOnly,
         maxLines: maxLines,
-        style: const TextStyle(fontSize: 13.5, color: Color(0xFF1A2B4A)),
+        style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary),
         decoration: InputDecoration(
           filled: true,
           fillColor: readOnly
-              ? const Color(0xFFF7F9FC)
+              ? AppColors.background
               : Colors.white,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+              borderSide: const BorderSide(color: AppColors.borderStrong)),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+              borderSide: const BorderSide(color: AppColors.borderStrong)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFF2563EB), width: 1.5)),
+                  color: AppColors.primary, width: 1.5)),
           disabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE8EDF5))),
+              borderSide: const BorderSide(color: AppColors.border)),
         ),
       ),
     ],
@@ -1414,20 +1404,20 @@ class _ReadOnlyField extends StatelessWidget {
     children: [
       Text(label, style: const TextStyle(
           fontSize: 11.5, fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099))),
+          color: AppColors.textSecondary)),
       const SizedBox(height: 5),
       Container(
         width: double.infinity,
         padding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF7F9FC),
+          color: AppColors.background,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFD0DBEE)),
+          border: Border.all(color: AppColors.borderStrong),
         ),
         child: Text(value,
             style: const TextStyle(
-                fontSize: 13.5, color: Color(0xFF1A2B4A))),
+                fontSize: 13.5, color: AppColors.textPrimary)),
       ),
     ],
   );
@@ -1454,25 +1444,25 @@ class _DropdownField<T> extends StatelessWidget {
     children: [
       Text(label, style: const TextStyle(
           fontSize: 11.5, fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099))),
+          color: AppColors.textSecondary)),
       const SizedBox(height: 5),
       DropdownButtonFormField<T>(
         value: value,
-        style: const TextStyle(fontSize: 13.5, color: Color(0xFF1A2B4A)),
+        style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary),
         decoration: InputDecoration(
           filled: true, fillColor: Colors.white,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+              borderSide: const BorderSide(color: AppColors.borderStrong)),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+              borderSide: const BorderSide(color: AppColors.borderStrong)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFF2563EB), width: 1.5)),
+                  color: AppColors.primary, width: 1.5)),
         ),
         items: items
             .map((i) => DropdownMenuItem<T>(
@@ -1493,19 +1483,19 @@ class _PaymentRow extends StatelessWidget {
 
   Color _statusColor(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFF1A7A4A);
-      case PaymentStatus.unpaid:  return const Color(0xFF7A6A1A);
-      case PaymentStatus.overdue: return const Color(0xFFCC2200);
-      case PaymentStatus.waived:  return const Color(0xFF5A7099);
+      case PaymentStatus.paid:    return AppColors.success;
+      case PaymentStatus.unpaid:  return AppColors.warning;
+      case PaymentStatus.overdue: return AppColors.danger;
+      case PaymentStatus.waived:  return AppColors.textSecondary;
     }
   }
 
   Color _statusBg(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
-      case PaymentStatus.unpaid:  return const Color(0xFFFFF8E0);
-      case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF4F7FB);
+      case PaymentStatus.paid:    return AppColors.successBg;
+      case PaymentStatus.unpaid:  return AppColors.warningBg;
+      case PaymentStatus.overdue: return AppColors.dangerBg;
+      case PaymentStatus.waived:  return AppColors.background;
     }
   }
 
@@ -1562,7 +1552,7 @@ class _PaymentRow extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E293B)),
+                          color: AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
@@ -1575,7 +1565,7 @@ class _PaymentRow extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A2B4A))),
+                    color: AppColors.textPrimary)),
             const SizedBox(height: 4),
             Text(
               'Due ${_fmt(payment.dueDate)}'
@@ -1589,7 +1579,7 @@ class _PaymentRow extends StatelessWidget {
                 child: TextButton(
                   onPressed: () => _markPaid(context),
                   style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF1A7A4A),
+                      foregroundColor: AppColors.success,
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0),
                       tapTargetSize:
@@ -1610,10 +1600,10 @@ class _PaymentRow extends StatelessWidget {
         children: [
           Expanded(flex: 3, child: Text(payment.type.label,
               style: const TextStyle(fontSize: 13.5,
-                  fontWeight: FontWeight.w500, color: Color(0xFF1E293B)))),
+                  fontWeight: FontWeight.w500, color: AppColors.textPrimary))),
           Expanded(flex: 2, child: Text(
               '₱${payment.amount.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 13.5, color: Color(0xFF1A2B4A)))),
+              style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary))),
           Expanded(flex: 2, child: Text(_fmt(payment.dueDate),
               style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
           Expanded(flex: 2, child: Text(_fmt(payment.paidDate),
@@ -1624,7 +1614,7 @@ class _PaymentRow extends StatelessWidget {
             TextButton(
               onPressed: () => _markPaid(context),
               style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF1A7A4A)),
+                  foregroundColor: AppColors.success),
               child: const Text('Mark Paid',
                   style: TextStyle(fontSize: 12)),
             ),
@@ -1652,7 +1642,7 @@ class _DocCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1662,11 +1652,11 @@ class _DocCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.insert_drive_file_outlined,
-                    size: 20, color: Color(0xFF2563EB)),
+                    size: 20, color: AppColors.primary),
               ),
               const Spacer(),
               InkWell(
@@ -1699,11 +1689,11 @@ class _DocCard extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF5A7099))),
+                  color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(doc.fileName,
               style: const TextStyle(
-                  fontSize: 13, color: Color(0xFF1A2B4A)),
+                  fontSize: 13, color: AppColors.textPrimary),
               overflow: TextOverflow.ellipsis),
         ],
       ),

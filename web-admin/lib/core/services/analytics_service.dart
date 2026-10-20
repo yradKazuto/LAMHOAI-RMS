@@ -38,18 +38,22 @@ class PaymentStatusBreakdown {
   final int paid;
   final int unpaid;
   final int overdue;
-  final int waived;
   final int total;
 
   const PaymentStatusBreakdown({
     required this.paid,
     required this.unpaid,
     required this.overdue,
-    required this.waived,
     required this.total,
   });
 
   double get paidPercent => total == 0 ? 0 : paid / total * 100;
+}
+
+class _PaidRecord {
+  final double   amount;
+  final DateTime paidDate;
+  const _PaidRecord({required this.amount, required this.paidDate});
 }
 
 class AnalyticsService {
@@ -68,30 +72,21 @@ class AnalyticsService {
     final now   = DateTime.now();
     final result = <MonthlyCollection>[];
 
+    // One query for the whole window instead of one per month.
+    final windowStart = DateTime(now.year, now.month - (months - 1), 1);
+    final windowEnd   = DateTime(now.year, now.month + 1, 1);
+    final paid = await _paidBetween(windowStart, windowEnd);
+
     for (int i = months - 1; i >= 0; i--) {
-      final date       = DateTime(now.year, now.month - i, 1);
+      final date         = DateTime(now.year, now.month - i, 1);
       final startOfMonth = DateTime(date.year, date.month, 1);
       final endOfMonth   = DateTime(date.year, date.month + 1, 1);
 
-      final snap = await _db
-          .collection('payments')
-          .where('status', isEqualTo: PaymentStatus.paid.name)
-          .where('paidDate',
-              isGreaterThanOrEqualTo:
-                  Timestamp.fromDate(startOfMonth))
-          .where('paidDate',
-              isLessThan: Timestamp.fromDate(endOfMonth))
-          .get();
-
-      final total = snap.docs.fold<double>(
-        0.0,
-        (sum, doc) =>
-            sum +
-            ((doc.data() as Map<String, dynamic>)['amount']
-                    as num? ??
-                0)
-                .toDouble(),
-      );
+      final total = paid
+          .where((p) =>
+              !p.paidDate.isBefore(startOfMonth) &&
+              p.paidDate.isBefore(endOfMonth))
+          .fold<double>(0.0, (sum, p) => sum + p.amount);
 
       result.add(MonthlyCollection(
         month: _monthLabel(date.month),
@@ -101,6 +96,38 @@ class AnalyticsService {
     }
 
     return result;
+  }
+
+  // Paid payments whose paidDate falls in [start, end).
+  //
+  // Deliberately filters on paidDate ONLY and checks status == paid in
+  // code. A status + paidDate query needs a composite index; when that
+  // index is missing Firestore rejects the whole query, and the Analytics
+  // screen quietly fell back to "No data available" / ₱0 even though the
+  // payments were saved correctly. A range on a single field uses
+  // Firestore's automatic index, so there is nothing to set up. Unpaid
+  // records have no paidDate, so they never match the range anyway.
+  Future<List<_PaidRecord>> _paidBetween(
+      DateTime start, DateTime end) async {
+    final snap = await _db
+        .collection('payments')
+        .where('paidDate',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('paidDate', isLessThan: Timestamp.fromDate(end))
+        .get();
+
+    final out = <_PaidRecord>[];
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      if ((data['status'] as String?) != PaymentStatus.paid.name) continue;
+      final ts = data['paidDate'] as Timestamp?;
+      if (ts == null) continue;
+      out.add(_PaidRecord(
+        amount:   (data['amount'] as num? ?? 0).toDouble(),
+        paidDate: ts.toDate(),
+      ));
+    }
+    return out;
   }
 
   // ── Member status breakdown ───────────────────────────────────────────────
@@ -140,7 +167,10 @@ class AnalyticsService {
     final snap = await _db.collection('payments').get();
     final now  = DateTime.now();
 
-    int paid = 0, unpaid = 0, overdue = 0, waived = 0;
+    // Waived is no longer a status the app offers. Any old waived records
+    // are simply left out of the breakdown (nothing is owed on them), so
+    // they can't skew the paid percentage.
+    int paid = 0, unpaid = 0, overdue = 0;
 
     for (final doc in snap.docs) {
       final data   = doc.data() as Map<String, dynamic>;
@@ -158,7 +188,6 @@ class AnalyticsService {
         case 'paid':    paid++;    break;
         case 'unpaid':  unpaid++;  break;
         case 'overdue': overdue++; break;
-        case 'waived':  waived++;  break;
       }
     }
 
@@ -166,8 +195,7 @@ class AnalyticsService {
       paid:    paid,
       unpaid:  unpaid,
       overdue: overdue,
-      waived:  waived,
-      total:   paid + unpaid + overdue + waived,
+      total:   paid + unpaid + overdue,
     );
   }
 
@@ -177,25 +205,8 @@ class AnalyticsService {
     final startOfMonth = DateTime(now.year, now.month, 1);
     final endOfMonth   = DateTime(now.year, now.month + 1, 1);
 
-    final snap = await _db
-        .collection('payments')
-        .where('status', isEqualTo: PaymentStatus.paid.name)
-        .where('paidDate',
-            isGreaterThanOrEqualTo:
-                Timestamp.fromDate(startOfMonth))
-        .where('paidDate',
-            isLessThan: Timestamp.fromDate(endOfMonth))
-        .get();
-
-    return snap.docs.fold<double>(
-      0.0,
-      (sum, doc) =>
-          sum +
-          ((doc.data() as Map<String, dynamic>)['amount']
-                  as num? ??
-              0)
-              .toDouble(),
-    );
+    final paid = await _paidBetween(startOfMonth, endOfMonth);
+    return paid.fold<double>(0.0, (sum, p) => sum + p.amount);
   }
 
   // ── Helper ────────────────────────────────────────────────────────────────

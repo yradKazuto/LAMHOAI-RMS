@@ -2,25 +2,27 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/utils/enum_utils.dart';
+
 enum MemberStatus { active, inactive, delinquent }
 
-extension MemberStatusExt on MemberStatus {
-  String get label {
-    switch (this) {
-      case MemberStatus.active:     return 'Active';
-      case MemberStatus.inactive:   return 'Inactive';
-      case MemberStatus.delinquent: return 'Delinquent';
-    }
-  }
+const Map<MemberStatus, String> _memberStatusLabels = {
+  MemberStatus.active: 'Active',
+  MemberStatus.inactive: 'Inactive',
+  MemberStatus.delinquent: 'Delinquent',
+};
 
-  static MemberStatus fromString(String? v) {
-    switch (v?.toLowerCase()) {
-      case 'active':      return MemberStatus.active;
-      case 'inactive':    return MemberStatus.inactive;
-      case 'delinquent':  return MemberStatus.delinquent;
-      default:            return MemberStatus.active;
-    }
-  }
+const Map<String, MemberStatus> _memberStatusLookup = {
+  'active': MemberStatus.active,
+  'inactive': MemberStatus.inactive,
+  'delinquent': MemberStatus.delinquent,
+};
+
+extension MemberStatusExt on MemberStatus {
+  String get label => enumLabel(this, _memberStatusLabels);
+
+  static MemberStatus fromString(String? v) =>
+      enumFromString(v, _memberStatusLookup, defaultValue: MemberStatus.active);
 }
 
 class MemberModel {

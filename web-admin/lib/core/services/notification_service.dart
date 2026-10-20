@@ -13,6 +13,115 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/payment_model.dart';
+
+/// Formats a peso amount with thousands separators: 1234.5 → "1,234.50".
+String formatPeso(double amount) {
+  final wholeStr = amount.toStringAsFixed(2);
+  final parts = wholeStr.split('.');
+  final intPart = parts[0];
+  final decPart = parts[1];
+
+  final buffer = StringBuffer();
+  for (int i = 0; i < intPart.length; i++) {
+    if (i > 0 && (intPart.length - i) % 3 == 0) buffer.write(',');
+    buffer.write(intPart[i]);
+  }
+  return '₱${buffer.toString()}.$decPart';
+}
+
+/// Builds the reminder title and body for ONE member.
+///
+/// Pure — no Firestore, no clock — so it can be unit-tested on its own
+/// (see test/notification_message_test.dart). A member can have overdue
+/// payments, upcoming ones, or both; the combined case gets a single
+/// message with the overdue part first, because that is the one that
+/// matters.
+({String title, String body}) buildReminderMessage({
+  required String name,
+  required List<Map<String, dynamic>> overdue,
+  required List<Map<String, dynamic>> upcoming,
+  required DateTime today,
+}) {
+  double total(List<Map<String, dynamic>> docs) => docs.fold<double>(
+      0, (acc, d) => acc + ((d['amount'] as num?)?.toDouble() ?? 0));
+
+  DateTime dueOf(Map<String, dynamic> d) =>
+      (d['dueDate'] as Timestamp?)?.toDate() ?? today;
+
+  final String dueWhen;
+  final String daysLate;
+
+  if (overdue.isNotEmpty) {
+    // The OLDEST overdue record — that is how long they have been late.
+    final oldest = overdue.map(dueOf).reduce((a, b) => a.isBefore(b) ? a : b);
+    final days = today.difference(oldest).inDays;
+    daysLate = days == 1 ? '1 day' : '$days days';
+
+    final overdueCount = overdue.length;
+    final overdueFmt = formatPeso(total(overdue));
+
+    if (upcoming.isEmpty) {
+      return (
+        title: overdueCount == 1 ? 'Payment Overdue' : '$overdueCount Payments Overdue',
+        body: overdueCount == 1
+            ? 'Hi $name, your payment of $overdueFmt is $daysLate overdue. '
+                'Please settle it at your earliest convenience.'
+            : 'Hi $name, you have $overdueCount overdue payments totaling '
+                '$overdueFmt, the oldest $daysLate overdue. '
+                'Please settle them at your earliest convenience.',
+      );
+    }
+
+    // Both — one message, overdue part first.
+    final upcomingCount = upcoming.length;
+    final upcomingFmt = formatPeso(total(upcoming));
+    final soonest = upcoming.map(dueOf).reduce((a, b) => a.isBefore(b) ? a : b);
+    final daysUntil = soonest.difference(today).inDays;
+    if (daysUntil <= 0) {
+      dueWhen = 'today';
+    } else if (daysUntil == 1) {
+      dueWhen = 'tomorrow';
+    } else {
+      dueWhen = 'in $daysUntil days';
+    }
+
+    return (
+      title: 'Payment Overdue',
+      body: 'Hi $name, you have $overdueCount overdue payment'
+          '${overdueCount == 1 ? '' : 's'} totaling $overdueFmt '
+          '(oldest $daysLate late), and $upcomingCount payment'
+          '${upcomingCount == 1 ? '' : 's'} totaling $upcomingFmt due $dueWhen.',
+    );
+  }
+
+  // Upcoming only.
+  final dueCount = upcoming.length;
+  final formatted = formatPeso(total(upcoming));
+  final soonest = upcoming.map(dueOf).reduce((a, b) => a.isBefore(b) ? a : b);
+  final daysUntil = soonest.difference(today).inDays;
+  if (daysUntil <= 0) {
+    dueWhen = 'today';
+  } else if (daysUntil == 1) {
+    dueWhen = 'tomorrow';
+  } else {
+    dueWhen = 'in $daysUntil days';
+  }
+
+  return (
+    title: dueCount == 1 ? 'Payment Due Soon' : '$dueCount Payments Due Soon',
+    body: dueCount == 1
+        ? 'Hi $name, your payment of $formatted is due $dueWhen.'
+        : 'Hi $name, you have $dueCount payments totaling $formatted, '
+            'the soonest due $dueWhen.',
+  );
+}
+
+/// One member's dues, split by urgency. Overdue first.
+class _MemberDues {
+  final List<Map<String, dynamic>> overdue = [];
+  final List<Map<String, dynamic>> upcoming = [];
+}
 
 class NotificationService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -146,6 +255,16 @@ class NotificationService {
       );
 
       if (response.statusCode != 200) {
+        // Still write the Firestore history record even when the push
+        // delivery failed, so the member has a visible trace of the reminder.
+        await _db.collection('notifications').add({
+          'uid': uid,
+          'title': title,
+          'body': body,
+          'type': type,
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
         return NotificationResult(
           success: false,
           sent: 0,
@@ -180,35 +299,67 @@ class NotificationService {
     }
   }
 
-  // ── Send dues reminders to members with unpaid dues due soon ───────────────
+  // ── Send dues reminders to members with unpaid dues due soon OR overdue ───
+  //
+  // Two queries, not one. An overdue record is excluded from the "due
+  // soon" query TWICE: syncOverdueStatuses() (run when the Payments
+  // screen opens) has already flipped its status to 'overdue', AND its
+  // dueDate is in the past — outside the [today, today+daysAhead] window.
+  // A single upcoming-only query therefore never reached overdue members.
+  //
+  // Both queries use the same (status, dueDate) composite index that
+  // applyOverduePenalties() already needs — no new index required.
   Future<NotificationResult> sendDuesReminders({int daysAhead = 7}) async {
     try {
       final now = DateTime.now();
-      final cutoff = now.add(Duration(days: daysAhead));
+      // Start of today, NOT now: dueDate is stored at midnight, so
+      // comparing with the current time excluded payments due TODAY from
+      // the window. This matches PaymentModel.displayStatus and
+      // syncOverdueStatuses(), which both use start-of-today.
+      final today = DateTime(now.year, now.month, now.day);
+      final cutoff = today.add(Duration(days: daysAhead));
 
-      final paymentsSnap = await _db
+      final upcomingSnap = await _db
           .collection('payments')
-          .where('status', isEqualTo: 'unpaid')
-          .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+          .where('status', isEqualTo: PaymentStatus.unpaid.name)
+          .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
           .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(cutoff))
           .get();
 
-      if (paymentsSnap.docs.isEmpty) {
+      // Overdue includes 'unpaid' as well as 'overdue' — a record that is
+      // past due but has not been flipped yet (sync hasn't run, or the
+      // record was written after it) is still overdue to the member.
+      final overdueSnap = await _db
+          .collection('payments')
+          .where('status', whereIn: [
+            PaymentStatus.unpaid.name,
+            PaymentStatus.overdue.name,
+          ])
+          .where('dueDate', isLessThan: Timestamp.fromDate(today))
+          .get();
+
+      if (upcomingSnap.docs.isEmpty && overdueSnap.docs.isEmpty) {
         return const NotificationResult(
           success: true,
           sent: 0,
           failed: 0,
-          message: 'No upcoming dues found.',
+          message: 'No upcoming or overdue dues found.',
         );
       }
 
-      final Map<String, List<Map<String, dynamic>>> byMember = {};
-      for (final doc in paymentsSnap.docs) {
-        final data = doc.data();
-        final uid = data['uid'] as String?;
-        if (uid == null || uid.isEmpty) continue;
-        byMember.putIfAbsent(uid, () => []).add(data);
+      final Map<String, _MemberDues> byMember = {};
+
+      void collect(List<Map<String, dynamic>> docs, bool isOverdue) {
+        for (final data in docs) {
+          final uid = data['uid'] as String?;
+          if (uid == null || uid.isEmpty) continue;
+          final dues = byMember.putIfAbsent(uid, () => _MemberDues());
+          (isOverdue ? dues.overdue : dues.upcoming).add(data);
+        }
       }
+
+      collect(upcomingSnap.docs.map((d) => d.data()).toList(), false);
+      collect(overdueSnap.docs.map((d) => d.data()).toList(), true);
 
       int sentCount = 0;
       int failedCount = 0;
@@ -216,29 +367,6 @@ class NotificationService {
       for (final entry in byMember.entries) {
         final uid = entry.key;
         final dues = entry.value;
-
-        final totalAmount = dues.fold<double>(
-          0,
-          (sum, d) => sum + ((d['amount'] as num?)?.toDouble() ?? 0),
-        );
-        final dueCount = dues.length;
-        final formatted = _formatPeso(totalAmount);
-
-        final soonestDueDate = dues
-            .map((d) => (d['dueDate'] as Timestamp).toDate())
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-        final daysUntilDue = soonestDueDate
-            .difference(DateTime(now.year, now.month, now.day))
-            .inDays;
-
-        final String dueWhen;
-        if (daysUntilDue <= 0) {
-          dueWhen = 'today';
-        } else if (daysUntilDue == 1) {
-          dueWhen = 'tomorrow';
-        } else {
-          dueWhen = 'in $daysUntilDue days';
-        }
 
         String name = 'Member';
         try {
@@ -249,16 +377,17 @@ class NotificationService {
               : 'Member';
         } catch (_) {}
 
-        final title =
-            dueCount == 1 ? 'Payment Due Soon' : '$dueCount Payments Due Soon';
-        final body = dueCount == 1
-            ? 'Hi $name, your payment of $formatted is due $dueWhen.'
-            : 'Hi $name, you have $dueCount payments totaling $formatted, the soonest due $dueWhen.';
+        final message = buildReminderMessage(
+          name: name,
+          overdue: dues.overdue,
+          upcoming: dues.upcoming,
+          today: today,
+        );
 
         final result = await sendToMember(
           uid: uid,
-          title: title,
-          body: body,
+          title: message.title,
+          body: message.body,
           type: 'dues',
         );
 
@@ -270,7 +399,7 @@ class NotificationService {
       }
 
       return NotificationResult(
-        success: true,
+        success: failedCount == 0,
         sent: sentCount,
         failed: failedCount,
         message: 'Dues reminder sent to $sentCount member(s).',
@@ -283,20 +412,6 @@ class NotificationService {
         message: 'Error sending dues reminders: $e',
       );
     }
-  }
-
-  String _formatPeso(double amount) {
-    final wholeStr = amount.toStringAsFixed(2);
-    final parts = wholeStr.split('.');
-    final intPart = parts[0];
-    final decPart = parts[1];
-
-    final buffer = StringBuffer();
-    for (int i = 0; i < intPart.length; i++) {
-      if (i > 0 && (intPart.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(intPart[i]);
-    }
-    return '₱${buffer.toString()}.$decPart';
   }
 
   Future<int> getMemberTokenCount() async {

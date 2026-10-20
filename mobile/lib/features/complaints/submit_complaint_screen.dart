@@ -83,60 +83,53 @@ class _SubmitComplaintScreenState extends State<SubmitComplaintScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            Expanded(child: _submitted ? _buildSuccess(context) : _buildForm()),
-          ],
-        ),
+      body: Column(
+        children: [
+          _buildHeader(context),
+          Expanded(child: _submitted ? _buildSuccess(context) : _buildForm()),
+        ],
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_blue800, _blue700],
+      width: double.infinity,
+      color: _blue700,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => context.canPop() ? context.pop() : context.go('/home/complaints'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
+                    SizedBox(width: 4),
+                    Text('Back', style: TextStyle(fontSize: 10, color: _blue200)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Submit a Complaint',
+                style: TextStyle(
+                  fontFamily: 'Georgia',
+                  fontSize: 20,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text('We will review and respond within 3–5 business days.',
+                  style: TextStyle(fontSize: 10, color: _blue200)),
+            ],
+          ),
         ),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => context.canPop() ? context.pop() : context.go('/home/complaints'),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
-                SizedBox(width: 4),
-                Text('Back', style: TextStyle(fontSize: 10, color: _blue200)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-            ),
-            child: const Center(child: Icon(Icons.feedback_outlined, size: 20, color: Colors.white)),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Submit a Complaint',
-            style: TextStyle(fontFamily: 'Georgia', fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 2),
-          const Text('We will review and respond within 3–5 business days.', style: TextStyle(fontSize: 10, color: _blue200)),
-        ],
       ),
     );
   }

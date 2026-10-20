@@ -259,6 +259,26 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _buildCard(
+            icon: Icons.feedback_outlined,
+            title: 'SEND FEEDBACK',
+            children: [
+              _rowWidget(
+                'Help us improve',
+                Text(
+                  'Send feedback, suggestions, or report issues',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: _gray800),
+                ),
+                trailing: const Icon(Icons.chevron_right, size: 16, color: _gray400),
+                isLast: true,
+              ),
+            ],
+            onTap: () => context.go('/home/feedback'),
+          ),
+          const SizedBox(height: 12),
+          _buildCard(
             icon: Icons.lock_outline,
             title: 'SECURITY',
             children: [
@@ -322,35 +342,39 @@ class ProfileScreen extends StatelessWidget {
     required IconData icon,
     required String title,
     required List<Widget> children,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _gray100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              children: [
-                Icon(icon, size: 14, color: _blue600),
-                const SizedBox(width: 6),
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: _blue600,
-                        letterSpacing: 0.5)),
-              ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _gray100),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  Icon(icon, size: 14, color: _blue600),
+                  const SizedBox(width: 6),
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _blue600,
+                          letterSpacing: 0.5)),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1, color: _gray100),
-          ...children,
-        ],
+            const Divider(height: 1, color: _gray100),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -375,7 +399,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _rowWidget(String label, Widget valueWidget,
-      {bool isLast = false}) {
+      {bool isLast = false, Widget? trailing}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       decoration: BoxDecoration(
@@ -390,6 +414,10 @@ class ProfileScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 11, color: _gray400)),
           const SizedBox(width: 16),
           Flexible(child: valueWidget),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing,
+          ],
         ],
       ),
     );

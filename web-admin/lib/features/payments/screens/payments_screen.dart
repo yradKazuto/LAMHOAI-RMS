@@ -10,8 +10,9 @@ import '../../../core/services/notification_service.dart';
 import '../../../core/services/settings_service.dart';
 import 'add_payment_screen.dart';
 import 'membership_dues_screen.dart';
-import 'package:go_router/go_router.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/routing/app_router.dart';
+import 'package:go_router/go_router.dart';
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -26,6 +27,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   final _notif    = NotificationService();
 
   bool _sendingReminders = false;
+  Future<void>? _maintenanceTask;
 
   // Created ONCE. Building `_fs.streamPayments()` inline in build() opened
   // brand-new Firestore listeners on every rebuild (i.e. every keystroke in
@@ -48,9 +50,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   PaymentStatus? _statusFilter;
   PaymentType?   _typeFilter;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   void initState() {
@@ -70,18 +72,26 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   }
 
   Future<void> _runMaintenance() async {
-    try {
-      // Free-tier stand-in for a scheduled Cloud Function — flips any
-      // unpaid-and-past-due record to overdue for real. streamPayments()
-      // picks up the change live.
-      await _fs.syncOverdueStatuses();
-      // Separate concern from the status flip above: adds the flat penalty
-      // to any dues/membershipFee record that's past its grace period and
-      // hasn't been penalized yet (see FirestoreService.applyOverduePenalties).
-      await _applyPenalties();
-    } catch (e) {
-      debugPrint('Payment maintenance failed: $e');
-    }
+    if (_maintenanceTask != null) return;
+    _maintenanceTask = () async {
+      try {
+        await _fs.syncOverdueStatuses();
+        await _applyPenalties();
+      } catch (e) {
+        debugPrint('Payment maintenance failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payment maintenance failed: $e'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
+      } finally {
+        _maintenanceTask = null;
+      }
+    }();
+    await _maintenanceTask;
   }
 
   Future<void> _applyPenalties() async {
@@ -139,7 +149,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF1E293B))),
         content: const Text(
-            'Notify members whose unpaid dues are coming up within:',
+            'Notify members whose unpaid dues are coming up within. '
+            'Members with overdue payments are always included:',
             style: TextStyle(fontSize: 13.5)),
         actions: [
           for (final d in [1, 3, 7, 14])
@@ -165,8 +176,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         SnackBar(
           content: Text(result.message),
           backgroundColor: result.success
-              ? const Color(0xFF1A7A4A)
-              : const Color(0xFFCC2200),
+                  ? AppColors.success
+                  : AppColors.danger,
         ),
       );
     }
@@ -195,7 +206,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final phoneScreen = MediaQuery.of(context).size.width < 560;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
             phoneScreen ? 16 : 28,
@@ -213,7 +224,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 final titleBlock = Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, color: _navy),
+                      icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
                       tooltip: 'Back to Dashboard',
                       onPressed: () => context.go(AppRoutes.dashboard),
                     ),
@@ -226,7 +237,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                               style: TextStyle(
                                   fontSize: phone ? 19 : 22,
                                   fontWeight: FontWeight.w700,
-                                  color: _navy)),
+                                  color: AppColors.textPrimary)),
                           if (!phone) ...[
                             const SizedBox(height: 2),
                             Text('Track dues and payment records',
@@ -257,7 +268,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     child: Tooltip(
                       message: tooltip,
                       child: Material(
-                        color: filled ? _navy : Colors.white,
+                        color: filled ? AppColors.textPrimary : Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(8),
@@ -269,7 +280,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                               borderRadius: BorderRadius.circular(8),
                               border: filled
                                   ? null
-                                  : Border.all(color: _navy),
+                                  : Border.all(color: AppColors.textPrimary),
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -281,13 +292,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                             strokeWidth: 2,
                                             color: filled
                                                 ? Colors.white
-                                                : _navy),
+                                                : AppColors.textPrimary),
                                       )
                                     : Icon(icon,
                                         size: 15,
                                         color: filled
                                             ? Colors.white
-                                            : _navy),
+                                            : AppColors.textPrimary),
                                 const SizedBox(height: 2),
                                 Text(label,
                                     maxLines: 1,
@@ -297,7 +308,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                         fontWeight: FontWeight.w600,
                                         color: filled
                                             ? Colors.white
-                                            : _navy)),
+                                            : AppColors.textPrimary)),
                               ],
                             ),
                           ),
@@ -361,8 +372,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           ? 'Sending...'
                           : 'Send Dues Reminder'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _navy,
-                        side: const BorderSide(color: _navy),
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.textPrimary),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 18, vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -378,8 +389,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       icon: const Icon(Icons.groups_outlined, size: 18),
                       label: const Text('Membership Dues'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _navy,
-                        side: const BorderSide(color: _navy),
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.textPrimary),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 18, vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -391,7 +402,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('Record Payment'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _navy,
+                        backgroundColor: AppColors.textPrimary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14),
@@ -469,21 +480,21 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         label: 'Total Collected',
                         amount: totals['collected']!,
                         icon: Icons.check_circle_outline,
-                        color: const Color(0xFF1A7A4A),
+                        color: AppColors.success,
                         compact: compact,
                       ),
                       _SummaryCard(
                         label: 'Pending',
                         amount: totals['pending']!,
                         icon: Icons.schedule_outlined,
-                        color: const Color(0xFF7A6A1A),
+                        color: AppColors.warning,
                         compact: compact,
                       ),
                       _SummaryCard(
                         label: 'Overdue',
                         amount: totals['overdue']!,
                         icon: Icons.warning_amber_outlined,
-                        color: const Color(0xFFCC2200),
+                        color: AppColors.danger,
                         compact: compact,
                       ),
                     ];
@@ -567,7 +578,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                       style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w700,
-                                          color: _navy)),
+                                          color: AppColors.textPrimary)),
                                   const Spacer(),
                                   if (tempStatus != null ||
                                       tempType != null)
@@ -592,9 +603,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 child: _FilterDrop<PaymentStatus?>(
                                   value: tempStatus,
                                   hint: 'All Statuses',
-                                  items: const [
+                                  items: [
                                     null,
-                                    ...PaymentStatus.values,
+                                    ...PaymentStatus.values.where((s) => s != PaymentStatus.waived),
                                   ],
                                   labelOf: (v) =>
                                       v == null ? 'All Statuses' : v.label,
@@ -636,7 +647,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                     Navigator.pop(sheetCtx);
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _navy,
+                                    backgroundColor: AppColors.textPrimary,
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
@@ -675,7 +686,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color: activeFilterCount > 0
-                                ? _accent
+                                ? AppColors.primary
                                 : const Color(0xFFD0DBEE)),
                       ),
                       child: Row(
@@ -684,7 +695,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           Icon(Icons.filter_list,
                               size: 18,
                               color: activeFilterCount > 0
-                                  ? _accent
+                                  ? AppColors.primary
                                   : Colors.grey[600]),
                           const SizedBox(width: 6),
                           Text(
@@ -695,7 +706,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: activeFilterCount > 0
-                                      ? _accent
+                                      ? AppColors.primary
                                       : const Color(0xFF1A2B4A))),
                         ],
                       ),
@@ -740,7 +751,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             value: _statusFilter,
                             options: [
                               const MapEntry(null, 'All Statuses'),
-                              ...PaymentStatus.values.map(
+                              ...PaymentStatus.values.where((s) => s != PaymentStatus.waived).map(
                                   (s) => MapEntry(s, s.label)),
                             ],
                             onChanged: (v) {
@@ -805,19 +816,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       final compact = constraints.maxWidth < 700;
 
                       return Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE0E8F4)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF1A4A9C)
-                                  .withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
+                        decoration: AppComponents.cardDecoration(),
                         child: Column(
                           children: [
                             if (!compact) ...[
@@ -825,9 +824,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 20, vertical: 14),
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFFF7F9FC),
+                                  color: AppColors.surfaceAlt,
                                   borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(12)),
+                                      top: Radius.circular(AppRadius.lg)),
                                 ),
                                 child: const Row(
                                   children: [
@@ -844,7 +843,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 ),
                               ),
                               const Divider(
-                                  height: 1, color: Color(0xFFE0E8F4)),
+                                  height: 1, color: AppColors.border),
                             ],
 
                             if (payments.isEmpty)
@@ -1032,19 +1031,19 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
 
   Color _fg(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFF1A7A4A);
-      case PaymentStatus.unpaid:  return const Color(0xFF7A6A1A);
-      case PaymentStatus.overdue: return const Color(0xFFCC2200);
-      case PaymentStatus.waived:  return const Color(0xFF5A7099);
+      case PaymentStatus.paid:    return AppColors.success;
+      case PaymentStatus.unpaid:  return AppColors.warning;
+      case PaymentStatus.overdue: return AppColors.danger;
+      case PaymentStatus.waived:  return AppColors.textSecondary;
     }
   }
 
   Color _bg(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
-      case PaymentStatus.unpaid:  return const Color(0xFFFFF8E0);
-      case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF4F7FB);
+      case PaymentStatus.paid:    return AppColors.successBg;
+      case PaymentStatus.unpaid:  return AppColors.warningBg;
+      case PaymentStatus.overdue: return AppColors.dangerBg;
+      case PaymentStatus.waived:  return AppColors.background;
     }
   }
 
@@ -1080,8 +1079,8 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                 ? 'Payment marked paid. Member notified.'
                 : 'Payment marked paid, but notification failed: ${result.message}'),
             backgroundColor: result.success
-                ? const Color(0xFF1A7A4A)
-                : const Color(0xFF7A6A1A),
+                ? AppColors.success
+                : AppColors.warning,
           ),
         );
       }
@@ -1097,15 +1096,14 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
   }
 
   Widget _statusPill(PaymentModel payment) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space2_5, vertical: AppSpacing.space1),
     decoration: BoxDecoration(
       color: _bg(payment.displayStatus),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppRadius.pillBorderRadius,
     ),
     child: Text(payment.displayStatus.label,
         textAlign: TextAlign.center,
-        style: TextStyle(
-            fontSize: 11.5,
+        style: AppTypography.caption.copyWith(
             fontWeight: FontWeight.w600,
             color: _fg(payment.displayStatus))),
   );
@@ -1143,17 +1141,14 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                         : () => widget.onMemberTap!(
                             payment.uid, payment.memberName),
                     child: Text(payment.memberName,
-                        style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
+                        style: AppTypography.bodyMedium.copyWith(
                             color: widget.onMemberTap == null
-                                ? const Color(0xFF1E293B)
-                                : const Color(0xFF2563EB),
+                                ? AppColors.textPrimary
+                                : AppColors.primary,
                             decoration: widget.onMemberTap == null
                                 ? TextDecoration.none
                                 : TextDecoration.underline,
-                            decorationColor:
-                                const Color(0xFF2563EB).withOpacity(0.35)),
+                            decorationColor: AppColors.primary.withOpacity(0.35)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                   ),
@@ -1172,38 +1167,37 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                           : '${payment.type.label} · ${payment.lotLabel}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted)),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.space1),
                 Text('₱${payment.amount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        fontSize: 13.5,
+                    style: AppTypography.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A2B4A))),
+                        color: AppColors.textPrimary)),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.space1),
             Text(
               'Due ${_fmt(payment.dueDate)}'
               '${payment.paidDate != null ? '  ·  Paid ${_fmt(payment.paidDate)}' : ''}',
-              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              style: AppTypography.caption,
             ),
             if (_canMarkPaid) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.space1_5),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton(
                   onPressed: _marking ? null : _markPaid,
                   style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF1A7A4A),
+                      foregroundColor: AppColors.success,
                       padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
+                      minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                   child: _marking
                       ? const SizedBox(
                           width: 14, height: 14,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Mark Paid', style: TextStyle(fontSize: 12)),
+                      : Text('Mark Paid', style: AppTypography.button),
                 ),
               ),
             ],
@@ -1246,23 +1240,23 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(payment.type.label,
-                  style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
               if (payment.lotLabel.isNotEmpty)
                 Text(payment.lotLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey[500])),
+                    style: AppTypography.caption),
             ],
           )),
           Expanded(flex: 2, child: Text(
               '₱${payment.amount.toStringAsFixed(2)}',
-              style: const TextStyle(
-                  fontSize: 13.5, fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A2B4A)))),
+              style: AppTypography.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary))),
           Expanded(flex: 2, child: Text(_fmt(payment.dueDate),
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary))),
           Expanded(flex: 2, child: Text(_fmt(payment.paidDate),
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary))),
           Expanded(
             flex: 2,
             child: _statusPill(payment),
@@ -1273,15 +1267,15 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                 ? TextButton(
                     onPressed: _marking ? null : _markPaid,
                     style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF1A7A4A),
+                        foregroundColor: AppColors.success,
                         padding: EdgeInsets.zero),
                     child: _marking
                         ? const SizedBox(
                             width: 14, height: 14,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Mark Paid',
-                            style: TextStyle(fontSize: 12)))
+                        : Text('Mark Paid',
+                            style: AppTypography.button))
                 : null,
           ),
         ],
@@ -1327,8 +1321,8 @@ class _FilterPopoverButton extends StatefulWidget {
 }
 
 class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
+  
+  
 
   final LayerLink _link = LayerLink();
   OverlayEntry? _entry;
@@ -1383,7 +1377,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                                   style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: _navy)),
+                                      color: AppColors.textPrimary)),
                               const Spacer(),
                               TextButton(
                                 onPressed: () {
@@ -1409,7 +1403,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                             child: ElevatedButton(
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _navy,
+                                backgroundColor: AppColors.textPrimary,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
@@ -1465,7 +1459,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                   color: widget.activeFilterCount > 0
-                      ? _accent
+                      ? AppColors.primary
                       : const Color(0xFFD0DBEE)),
             ),
             child: Row(
@@ -1474,7 +1468,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                 Icon(Icons.filter_list,
                     size: 18,
                     color: widget.activeFilterCount > 0
-                        ? _accent
+                        ? AppColors.primary
                         : Colors.grey[600]),
                 const SizedBox(width: 6),
                 Text(
@@ -1485,7 +1479,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: widget.activeFilterCount > 0
-                            ? _accent
+                            ? AppColors.primary
                             : const Color(0xFF1A2B4A))),
                 const SizedBox(width: 4),
                 Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
@@ -1513,7 +1507,7 @@ class _FilterChipGroup<T> extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const Color _accent = Color(0xFF2563EB);
+  
 
   @override
   Widget build(BuildContext context) => Wrap(
@@ -1529,17 +1523,17 @@ class _FilterChipGroup<T> extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: selected
-                ? _accent.withOpacity(0.1)
+                ? AppColors.primary.withOpacity(0.1)
                 : const Color(0xFFF7F9FC),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: selected ? _accent : const Color(0xFFD0DBEE)),
+                color: selected ? AppColors.primary : const Color(0xFFD0DBEE)),
           ),
           child: Text(opt.value,
               style: TextStyle(
                   fontSize: 12.5,
                   color:
-                      selected ? _accent : const Color(0xFF1A2B4A),
+                      selected ? AppColors.primary : const Color(0xFF1A2B4A),
                   fontWeight:
                       selected ? FontWeight.w600 : FontWeight.w400)),
         ),
@@ -1631,7 +1625,7 @@ class _MemberPaymentsDialog extends StatelessWidget {
     required this.canRecord,
   });
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   @override
   Widget build(BuildContext context) {
@@ -1658,7 +1652,7 @@ class _MemberPaymentsDialog extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
-                            color: _navy),
+                            color: AppColors.textPrimary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                   ),

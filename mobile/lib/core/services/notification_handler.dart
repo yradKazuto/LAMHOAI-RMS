@@ -20,8 +20,8 @@ class NotificationHandler {
   /// e.g. { "type": "announcement" } or { "type": "payment", "paymentId": "..." }
   static void handleData(Map<String, dynamic> data, GoRouter router) {
     _route(
-      type: data['type'] as String? ?? '',
-      paymentId: data['paymentId'] as String?,
+      type: data['type']?.toString() ?? '',
+      paymentId: data['paymentId']?.toString(),
       router: router,
     );
   }
@@ -30,8 +30,8 @@ class NotificationHandler {
   /// firebase_messaging directly.
   static void handleMessage(RemoteMessage message, GoRouter router) {
     _route(
-      type: message.data['type'] as String? ?? '',
-      paymentId: message.data['paymentId'] as String?,
+      type: message.data['type']?.toString() ?? '',
+      paymentId: message.data['paymentId']?.toString(),
       router: router,
     );
   }
@@ -60,6 +60,9 @@ class NotificationHandler {
         break;
       case 'complaint':
         router.go(Routes.complaints);
+        break;
+      case 'payment_reminder':
+        router.go(Routes.payments);
         break;
       default:
         router.go(Routes.notifications);

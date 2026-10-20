@@ -38,7 +38,7 @@ class DashboardScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Good day, ${user?.displayName ?? 'User'} 👋',
+              'Good day, ${user?.displayName ?? 'User'}',
               style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -52,14 +52,11 @@ class DashboardScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             _StatsRow(role: auth.role),
-            // Accountants have no insights row, so their payments list sits
-            // right under the stat cards.
-            if (auth.role == UserRole.accountant) ...[
-              const SizedBox(height: 28),
-              const _RecentPaymentsCard(),
-            ],
+            // Accountants have no complaints to triage, so their insights
+            // row is just the activity log and payments list.
             if (auth.role == UserRole.admin ||
-                auth.role == UserRole.officer) ...[
+                auth.role == UserRole.officer ||
+                auth.role == UserRole.accountant) ...[
               const SizedBox(height: 28),
               const Text('Actionable Insights & Activity',
                   style: TextStyle(
@@ -67,12 +64,12 @@ class DashboardScreen extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary)),
               const SizedBox(height: 14),
-              const _ActivityAndComplaintsRow(),
-            ],
-            // Admins get it below Actionable Insights & Activity.
-            if (auth.role == UserRole.admin) ...[
-              const SizedBox(height: 28),
-              const _RecentPaymentsCard(),
+              _InsightsRow(
+                showPayments: auth.role == UserRole.admin ||
+                    auth.role == UserRole.accountant,
+                showComplaints: auth.role == UserRole.admin ||
+                    auth.role == UserRole.officer,
+              ),
             ],
           ],
         ),
@@ -531,9 +528,15 @@ class _RecentPaymentRow extends StatelessWidget {
   }
 }
 
-// ── Activity Log + Pending Complaints row ────────────────────────────────────
-class _ActivityAndComplaintsRow extends StatelessWidget {
-  const _ActivityAndComplaintsRow();
+// ── Insights row: Activity Log + Recent Payments + Pending Complaints ────────
+class _InsightsRow extends StatelessWidget {
+  final bool showPayments;
+  final bool showComplaints;
+
+  const _InsightsRow({
+    required this.showPayments,
+    required this.showComplaints,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -542,25 +545,30 @@ class _ActivityAndComplaintsRow extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final narrow = constraints.maxWidth < 760;
-        final activity   = _RecentActivityCard(svc: settingsSvc);
-        final complaints = _PendingComplaintsCard(fs: fs);
+        final cards = <Widget>[
+          _RecentActivityCard(svc: settingsSvc),
+          if (showPayments) const _RecentPaymentsCard(),
+          if (showComplaints) _PendingComplaintsCard(fs: fs),
+        ];
 
-        if (narrow) {
+        // One card per row when there isn't room for them side by side.
+        if (constraints.maxWidth < 760) {
           return Column(
             children: [
-              activity,
-              const SizedBox(height: 14),
-              complaints,
+              for (int i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(height: 14),
+                cards[i],
+              ],
             ],
           );
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(flex: 3, child: activity),
-            const SizedBox(width: 14),
-            Expanded(flex: 2, child: complaints),
+            for (int i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(width: 14),
+              Expanded(child: cards[i]),
+            ],
           ],
         );
       },
@@ -1001,32 +1009,25 @@ class AppSidebar extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Logo
+          // Logo — stretched across the sidebar's full width
           Container(
             padding: const EdgeInsets.symmetric(
-                horizontal: 20, vertical: 22),
-            child: Row(
-              children: [
-                Container(
-                  width: 34, height: 34,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white
-                        .withOpacity(0.15),
-                  ),
-                  child: const Icon(
-                      Icons.account_balance,
-                      color: Colors.white,
-                      size: 17),
+                horizontal: 16, vertical: 18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SizedBox(
+                height: 42,
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  width: double.infinity,
+                  fit: BoxFit.contain,
                 ),
-                const SizedBox(width: 10),
-                const Text('LAMHOAI',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        letterSpacing: 1.5)),
-              ],
+              ),
             ),
           ),
           const Divider(
@@ -1188,12 +1189,12 @@ class AppSidebar extends StatelessWidget {
                 children: [
                   Icon(Icons.logout,
                       color: Color(0xFF7A9CCE),
-                      size: 18),
+                      size: 17),
                   SizedBox(width: 10),
                   Text('Sign Out',
                       style: TextStyle(
                           color: Color(0xFF7A9CCE),
-                          fontSize: 13.5)),
+                          fontSize: 12.5)),
                 ],
               ),
             ),
@@ -1265,13 +1266,13 @@ class _NavItem extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: ListTile(
         dense: true,
-        leading: Icon(icon, size: 18,
+        leading: Icon(icon, size: 17,
             color: selected
                 ? Colors.white
                 : const Color(0xFF7A9CCE)),
         title: Text(label,
             style: TextStyle(
-                fontSize: 13.5,
+                fontSize: 12.5,
                 color: selected
                     ? Colors.white
                     : const Color(0xFF7A9CCE),

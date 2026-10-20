@@ -15,6 +15,7 @@ import '../providers/auth_provider.dart';
 import 'app_router.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart'
     show AppSidebar, AppTopBar;
+import '../theme/design_tokens.dart';
 
 class AppShell extends StatelessWidget {
   final String currentPath;
@@ -26,8 +27,7 @@ class AppShell extends StatelessWidget {
     required this.child,
   });
 
-  static const Color _bg = Color(0xFFF4F7FB);
-
+  
   // Below this width the persistent sidebar becomes a Drawer instead.
   static const double _mobileBreakpoint = 900;
 
@@ -41,6 +41,7 @@ class AppShell extends StatelessWidget {
     AppRoutes.documents:     'Documents',
     AppRoutes.announcements: 'Announcements',
     AppRoutes.complaints:    'Complaints',
+    AppRoutes.feedback:      'Feedback',
     AppRoutes.analytics:     'Analytics',
     AppRoutes.reports:       'Reports',
     AppRoutes.settings:      'Settings',
@@ -67,7 +68,7 @@ class AppShell extends StatelessWidget {
 
         if (isMobile) {
           return Scaffold(
-            backgroundColor: _bg,
+            backgroundColor: AppColors.background,
             drawer: Drawer(width: 220, child: buildSidebar()),
             body: Builder(
               builder: (drawerContext) => Column(
@@ -86,7 +87,7 @@ class AppShell extends StatelessWidget {
         }
 
         return Scaffold(
-          backgroundColor: _bg,
+          backgroundColor: AppColors.background,
           body: Row(
             children: [
               buildSidebar(),

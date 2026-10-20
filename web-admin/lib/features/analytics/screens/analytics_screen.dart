@@ -7,20 +7,22 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/services/analytics_service.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
+  
+  
+  
 
   @override
   Widget build(BuildContext context) {
     final _svc = AnalyticsService();
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -29,7 +31,7 @@ class AnalyticsScreen extends StatelessWidget {
             Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back, color: _navy),
+                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
                   tooltip: 'Back to Dashboard',
                   onPressed: () => context.go(AppRoutes.dashboard),
                 ),
@@ -42,7 +44,7 @@ class AnalyticsScreen extends StatelessWidget {
                           style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
-                              color: _navy)),
+                              color: AppColors.textPrimary)),
                       const SizedBox(height: 2),
                       Text('Financial and membership overview',
                           maxLines: 1,
@@ -247,7 +249,7 @@ class _MonthlyBarChart extends StatelessWidget {
   final AnalyticsService svc;
   const _MonthlyBarChart({required this.svc});
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   @override
   Widget build(BuildContext context) {
@@ -265,7 +267,7 @@ class _MonthlyBarChart extends StatelessWidget {
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _navy)),
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text('Last 6 months',
               style: TextStyle(
@@ -424,7 +426,7 @@ class _MemberStatusPieChartState
     extends State<_MemberStatusPieChart> {
   int _touched = -1;
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   @override
   Widget build(BuildContext context) {
@@ -442,7 +444,7 @@ class _MemberStatusPieChartState
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _navy)),
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text('Breakdown by status',
               style: TextStyle(
@@ -587,7 +589,7 @@ class _PaymentComplianceCard extends StatelessWidget {
   final AnalyticsService svc;
   const _PaymentComplianceCard({required this.svc});
 
-  static const Color _navy = Color(0xFF1E293B);
+  
 
   @override
   Widget build(BuildContext context) {
@@ -605,7 +607,7 @@ class _PaymentComplianceCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _navy)),
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text('All payment records',
               style: TextStyle(
@@ -649,13 +651,6 @@ class _PaymentComplianceCard extends StatelessWidget {
                     count: data.overdue,
                     total: data.total,
                     color: const Color(0xFFCC2200),
-                  ),
-                  const SizedBox(height: 12),
-                  _ComplianceBar(
-                    label: 'Waived',
-                    count: data.waived,
-                    total: data.total,
-                    color: const Color(0xFF5A7099),
                   ),
                   const SizedBox(height: 20),
                   Container(

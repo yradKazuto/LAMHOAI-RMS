@@ -2,57 +2,59 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/utils/enum_utils.dart';
+
 // Stored in Firestore by `name` — never rename a value once records exist.
 // `dues` = per-lot MONTHLY dues, `membershipFee` = ANNUAL association fee,
 // `lotPayment` = payments made toward a lot (amortization / installments).
 // Monthly dues and lot payments belong to ONE specific lot (lotId).
 enum PaymentType { dues, membershipFee, lotPayment, penalty, specialAssessment, other }
 
-extension PaymentTypeExt on PaymentType {
-  String get label {
-    switch (this) {
-      case PaymentType.dues:              return 'Monthly Dues';
-      case PaymentType.membershipFee:     return 'Annual Membership Fee';
-      case PaymentType.lotPayment:        return 'Lot Amortization';
-      case PaymentType.penalty:           return 'Penalty';
-      case PaymentType.specialAssessment: return 'Special Assessment';
-      case PaymentType.other:             return 'Other';
-    }
-  }
+const Map<PaymentType, String> _paymentTypeLabels = {
+  PaymentType.dues: 'Monthly Dues',
+  PaymentType.membershipFee: 'Annual Membership Fee',
+  PaymentType.lotPayment: 'Lot Amortization',
+  PaymentType.penalty: 'Penalty',
+  PaymentType.specialAssessment: 'Special Assessment',
+  PaymentType.other: 'Other',
+};
 
-  static PaymentType fromString(String? v) {
-    switch (v) {
-      case 'dues':              return PaymentType.dues;
-      case 'membershipFee':     return PaymentType.membershipFee;
-      case 'lotPayment':        return PaymentType.lotPayment;
-      case 'penalty':           return PaymentType.penalty;
-      case 'specialAssessment': return PaymentType.specialAssessment;
-      default:                  return PaymentType.other;
-    }
-  }
+const Map<String, PaymentType> _paymentTypeLookup = {
+  'dues': PaymentType.dues,
+  'membershipfee': PaymentType.membershipFee,
+  'lotpayment': PaymentType.lotPayment,
+  'penalty': PaymentType.penalty,
+  'specialassessment': PaymentType.specialAssessment,
+};
+
+extension PaymentTypeExt on PaymentType {
+  String get label => enumLabel(this, _paymentTypeLabels);
+
+  static PaymentType fromString(String? v) =>
+      enumFromString(v, _paymentTypeLookup, defaultValue: PaymentType.other);
 }
 
 enum PaymentStatus { paid, unpaid, overdue, waived }
 
-extension PaymentStatusExt on PaymentStatus {
-  String get label {
-    switch (this) {
-      case PaymentStatus.paid:    return 'Paid';
-      case PaymentStatus.unpaid:  return 'Unpaid';
-      case PaymentStatus.overdue: return 'Overdue';
-      case PaymentStatus.waived:  return 'Waived';
-    }
-  }
+const Map<PaymentStatus, String> _paymentStatusLabels = {
+  PaymentStatus.paid: 'Paid',
+  PaymentStatus.unpaid: 'Unpaid',
+  PaymentStatus.overdue: 'Overdue',
+  PaymentStatus.waived: 'Waived',
+};
 
-  static PaymentStatus fromString(String? v) {
-    switch (v?.toLowerCase()) {
-      case 'paid':    return PaymentStatus.paid;
-      case 'unpaid':  return PaymentStatus.unpaid;
-      case 'overdue': return PaymentStatus.overdue;
-      case 'waived':  return PaymentStatus.waived;
-      default:        return PaymentStatus.unpaid;
-    }
-  }
+const Map<String, PaymentStatus> _paymentStatusLookup = {
+  'paid': PaymentStatus.paid,
+  'unpaid': PaymentStatus.unpaid,
+  'overdue': PaymentStatus.overdue,
+  'waived': PaymentStatus.waived,
+};
+
+extension PaymentStatusExt on PaymentStatus {
+  String get label => enumLabel(this, _paymentStatusLabels);
+
+  static PaymentStatus fromString(String? v) =>
+      enumFromString(v, _paymentStatusLookup, defaultValue: PaymentStatus.unpaid);
 }
 
 class PaymentModel {

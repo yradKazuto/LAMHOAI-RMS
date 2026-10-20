@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/routing/app_router.dart';
+import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -37,38 +38,10 @@ class LamhoaiApp extends StatelessWidget {
           return MaterialApp.router(
             title: 'LAMHOAI – RMS',
             debugShowCheckedModeBanner: false,
-            theme: _buildTheme(),
+            theme: AppTheme.lightTheme,
             routerConfig: router,
           );
         },
-      ),
-    );
-  }
-
-  ThemeData _buildTheme() {
-    const Color navy = Color(0xFF0D2A5C);
-    const Color accent = Color(0xFF2E6BE6);
-
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: navy,
-        primary: navy,
-        secondary: accent,
-      ),
-      scaffoldBackgroundColor: const Color(0xFFF0F4FB),
-      fontFamily: 'Inter',
-      textTheme: const TextTheme(
-        bodyMedium: TextStyle(color: Color(0xFF1A2B4A)),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: navy,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
       ),
     );
   }

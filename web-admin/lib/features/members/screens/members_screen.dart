@@ -14,6 +14,8 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/lot_service.dart';
 import 'member_detail_screen.dart';
+import '../../../core/theme/design_tokens.dart';
+import '../../../core/widgets/app_filter_controls.dart';
 
 class MembersScreen extends StatefulWidget {
   const MembersScreen({super.key});
@@ -29,10 +31,6 @@ class _MembersScreenState extends State<MembersScreen> {
   String  _searchQuery  = '';
   String? _statusFilter;
   String? _blockFilter;
-
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-  static const Color _bg     = Color(0xFFF4F7FB);
 
   @override
   void dispose() {
@@ -67,7 +65,7 @@ class _MembersScreenState extends State<MembersScreen> {
     final canEdit = auth.isAdmin || auth.isOfficer;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       body: Padding(
         padding: const EdgeInsets.all(28),
         child: Column(
@@ -83,7 +81,7 @@ class _MembersScreenState extends State<MembersScreen> {
                         style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
-                            color: _navy)),
+                            color: AppColors.textPrimary)),
                     const SizedBox(height: 2),
                     Text('Manage and view all registered homeowners',
                         maxLines: 1,
@@ -101,7 +99,7 @@ class _MembersScreenState extends State<MembersScreen> {
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Member'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _navy,
+                          backgroundColor: AppColors.textPrimary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 14),
@@ -161,17 +159,17 @@ class _MembersScreenState extends State<MembersScreen> {
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     enabledBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     focusedBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: _accent, width: 1.5)),
+                            color: AppColors.primary, width: 1.5)),
                   ),
                 );
 
@@ -232,7 +230,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                       style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w700,
-                                          color: _navy)),
+                                          color: AppColors.textPrimary)),
                                   const Spacer(),
                                   if (tempStatus != null ||
                                       tempBlock != null)
@@ -335,7 +333,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                     Navigator.pop(sheetCtx);
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _navy,
+                                    backgroundColor: AppColors.textPrimary,
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
@@ -372,8 +370,8 @@ class _MembersScreenState extends State<MembersScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color: activeFilterCount > 0
-                                ? _accent
-                                : const Color(0xFFD0DBEE)),
+                                ? AppColors.primary
+                                : AppColors.borderStrong),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -381,7 +379,7 @@ class _MembersScreenState extends State<MembersScreen> {
                           Icon(Icons.filter_list,
                               size: 18,
                               color: activeFilterCount > 0
-                                  ? _accent
+                                  ? AppColors.primary
                                   : Colors.grey[600]),
                           const SizedBox(width: 6),
                           Text(
@@ -392,8 +390,8 @@ class _MembersScreenState extends State<MembersScreen> {
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: activeFilterCount > 0
-                                      ? _accent
-                                      : const Color(0xFF1A2B4A))),
+                                      ? AppColors.primary
+                                      : AppColors.textPrimary)),
                         ],
                       ),
                     ),
@@ -429,12 +427,12 @@ class _MembersScreenState extends State<MembersScreen> {
                   children: [
                     SizedBox(width: 280, child: searchField),
                     const SizedBox(width: 12),
-                    _FilterPopoverButton(
+                    AppFilterPopoverButton(
                       activeFilterCount: activeFilterCount,
                       panelBuilder: (context, setPanelState, close) => [
-                        _PopoverFilterField(
+                        AppPopoverFilterField(
                           label: 'Status',
-                          child: _FilterChipGroup<String?>(
+                          child: AppFilterChipGroup<String?>(
                             value: _statusFilter,
                             options: const [
                               MapEntry(null, 'All Statuses'),
@@ -448,9 +446,9 @@ class _MembersScreenState extends State<MembersScreen> {
                             },
                           ),
                         ),
-                        _PopoverFilterField(
+                        AppPopoverFilterField(
                           label: 'Block',
-                          child: _FilterChipGroup<String?>(
+                          child: AppFilterChipGroup<String?>(
                             value: _blockFilter,
                             options: const [
                               MapEntry(null, 'All Blocks'),
@@ -541,15 +539,8 @@ class _MembersScreenState extends State<MembersScreen> {
                                   BorderRadius.circular(12),
                               border: Border.all(
                                   color:
-                                      const Color(0xFFE0E8F4)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF1A4A9C)
-                                      .withOpacity(0.05),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
+                                      AppColors.border),
+                              boxShadow: AppShadows.card,
                             ),
                             child: Column(
                               children: [
@@ -557,7 +548,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                   _TableHeader(),
                                   const Divider(
                                       height: 1,
-                                      color: Color(0xFFE0E8F4)),
+                                      color: AppColors.border),
                                 ],
                                 if (members.isEmpty)
                                   const Expanded(
@@ -659,9 +650,7 @@ class _FilterPopoverButton extends StatefulWidget {
 }
 
 class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-
+    
   final LayerLink _link = LayerLink();
   OverlayEntry? _entry;
 
@@ -696,7 +685,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border:
-                            Border.all(color: const Color(0xFFE0E8F4)),
+                            Border.all(color: AppColors.border),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.12),
@@ -715,7 +704,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                                   style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: _navy)),
+                                      color: AppColors.textPrimary)),
                               const Spacer(),
                               TextButton(
                                 onPressed: () {
@@ -741,7 +730,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                             child: ElevatedButton(
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _navy,
+                                backgroundColor: AppColors.textPrimary,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
@@ -797,8 +786,8 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                   color: widget.activeFilterCount > 0
-                      ? _accent
-                      : const Color(0xFFD0DBEE)),
+                      ? AppColors.primary
+                      : AppColors.borderStrong),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -806,7 +795,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                 Icon(Icons.filter_list,
                     size: 18,
                     color: widget.activeFilterCount > 0
-                        ? _accent
+                        ? AppColors.primary
                         : Colors.grey[600]),
                 const SizedBox(width: 6),
                 Text(
@@ -817,8 +806,8 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: widget.activeFilterCount > 0
-                            ? _accent
-                            : const Color(0xFF1A2B4A))),
+                            ? AppColors.primary
+                            : AppColors.textPrimary)),
                 const SizedBox(width: 4),
                 Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
               ],
@@ -845,8 +834,7 @@ class _FilterChipGroup<T> extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const Color _accent = Color(0xFF2563EB);
-
+  
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 8,
@@ -861,17 +849,17 @@ class _FilterChipGroup<T> extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: selected
-                ? _accent.withOpacity(0.1)
-                : const Color(0xFFF7F9FC),
+                ? AppColors.primary.withOpacity(0.1)
+                : AppColors.background,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: selected ? _accent : const Color(0xFFD0DBEE)),
+                color: selected ? AppColors.primary : AppColors.borderStrong),
           ),
           child: Text(opt.value,
               style: TextStyle(
                   fontSize: 12.5,
                   color:
-                      selected ? _accent : const Color(0xFF1A2B4A),
+                      selected ? AppColors.primary : AppColors.textPrimary,
                   fontWeight:
                       selected ? FontWeight.w600 : FontWeight.w400)),
         ),
@@ -926,7 +914,7 @@ class _DropdownFilter extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(8),
       border: Border.all(
-          color: const Color(0xFFD0DBEE)),
+          color: AppColors.borderStrong),
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String?>(
@@ -937,7 +925,7 @@ class _DropdownFilter extends StatelessWidget {
                 color: Colors.grey[500])),
         style: const TextStyle(
             fontSize: 13,
-            color: Color(0xFF1A2B4A)),
+            color: AppColors.textPrimary),
         icon: const Icon(Icons.expand_more,
             size: 18),
         items: items,
@@ -954,7 +942,7 @@ class _TableHeader extends StatelessWidget {
     padding: const EdgeInsets.symmetric(
         horizontal: 20, vertical: 14),
     decoration: const BoxDecoration(
-      color: Color(0xFFF7F9FC),
+      color: AppColors.background,
       borderRadius: BorderRadius.vertical(
           top: Radius.circular(12)),
     ),
@@ -979,7 +967,7 @@ class _TH extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099),
+          color: AppColors.textSecondary,
           letterSpacing: 0.4));
 }
 
@@ -1002,22 +990,22 @@ class _MemberRow extends StatelessWidget {
   Color _fg(MemberStatus s) {
     switch (s) {
       case MemberStatus.active:
-        return const Color(0xFF1A7A4A);
+        return AppColors.success;
       case MemberStatus.inactive:
-        return const Color(0xFF7A6A1A);
+        return AppColors.warning;
       case MemberStatus.delinquent:
-        return const Color(0xFFCC2200);
+        return AppColors.danger;
     }
   }
 
   Color _bg(MemberStatus s) {
     switch (s) {
       case MemberStatus.active:
-        return const Color(0xFFEAF7F0);
+        return AppColors.successBg;
       case MemberStatus.inactive:
-        return const Color(0xFFFFF8E0);
+        return AppColors.warningBg;
       case MemberStatus.delinquent:
-        return const Color(0xFFFFF0EE);
+        return AppColors.dangerBg;
     }
   }
 
@@ -1047,7 +1035,7 @@ class _MemberRow extends StatelessWidget {
       CircleAvatar(
         radius: 16,
         backgroundColor:
-            const Color(0xFF2563EB).withOpacity(0.12),
+            AppColors.primary.withOpacity(0.12),
         child: Text(
           member.name.isNotEmpty
               ? member.name[0].toUpperCase()
@@ -1055,7 +1043,7 @@ class _MemberRow extends StatelessWidget {
           style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF2563EB)),
+              color: AppColors.primary),
         ),
       ),
       const SizedBox(width: 10),
@@ -1064,7 +1052,7 @@ class _MemberRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B)),
+                color: AppColors.textPrimary),
             overflow: TextOverflow.ellipsis),
       ),
     ],
@@ -1100,7 +1088,7 @@ class _MemberRow extends StatelessWidget {
         ),
         child: InkWell(
         onTap: onTap,
-        hoverColor: const Color(0xFFF4F7FB),
+        hoverColor: AppColors.background,
         child: Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: 16, vertical: 12),
@@ -1132,7 +1120,7 @@ class _MemberRow extends StatelessWidget {
                 child: Text('$_lotText  ·  $_blockText',
                     style: const TextStyle(
                         fontSize: 12.5,
-                        color: Color(0xFF1A2B4A))),
+                        color: AppColors.textPrimary)),
               ),
             ],
           ),
@@ -1149,7 +1137,7 @@ class _MemberRow extends StatelessWidget {
       ),
       child: InkWell(
       onTap: onTap,
-      hoverColor: const Color(0xFFF4F7FB),
+      hoverColor: AppColors.background,
       child: Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: 20, vertical: 14),
@@ -1169,14 +1157,14 @@ class _MemberRow extends StatelessWidget {
               child: Text(_lotText,
                   style: const TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF1A2B4A))),
+                      color: AppColors.textPrimary)),
             ),
             Expanded(
               flex: 2,
               child: Text(_blockText,
                   style: const TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF1A2B4A))),
+                      color: AppColors.textPrimary)),
             ),
             Expanded(flex: 2, child: _statusPill()),
             SizedBox(
@@ -1216,9 +1204,7 @@ class _AddMemberDialogState
   bool    _obscure = true;
   String? _error;
 
-  static const Color _navy   = Color(0xFF1E293B);
-  static const Color _accent = Color(0xFF2563EB);
-
+    
   @override
   void dispose() {
     _name.dispose();
@@ -1294,7 +1280,7 @@ class _AddMemberDialogState
                 'Member created. Verification email sent. '
                 'Assign them to a lot from Location Mapping to '
                 'show their Lot No. and Block in this list.'),
-            backgroundColor: Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -1325,25 +1311,25 @@ class _AddMemberDialogState
         hintStyle: TextStyle(
             fontSize: 13, color: Colors.grey[400]),
         filled:    true,
-        fillColor: const Color(0xFFF7F9FC),
+        fillColor: AppColors.background,
         contentPadding: const EdgeInsets.symmetric(
             horizontal: 12, vertical: 12),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(
-                color: Color(0xFFD0DBEE))),
+                color: AppColors.borderStrong)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(
-                color: Color(0xFFD0DBEE))),
+                color: AppColors.borderStrong)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(
-                color: _accent, width: 1.5)),
+                color: AppColors.primary, width: 1.5)),
         errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(
-                color: Color(0xFFCC2200))),
+                color: AppColors.danger)),
       );
 
   @override
@@ -1376,7 +1362,7 @@ class _AddMemberDialogState
                     style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: _navy)),
+                        color: AppColors.textPrimary)),
                 const SizedBox(height: 4),
                 Text(
                   'Creates a login account for the mobile app.',
@@ -1395,7 +1381,7 @@ class _AddMemberDialogState
                             vertical: 10),
                     decoration: BoxDecoration(
                       color:
-                          const Color(0xFFFFF0EE),
+                          AppColors.dangerBg,
                       borderRadius:
                           BorderRadius.circular(8),
                       border: Border.all(
@@ -1409,7 +1395,7 @@ class _AddMemberDialogState
                             Icons.error_outline,
                             size: 15,
                             color:
-                                Color(0xFFCC2200)),
+                                AppColors.danger),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(_error!,
@@ -1580,12 +1566,11 @@ class _AddMemberDialogState
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color:
-                        const Color(0xFFE8F4FF),
+                        AppPrimitiveColors.blue50,
                     borderRadius:
                         BorderRadius.circular(8),
                     border: Border.all(
-                        color: const Color(
-                                0xFF2563EB)
+                        color: AppColors.primary
                             .withOpacity(0.2)),
                   ),
                   child: const Row(
@@ -1593,7 +1578,7 @@ class _AddMemberDialogState
                       Icon(Icons.info_outline,
                           size: 15,
                           color:
-                              Color(0xFF2563EB)),
+                              AppColors.primary),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1627,7 +1612,7 @@ class _AddMemberDialogState
                           _loading ? null : _submit,
                       style:
                           ElevatedButton.styleFrom(
-                        backgroundColor: _navy,
+                        backgroundColor: AppColors.textPrimary,
                         foregroundColor:
                             Colors.white,
                         shape:
@@ -1674,7 +1659,7 @@ class _FieldLabel extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF1E293B)));
+          color: AppColors.textPrimary));
 }
 
 class _Field extends StatelessWidget {

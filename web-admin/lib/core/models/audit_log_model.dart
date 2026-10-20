@@ -2,6 +2,8 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/utils/enum_utils.dart';
+
 enum AuditAction {
   created,
   updated,
@@ -11,29 +13,29 @@ enum AuditAction {
   login,
 }
 
-extension AuditActionExt on AuditAction {
-  String get label {
-    switch (this) {
-      case AuditAction.created:       return 'Created';
-      case AuditAction.updated:       return 'Updated';
-      case AuditAction.deleted:       return 'Deleted';
-      case AuditAction.statusChanged: return 'Status Changed';
-      case AuditAction.roleChanged:   return 'Role Changed';
-      case AuditAction.login:         return 'Login';
-    }
-  }
+const Map<AuditAction, String> _auditActionLabels = {
+  AuditAction.created: 'Created',
+  AuditAction.updated: 'Updated',
+  AuditAction.deleted: 'Deleted',
+  AuditAction.statusChanged: 'Status Changed',
+  AuditAction.roleChanged: 'Role Changed',
+  AuditAction.login: 'Login',
+};
 
-  static AuditAction fromString(String? v) {
-    switch (v) {
-      case 'created':       return AuditAction.created;
-      case 'updated':       return AuditAction.updated;
-      case 'deleted':       return AuditAction.deleted;
-      case 'statusChanged': return AuditAction.statusChanged;
-      case 'roleChanged':   return AuditAction.roleChanged;
-      case 'login':         return AuditAction.login;
-      default:              return AuditAction.updated;
-    }
-  }
+const Map<String, AuditAction> _auditActionLookup = {
+  'created': AuditAction.created,
+  'updated': AuditAction.updated,
+  'deleted': AuditAction.deleted,
+  'statuschanged': AuditAction.statusChanged,
+  'rolechanged': AuditAction.roleChanged,
+  'login': AuditAction.login,
+};
+
+extension AuditActionExt on AuditAction {
+  String get label => enumLabel(this, _auditActionLabels);
+
+  static AuditAction fromString(String? v) =>
+      enumFromString(v, _auditActionLookup, defaultValue: AuditAction.updated);
 }
 
 class AuditLogModel {

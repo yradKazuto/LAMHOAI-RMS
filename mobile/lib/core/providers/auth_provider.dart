@@ -126,8 +126,8 @@ class AuthProvider extends ChangeNotifier {
       await _auth.sendPasswordResetEmail(email: email.trim());
     } on FirebaseAuthException catch (e) {
       _errorMessage = _mapAuthError(e.code);
-      _setStatus(AuthStatus.error);
-      rethrow;
+      // Don't flip auth status — a failed password reset must not kick a
+      // still-signed-in member back to /login.
     }
   }
 
@@ -141,7 +141,11 @@ class AuthProvider extends ChangeNotifier {
     if (!doc.exists || doc.data() == null) {
       throw Exception('User profile not found. Contact your HOA admin.');
     }
-    return UserModel.fromFirestore(doc.data()!, uid);
+    final model = UserModel.fromFirestore(doc.data()!, uid);
+    if (model.isActive == false) {
+      throw Exception('Account is inactive. Contact your HOA admin.');
+    }
+    return model;
   }
 
   // ── Utilities ─────────────────────────────────────────────────────────────
@@ -153,7 +157,8 @@ class AuthProvider extends ChangeNotifier {
 
   void clearError() {
     _errorMessage = null;
-    if (_status == AuthStatus.error) _setStatus(AuthStatus.unauthenticated);
+    // Do not flip auth status — clearing an error banner must not boot a
+    // still-signed-in member back to /login.
   }
 
   String _mapAuthError(String code) {

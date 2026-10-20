@@ -8,6 +8,8 @@ import '../../../core/models/audit_log_model.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class UploadSelection {
   final String memberId;
@@ -133,8 +135,8 @@ class _UploadProgressDialog extends StatelessWidget {
     required this.progress,
   });
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
+  
+  
 
   @override
   Widget build(BuildContext context) {
@@ -153,7 +155,7 @@ class _UploadProgressDialog extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               Text(fileName,
                   style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
@@ -176,7 +178,7 @@ class _UploadProgressDialog extends StatelessWidget {
                           minHeight: 8,
                           backgroundColor: const Color(0xFFE8EDF5),
                           valueColor:
-                              const AlwaysStoppedAnimation(_accent),
+                              const AlwaysStoppedAnimation(AppColors.primary),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -219,8 +221,8 @@ class _UploadDialogState extends State<UploadDialog> {
   String?      _memberName;
   DocumentType _docType = DocumentType.other;
 
-  static const Color _navy   = Color(0xFF0D2A5C);
-  static const Color _accent = Color(0xFF2E6BE6);
+  
+  
 
   @override
   void initState() {
@@ -244,7 +246,7 @@ class _UploadDialogState extends State<UploadDialog> {
         borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _accent, width: 1.5)),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
   );
 
   @override
@@ -264,7 +266,7 @@ class _UploadDialogState extends State<UploadDialog> {
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -294,7 +296,7 @@ class _UploadDialogState extends State<UploadDialog> {
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               if (widget.preselectedMemberId != null)
                 Container(
@@ -351,7 +353,7 @@ class _UploadDialogState extends State<UploadDialog> {
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: _navy)),
+                      color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               DropdownButtonFormField<DocumentType>(
                 value: _docType,
@@ -414,10 +416,10 @@ class _UploadDialogState extends State<UploadDialog> {
                               ),
                             ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _navy,
+                      backgroundColor: AppColors.textPrimary,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor:
-                          _navy.withOpacity(0.4),
+                          AppColors.textPrimary.withOpacity(0.4),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(

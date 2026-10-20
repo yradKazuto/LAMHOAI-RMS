@@ -15,6 +15,7 @@ import '../../features/notifications/notifications_screen.dart';
 import '../../features/announcements/announcements_screen.dart';
 import '../../features/complaints/complaints_screen.dart';
 import '../../features/complaints/submit_complaint_screen.dart';
+import '../../features/feedback/feedback_screen.dart';
 import '../../features/profile/profile_screen.dart';
 
 // ── Route names ───────────────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ class Routes {
   static const announcements   = '/home/announcements';
   static const complaints      = '/home/complaints';
   static const submitComplaint = '/home/complaints/submit';
+  static const feedback        = '/home/feedback';
   static const profile         = '/home/profile';
   static const adminHome       = '/admin';
 }
@@ -115,6 +117,11 @@ class AppRouter {
                   GoRoute(
                     path: 'announcements',
                     builder: (_, __) => const AnnouncementsScreen(),
+                  ),
+                  // Feedback nested under home
+                  GoRoute(
+                    path: 'feedback',
+                    builder: (_, __) => const FeedbackScreen(),
                   ),
                 ],
               ),

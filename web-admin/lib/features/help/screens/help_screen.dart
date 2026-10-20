@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/design_tokens.dart';
+import '../../../core/theme/design_tokens.dart';
 
 /// Help / Onboarding screen for new admin/accountant users.
 /// Provides guidance on key features, FAQs, and overview of the portal.
@@ -25,10 +25,10 @@ class HelpScreen extends StatelessWidget {
             title: 'Getting Started',
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Welcome to the HOA Management Portal! This guide will help you '
             'get oriented with the key features and workflows.',
-            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 20),
 
@@ -47,8 +47,8 @@ class HelpScreen extends StatelessWidget {
 
           // ── Section: Member Management ────────────────────────────────────
           _SectionTitle(
-            Icons.people,
-            'Member Management',
+            icon: Icons.people,
+            title: 'Member Management',
           ),
           const SizedBox(height: 4),
           const Text(
@@ -60,8 +60,8 @@ class HelpScreen extends StatelessWidget {
 
           // ── Section: Payment Processing ───────────────────────────────────
           _SectionTitle(
-            Icons.money,
-            'Payment Processing',
+            icon: Icons.money,
+            title: 'Payment Processing',
           ),
           const SizedBox(height: 4),
           const Text(
@@ -74,8 +74,8 @@ class HelpScreen extends StatelessWidget {
 
           // ── Section: Reports & Export ─────────────────────────────────────
           _SectionTitle(
-            Icons.bar_chart,
-            'Reports & Export',
+            icon: Icons.bar_chart,
+            title: 'Reports & Export',
           ),
           const SizedBox(height: 4),
           const Text(
@@ -86,8 +86,8 @@ class HelpScreen extends StatelessWidget {
 
           // ── Section: Location Mapping ─────────────────────────────────────
           _SectionTitle(
-            Icons.map,
-            'Location Mapping',
+            icon: Icons.map,
+            title: 'Location Mapping',
           ),
           const SizedBox(height: 4),
           const Text(
@@ -99,8 +99,8 @@ class HelpScreen extends StatelessWidget {
 
           // ── Section: FAQ ──────────────────────────────────────────────────
           _SectionTitle(
-            Icons.quiz_outlined,
-            'Frequently Asked Questions',
+            icon: Icons.quiz_outlined,
+            title: 'Frequently Asked Questions',
           ),
           const SizedBox(height: 4),
           _FaqItem(
@@ -128,18 +128,18 @@ class HelpScreen extends StatelessWidget {
 
           // ── Section: Need More Help? ──────────────────────────────────────
           _SectionTitle(
-            Icons.contact_mail,
-            'Need More Help?',
+            icon: Icons.contact_mail,
+            title: 'Need More Help?',
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'If you cannot find the answer to your question here, please contact '
             'your system administrator or refer to the official documentation.',
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Contact: admin@lamhoai.example.com',
-            style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey[600]),
+            style: TextStyle(fontStyle: FontStyle.italic, color: AppColors.textMuted),
           ),
         ],
       ),

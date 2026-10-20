@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/theme/design_tokens.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,9 +24,9 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<Offset> _slideAnim;
 
   // ── Brand colours ──────────────────────────────────────────────────────────
-  static const Color _navy = Color(0xFF0D2A5C);
+  
   static const Color _blue = Color(0xFF1A4A9C);
-  static const Color _accent = Color(0xFF2E6BE6);
+  
   static const Color _lightBg = Color(0xFFF0F4FB);
   static const Color _border = Color(0xFFD0DBEE);
   static const Color _error = Color(0xFFCC2200);
@@ -75,17 +77,12 @@ class _LoginScreenState extends State<LoginScreen>
 
     return Scaffold(
       body: Container(
-        // Seamless Fullscreen Background Gradient
+        // Fullscreen background image
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0D2A5C), // _navy
-              Color(0xFF1A4A9C), // _blue
-              Color(0xFFE2EAF8), // soft tint to blend with light card
-            ],
-            stops: [0.0, 0.45, 1.0],
+          image: DecorationImage(
+            image: AssetImage('assets/images/background.png'),
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
           ),
         ),
         child: Row(
@@ -100,22 +97,26 @@ class _LoginScreenState extends State<LoginScreen>
             // ── Right Form Section ───────────────────────────────────────────
             Expanded(
               flex: 6,
-              child: Center(
-                child: SingleChildScrollView(
-                  child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: SlideTransition(
-                      position: _slideAnim,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 440),
-                        child: _LoginCard(
-                          formKey: _formKey,
-                          emailController: _emailController,
-                          passwordController: _passwordController,
-                          obscurePassword: _obscurePassword,
-                          onTogglePassword: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
-                          onSubmit: _submit,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 80),
+                  child: SingleChildScrollView(
+                    child: FadeTransition(
+                      opacity: _fadeAnim,
+                      child: SlideTransition(
+                        position: _slideAnim,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 440),
+                          child: _LoginCard(
+                            formKey: _formKey,
+                            emailController: _emailController,
+                            passwordController: _passwordController,
+                            obscurePassword: _obscurePassword,
+                            onTogglePassword: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
+                            onSubmit: _submit,
+                          ),
                         ),
                       ),
                     ),
@@ -151,35 +152,17 @@ class _LeftPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Top Brand Badge
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.25),
-                          width: 1,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.account_balance,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Text(
-                      'LAMHOAI',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2.5,
-                      ),
-                    ),
-                  ],
+                // Logo only — no wordmark
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    height: 48,
+                  ),
                 ),
 
                 const Spacer(),
@@ -206,7 +189,7 @@ class _LeftPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Record Management System',
+                  'Residence Map Management',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 16,
@@ -228,7 +211,7 @@ class _LeftPanel extends StatelessWidget {
 
                 // Footer Version Tag
                 Text(
-                  '© ${DateTime.now().year} LAMHOAI · RMS',
+                  '© ${DateTime.now().year} LAMHSYS ',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.45),
                     fontSize: 11.5,
@@ -279,7 +262,7 @@ class _LoginCard extends StatelessWidget {
   final VoidCallback onTogglePassword;
   final VoidCallback onSubmit;
 
-  static const Color _navy = Color(0xFF0D2A5C);
+  
   static const Color _error = Color(0xFFCC2200);
 
   const _LoginCard({
@@ -321,7 +304,7 @@ class _LoginCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w700,
-                    color: _navy,
+                    color: AppColors.textPrimary,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -415,9 +398,9 @@ class _LoginCard extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: auth.isLoading ? null : onSubmit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _navy,
+                      backgroundColor: AppColors.textPrimary,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: _navy.withOpacity(0.5),
+                      disabledBackgroundColor: AppColors.textPrimary.withOpacity(0.5),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -497,7 +480,7 @@ class _AuthField extends StatelessWidget {
   final String? Function(String?)? validator;
   final void Function(String)? onFieldSubmitted;
 
-  static const Color _accent = Color(0xFF2E6BE6);
+  
   static const Color _border = Color(0xFFD0DBEE);
 
   const _AuthField({
@@ -552,7 +535,7 @@ class _AuthField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _accent, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
