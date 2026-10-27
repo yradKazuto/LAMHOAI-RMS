@@ -60,7 +60,9 @@ class _LotBill {
 }
 
 class FirestoreService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
+
+  FirestoreService({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
 
   // Members who are billed dues. Delinquent members must keep being billed
   // (excluding them stopped the very members who owe money from accruing
@@ -93,15 +95,82 @@ class FirestoreService {
     }
   }
 
-  CollectionReference get _users         => _db.collection('users');
-  CollectionReference get _payments      => _db.collection('payments');
-  CollectionReference get _docs          => _db.collection('documents');
-  CollectionReference get _announcements => _db.collection('announcements');
-  CollectionReference get _complaints    => _db.collection('complaints');
+  CollectionReference<Map<String, dynamic>> get _users      => _db.collection('users');
+  CollectionReference<Map<String, dynamic>> get _payments    => _db.collection('payments');
+  CollectionReference<Map<String, dynamic>> get _docs       => _db.collection('documents');
+  CollectionReference<Map<String, dynamic>> get _announcements => _db.collection('announcements');
+  CollectionReference<Map<String, dynamic>> get _complaints  => _db.collection('complaints');
+  CollectionReference<Map<String, dynamic>> get _feedbacks  => _db.collection('feedback');
+
+  // Ledger: per-member snapshot of outstanding membership balance
+  CollectionReference<Map<String, dynamic>> get _ledgers   => _db.collection('member_ledgers');
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MEMBERS (role == 'member')
+  // COMPLAINTS
   // ════════════════════════════════════════════════════════════════════════════
+
+  Stream<List<ComplaintModel>> streamPendingComplaints() {
+    return _complaints
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => ComplaintModel.fromMap(d.data(), d.id)).toList());
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // FEEDBACK
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Stream<List<FeedbackModel>> streamPendingFeedbacks() {
+    return _feedbacks
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => FeedbackModel.fromMap(d.data(), d.id)).toList());
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // LEDGER
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Stream<List<Map<String, dynamic>>> streamMemberLedgers() {
+    return _ledgers
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d.data()).toList());
+  }
+
+  Future<void> createOrUpdateLedger(String uid, double target, double balance, int year) async {
+    final docRef = _ledgers.doc(uid);
+    final doc = await docRef.get();
+    if (!doc.exists) {
+      await docRef.set({
+        'uid': uid,
+        'annualTarget': target,
+        'currentBalance': balance,
+        'year': year,
+        'createdAt': Timestamp.now(),
+        'updatedAt': Timestamp.now(),
+      });
+    } else {
+      await docRef.update({
+        'annualTarget': target,
+        'currentBalance': balance,
+        'year': year,
+        'updatedAt': Timestamp.now(),
+      });
+    }
+  }
+
+  Future<void> updateLedgerBalance(String uid, double amountDelta) async {
+    final docRef = _ledgers.doc(uid);
+    await _db.runTransaction((transaction) async {
+      final doc = await transaction.get(docRef);
+      if (!doc.exists) return; // Lazy init will handle it later if needed
+      final current = (doc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
+      transaction.update(docRef, {
+        'currentBalance': current + amountDelta,
+        'updatedAt': Timestamp.now(),
+      });
+    });
+  }
 
   Stream<List<MemberModel>> streamMembers() {
     return _users
@@ -200,6 +269,25 @@ class FirestoreService {
 
   Future<void> addPayment(PaymentModel payment) async {
     await _payments.doc(payment.id).set(payment.toMap());
+    // Adjust outstanding balance for membership-type payments
+    if (payment.type == PaymentType.membershipFee ||
+        payment.type == PaymentType.monthlyMembership) {
+      final delta = (payment.type == PaymentType.monthlyMembership)
+          ? payment.amount
+          : (payment.status == PaymentStatus.paid ? -payment.amount : 0.0);
+
+      if (delta != 0.0) {
+        await _db.runTransaction((transaction) async {
+          final doc = await transaction.get(_ledgers.doc(payment.uid));
+          if (!doc.exists) return; // Lazy init will handle it
+          final current = (doc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
+          transaction.update(_ledgers.doc(payment.uid), {
+            'currentBalance': current + delta,
+            'updatedAt': Timestamp.now(),
+          });
+        });
+      }
+    }
   }
 
   Future<void> updatePayment(PaymentModel payment) async {
@@ -207,14 +295,63 @@ class FirestoreService {
   }
 
   Future<void> markPaymentPaid(String paymentId) async {
-    await _payments.doc(paymentId).update({
+    final ref = _payments.doc(paymentId);
+    final data = await ref.get();
+    if (!data.exists) return;
+    final type = PaymentTypeExt.fromString(data['type'] as String?);
+    final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+    await ref.update({
       'status':   PaymentStatus.paid.name,
       'paidDate': Timestamp.fromDate(DateTime.now()),
     });
+    // Deduct monthly membership payments from the ledger balance
+    if (type == PaymentType.monthlyMembership && amount > 0) {
+      await _db.runTransaction((transaction) async {
+        final ledgerRef = _ledgers.doc(data['uid'] as String? ?? '');
+        final ledgerDoc = await transaction.get(ledgerRef);
+        if (!ledgerDoc.exists) return;
+        final current = (ledgerDoc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
+        transaction.update(ledgerRef, {
+          'currentBalance': current - amount,
+          'updatedAt': Timestamp.now(),
+        });
+      });
+    }
   }
 
   Future<void> deletePayment(String paymentId) async {
-    await _payments.doc(paymentId).delete();
+    final ref = _payments.doc(paymentId);
+    final data = await ref.get();
+    if (!data.exists) return;
+    // Restore outstanding balance for membership-type payments
+    final type = PaymentTypeExt.fromString(data['type'] as String?);
+    final status = PaymentStatusExt.fromString(data['status'] as String?);
+    if (type == PaymentType.membershipFee ||
+        type == PaymentType.monthlyMembership) {
+      final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+      // Inverse of addPayment logic:
+      // If addPayment did -amount (paid fee), restore by +amount
+      // If addPayment did +amount (monthly), restore by -amount
+      final delta = (type == PaymentType.monthlyMembership)
+          ? -amount
+          : (status == PaymentStatus.paid ? amount : 0.0);
+
+      final uid = data['uid'] as String?;
+      if (uid != null && delta != 0.0) {
+        await _db.runTransaction((transaction) async {
+          final ledgerRef = _ledgers.doc(uid);
+          final ledgerDoc = await transaction.get(ledgerRef);
+          if (ledgerDoc.exists) {
+            final current = (ledgerDoc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
+            transaction.update(ledgerRef, {
+              'currentBalance': current + delta,
+              'updatedAt': Timestamp.now(),
+            });
+          }
+        });
+      }
+    }
+    await ref.delete();
   }
 
   /// Free-tier alternative to a scheduled Cloud Function (those require the
@@ -293,7 +430,7 @@ class FirestoreService {
       final status           = PaymentStatusExt.fromString(data['status'] as String?);
       final penaltyApplied   = data['penaltyApplied'] as bool? ?? false;
       return !penaltyApplied &&
-          (type == PaymentType.dues || type == PaymentType.membershipFee) &&
+          (type == PaymentType.dues || type == PaymentType.membershipFee || type == PaymentType.monthlyMembership) &&
           (status == PaymentStatus.unpaid || status == PaymentStatus.overdue);
     }).toList();
 
@@ -349,16 +486,21 @@ class FirestoreService {
     required int    year,
     required double amount,
     required String recordedBy,
+    List<String>?   targetUids,
     int             generationGraceDays = 30,
   }) async {
     final membersSnap = await _users
         .where('role', isEqualTo: 'member')
         .where('status', whereIn: _billableStatuses)
         .get();
-    final members = membersSnap.docs
+    var members = membersSnap.docs
         .map((d) => MemberModel.fromMap(
             d.data() as Map<String, dynamic>, d.id))
         .toList();
+
+    if (targetUids != null) {
+      members = members.where((m) => targetUids.contains(m.uid)).toList();
+    }
 
     final start = DateTime(year, 1, 1);
     final end   = DateTime(year + 1, 1, 1);
@@ -411,6 +553,15 @@ class FirestoreService {
         createdAt:  DateTime.now(),
       );
       batch.set(ref, payment.toMap());
+      // Initialize ledger for new annual fee
+      batch.set(_ledgers.doc(member.uid), {
+        'uid': member.uid,
+        'annualTarget': amount,
+        'currentBalance': amount,
+        'year': year,
+        'createdAt': Timestamp.now(),
+        'updatedAt': Timestamp.now(),
+      });
     });
 
     return GenerateDuesResult(
@@ -464,16 +615,21 @@ class FirestoreService {
     required double amount,
     required String recordedBy,
     required List<LotModel> lots,
+    List<String>?   targetUids,
     int             dueDay = 15,
   }) async {
     final membersSnap = await _users
         .where('role', isEqualTo: 'member')
         .where('status', whereIn: _billableStatuses)
         .get();
-    final members = membersSnap.docs
+    var members = membersSnap.docs
         .map((d) => MemberModel.fromMap(
             d.data() as Map<String, dynamic>, d.id))
         .toList();
+
+    if (targetUids != null) {
+      members = members.where((m) => targetUids.contains(m.uid)).toList();
+    }
 
     final lotsByUid = <String, List<LotModel>>{};
     for (final lot in lots) {
@@ -566,6 +722,94 @@ class FirestoreService {
       total: billable,
       withoutLot: withoutLot,
     );
+  }
+
+  // ── Monthly Membership Fees (flat per member) ─────────────────────────────
+
+  Future<GenerateDuesResult> generateMonthlyMemberships({
+    required int    year,
+    required int    month,
+    required double amount,
+    required String recordedBy,
+    List<String>?   targetUids,
+  }) async {
+    final membersSnap = await _users
+        .where('role', isEqualTo: 'member')
+        .where('status', whereIn: _billableStatuses)
+        .get();
+    var members = membersSnap.docs
+        .map((d) => MemberModel.fromMap(
+            d.data() as Map<String, dynamic>, d.id))
+        .toList();
+
+    if (targetUids != null) {
+      members = members.where((m) => targetUids.contains(m.uid)).toList();
+    }
+
+    final start = DateTime(year, month, 1);
+    final end   = DateTime(year, month + 1, 1);
+    final existingSnap = await _payments
+        .where('type', isEqualTo: PaymentType.monthlyMembership.name)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dueDate', isLessThan: Timestamp.fromDate(end))
+        .get();
+    final existingUids = existingSnap.docs
+        .map((d) => (d.data() as Map<String, dynamic>)['uid'] as String? ?? '')
+        .toSet();
+
+    final toCreate = members
+        .where((m) => !existingUids.contains(m.uid))
+        .toList();
+
+    if (toCreate.isEmpty) {
+      return GenerateDuesResult(
+        created: 0,
+        skipped: members.length,
+        total: members.length,
+      );
+    }
+
+    final dueDate = DateTime(year, month, 25); // Arbitrary day
+    await _commitInChunks(toCreate.length, (batch, i) {
+      final member = toCreate[i];
+      final ref = _payments.doc();
+      final payment = PaymentModel(
+        id:         ref.id,
+        uid:        member.uid,
+        memberName: member.name,
+        type:       PaymentType.monthlyMembership,
+        amount:     amount,
+        status:     PaymentStatus.unpaid,
+        dueDate:    dueDate,
+        recordedBy: recordedBy,
+        notes:      'Auto-generated monthly membership',
+        createdAt:  DateTime.now(),
+      );
+      batch.set(ref, payment.toMap());
+      // Do NOT touch the ledger here — it holds the ANNUAL target balance
+      // (set by generateMembershipFees). Monthly membership records deduct
+      // from it via markPaymentPaid, never overwrite it.
+    });
+    return GenerateDuesResult(
+      created: toCreate.length,
+      skipped: members.length - toCreate.length,
+      total: members.length,
+    );
+  }
+
+  /// Monthly membership payment records for a given [year]/[month].
+  Stream<List<PaymentModel>> streamMonthlyFeesForMonth(int year, int month) {
+    final start = DateTime(year, month, 1);
+    final end   = DateTime(year, month + 1, 1);
+    return _payments
+        .where('type', isEqualTo: PaymentType.monthlyMembership.name)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dueDate', isLessThan: Timestamp.fromDate(end))
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => PaymentModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
   }
 
   // ════════════════════════════════════════════════════════════════════════════
