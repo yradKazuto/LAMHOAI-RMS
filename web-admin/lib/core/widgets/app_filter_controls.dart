@@ -74,7 +74,7 @@ class AppPopoverFilterField extends StatelessWidget {
             style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600])),
+                color: AppColors.textSecondary)),
         const SizedBox(height: 5),
         SizedBox(width: double.infinity, child: child),
       ],
@@ -138,7 +138,7 @@ class _AppFilterPopoverButtonState extends State<AppFilterPopoverButton> {
                       width: 300,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(AppRadius.lg),
                         border: Border.all(color: AppColors.borderSubtle),
                         boxShadow: [
@@ -227,7 +227,7 @@ class _AppFilterPopoverButtonState extends State<AppFilterPopoverButton> {
     return CompositedTransformTarget(
       link: _link,
       child: Material(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -249,7 +249,7 @@ class _AppFilterPopoverButtonState extends State<AppFilterPopoverButton> {
                     size: 18,
                     color: widget.activeFilterCount > 0
                         ? AppColors.primary
-                        : Colors.grey[600]),
+                        : AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(widget.activeFilterCount > 0
                     ? 'Filter (${widget.activeFilterCount})'
@@ -259,9 +259,9 @@ class _AppFilterPopoverButtonState extends State<AppFilterPopoverButton> {
                         fontWeight: FontWeight.w600,
                         color: widget.activeFilterCount > 0
                             ? AppColors.primary
-                            : Colors.grey[600])),
+                            : AppColors.textSecondary)),
                 const SizedBox(width: 4),
-                Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
+                Icon(Icons.expand_more, size: 16, color: AppColors.textMuted),
               ],
             ),
           ),
@@ -299,7 +299,7 @@ class AppFilterBottomSheet extends StatelessWidget {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: AppColors.borderStrong,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

@@ -89,7 +89,7 @@ class _MemberPreviewScreenState
                 'Preview what a member sees on the mobile app',
                 style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey[600])),
+                    color: AppColors.textSecondary)),
             const SizedBox(height: 24),
 
             // ── Member selector ────────────────────────────────────────────
@@ -100,9 +100,9 @@ class _MemberPreviewScreenState
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.textInverted,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE0E8F4)),
+                border: Border.all(color: AppColors.border),
               ),
               child: StreamBuilder<List<MemberModel>>(
                 stream: _fs.streamMembers(),
@@ -118,7 +118,7 @@ class _MemberPreviewScreenState
                             color: AppColors.textPrimary, size: 20),
                         const SizedBox(width: 12),
                         Text('No members found.',
-                            style: TextStyle(color: Colors.grey[500])),
+                            style: TextStyle(color: AppColors.textMuted)),
                       ],
                     );
                   }
@@ -146,13 +146,13 @@ class _MemberPreviewScreenState
                               controller: _search,
                               focusNode: _searchFocus,
                               style: const TextStyle(
-                                  fontSize: 13.5, color: Color(0xFF1A2B4A)),
+                                  fontSize: 13.5, color: AppColors.textPrimary),
                               decoration: InputDecoration(
                                 isDense: true,
                                 border: InputBorder.none,
                                 hintText: 'Search by name, lot, or phase...',
                                 hintStyle: TextStyle(
-                                    fontSize: 13, color: Colors.grey[400]),
+                                    fontSize: 13, color: AppColors.textMuted),
                                 suffixIcon: _search.text.isEmpty
                                     ? null
                                     : IconButton(
@@ -191,7 +191,7 @@ class _MemberPreviewScreenState
                                   child: Text('No matching members.',
                                       style: TextStyle(
                                           fontSize: 12.5,
-                                          color: Colors.grey[500])),
+                                          color: AppColors.textMuted)),
                                 )
                               : ListView.builder(
                                   shrinkWrap: true,
@@ -211,7 +211,7 @@ class _MemberPreviewScreenState
                                                 '${m.status == MemberStatus.inactive ? ' (inactive)' : ''}',
                                                 style: const TextStyle(
                                                     fontSize: 13.5,
-                                                    color: Color(0xFF1A2B4A)),
+                                                    color: AppColors.textPrimary),
                                               ),
                                             ),
                                             Text(
@@ -220,7 +220,7 @@ class _MemberPreviewScreenState
                                                   : 'Lot ${m.lotNumber}',
                                               style: TextStyle(
                                                   fontSize: 12,
-                                                  color: Colors.grey[500]),
+                                                  color: AppColors.textMuted),
                                             ),
                                           ],
                                         ),
@@ -246,14 +246,14 @@ class _MemberPreviewScreenState
                     children: [
                       Icon(Icons.phone_android_outlined,
                           size: 64,
-                          color: Colors.grey[300]),
+                          color: AppColors.borderStrong),
                       const SizedBox(height: 16),
                       Text(
                         'Select a member above to preview\ntheir mobile app experience.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[500],
+                            color: AppColors.textMuted,
                             height: 1.6),
                       ),
                     ],
@@ -266,23 +266,23 @@ class _MemberPreviewScreenState
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F4FF),
+                  color: AppColors.primaryBg,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: const Color(0xFF2E6BE6)
+                      color: AppColors.primaryHover
                           .withOpacity(0.2)),
                 ),
                 child: Row(
                   children: [
                     const Icon(Icons.visibility_outlined,
                         size: 16,
-                        color: Color(0xFF2E6BE6)),
+                        color: AppColors.primaryHover),
                     const SizedBox(width: 8),
                     Text(
                       'Previewing as: ${_selectedMember!.name}  ·  ${_selectedMember!.phase}  ·  Lot ${_selectedMember!.lotNumber}',
                       style: const TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF1A4A9C),
+                          color: AppColors.dataInk,
                           fontWeight: FontWeight.w500),
                     ),
                   ],
@@ -293,15 +293,15 @@ class _MemberPreviewScreenState
               // Tabs
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: const Color(0xFFE0E8F4)),
+                      color: AppColors.border),
                 ),
                 child: TabBar(
                   controller: _tabs,
                   labelColor: AppColors.textPrimary,
-                  unselectedLabelColor: Colors.grey,
+                  unselectedLabelColor: AppColors.textMuted,
                   indicatorColor: AppColors.primary,
                   dividerColor: Colors.transparent,
                   labelStyle: const TextStyle(
@@ -352,19 +352,19 @@ class _PaymentsPreview extends StatelessWidget {
 
   Color _fg(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFF1A7A4A);
-      case PaymentStatus.unpaid:  return const Color(0xFF7A6A1A);
-      case PaymentStatus.overdue: return const Color(0xFFCC2200);
-      case PaymentStatus.waived:  return const Color(0xFF5A7099);
+      case PaymentStatus.paid:    return AppColors.success;
+      case PaymentStatus.unpaid:  return AppColors.warning;
+      case PaymentStatus.overdue: return AppColors.danger;
+      case PaymentStatus.waived:  return AppColors.textSecondary;
     }
   }
 
   Color _bg(PaymentStatus s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
-      case PaymentStatus.unpaid:  return const Color(0xFFFFF8E0);
-      case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF0F4FB);
+      case PaymentStatus.paid:    return AppColors.successBg;
+      case PaymentStatus.unpaid:  return AppColors.warningBg;
+      case PaymentStatus.overdue: return AppColors.dangerBg;
+      case PaymentStatus.waived:  return AppColors.background;
     }
   }
 
@@ -404,7 +404,7 @@ class _PaymentsPreview extends StatelessWidget {
                   child: _PreviewStat(
                     label: 'Total Paid',
                     value: '₱${totalPaid.toStringAsFixed(0)}',
-                    color: const Color(0xFF1A7A4A),
+                    color: AppColors.success,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -412,7 +412,7 @@ class _PaymentsPreview extends StatelessWidget {
                   child: _PreviewStat(
                     label: 'Pending',
                     value: '$pending records',
-                    color: const Color(0xFFCC2200),
+                    color: AppColors.danger,
                   ),
                 ),
               ],
@@ -421,17 +421,17 @@ class _PaymentsPreview extends StatelessWidget {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: const Color(0xFFE0E8F4)),
+                      color: AppColors.border),
                 ),
                 child: ListView.separated(
                   itemCount: payments.length,
                   separatorBuilder: (_, __) =>
                       const Divider(
                           height: 1,
-                          color: Color(0xFFEEF2F9)),
+                          color: AppColors.background),
                   itemBuilder: (_, i) {
                     final p = payments[i];
                     return Padding(
@@ -449,8 +449,7 @@ class _PaymentsPreview extends StatelessWidget {
                                         fontSize: 13.5,
                                         fontWeight:
                                             FontWeight.w500,
-                                        color: Color(
-                                            0xFF0D2A5C))),
+                                        color: AppColors.primaryHeader)),
                                 Text(
                                     'Due: ${_fmt(p.dueDate)}',
                                     style: TextStyle(
@@ -465,7 +464,7 @@ class _PaymentsPreview extends StatelessWidget {
                             style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1A2B4A)),
+                                color: AppColors.textPrimary),
                           ),
                           const SizedBox(width: 12),
                           Container(
@@ -522,29 +521,29 @@ class _DocumentsPreview extends StatelessWidget {
 
         return Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.textInverted,
             borderRadius: BorderRadius.circular(12),
             border:
-                Border.all(color: const Color(0xFFE0E8F4)),
+                Border.all(color: AppColors.border),
           ),
           child: ListView.separated(
             itemCount: docs.length,
             separatorBuilder: (_, __) => const Divider(
-                height: 1, color: Color(0xFFEEF2F9)),
+                height: 1, color: AppColors.background),
             itemBuilder: (_, i) {
               final d = docs[i];
               return ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E6BE6)
+                    color: AppColors.primaryHover
                         .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                       Icons.insert_drive_file_outlined,
                       size: 20,
-                      color: Color(0xFF2E6BE6)),
+                      color: AppColors.primaryHover),
                 ),
                 title: Text(d.fileName,
                     style: const TextStyle(
@@ -553,7 +552,7 @@ class _DocumentsPreview extends StatelessWidget {
                 subtitle: Text(d.type.label,
                     style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[500])),
+                        color: AppColors.textMuted)),
                 trailing: TextButton(
                   onPressed: () {},
                   child: const Text('View'),
@@ -601,10 +600,10 @@ class _AnnouncementsPreview extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.textInverted,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: const Color(0xFFE0E8F4)),
+                    color: AppColors.border),
               ),
               child: Column(
                 crossAxisAlignment:
@@ -614,19 +613,19 @@ class _AnnouncementsPreview extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF0D2A5C))),
+                          color: AppColors.primaryHeader)),
                   const SizedBox(height: 6),
                   Text(a.body,
                       style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey[700],
+                          color: AppColors.textSecondary,
                           height: 1.5)),
                   const SizedBox(height: 8),
                   Text(
                     'Posted by ${a.postedByName} · ${_fmt(a.createdAt)}',
                     style: TextStyle(
                         fontSize: 11.5,
-                        color: Colors.grey[400]),
+                        color: AppColors.textMuted),
                   ),
                 ],
               ),
@@ -648,19 +647,19 @@ class _ComplaintsPreview extends StatelessWidget {
 
   Color _fg(ComplaintStatus s) {
     switch (s) {
-      case ComplaintStatus.pending:   return const Color(0xFF7A6A1A);
-      case ComplaintStatus.reviewing: return const Color(0xFF1A4A9C);
-      case ComplaintStatus.resolved:  return const Color(0xFF1A7A4A);
-      case ComplaintStatus.rejected:  return const Color(0xFFCC2200);
+      case ComplaintStatus.pending:   return AppColors.warning;
+      case ComplaintStatus.reviewing: return AppColors.dataInk;
+      case ComplaintStatus.resolved:  return AppColors.success;
+      case ComplaintStatus.rejected:  return AppColors.danger;
     }
   }
 
   Color _bg(ComplaintStatus s) {
     switch (s) {
-      case ComplaintStatus.pending:   return const Color(0xFFFFF8E0);
-      case ComplaintStatus.reviewing: return const Color(0xFFEEF4FF);
-      case ComplaintStatus.resolved:  return const Color(0xFFEAF7F0);
-      case ComplaintStatus.rejected:  return const Color(0xFFFFF0EE);
+      case ComplaintStatus.pending:   return AppColors.warningBg;
+      case ComplaintStatus.reviewing: return AppColors.primaryBg;
+      case ComplaintStatus.resolved:  return AppColors.successBg;
+      case ComplaintStatus.rejected:  return AppColors.dangerBg;
     }
   }
 
@@ -687,15 +686,15 @@ class _ComplaintsPreview extends StatelessWidget {
 
         return Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.textInverted,
             borderRadius: BorderRadius.circular(12),
             border:
-                Border.all(color: const Color(0xFFE0E8F4)),
+                Border.all(color: AppColors.border),
           ),
           child: ListView.separated(
             itemCount: memberComplaints.length,
             separatorBuilder: (_, __) => const Divider(
-                height: 1, color: Color(0xFFEEF2F9)),
+                height: 1, color: AppColors.background),
             itemBuilder: (_, i) {
               final c = memberComplaints[i];
               return Padding(
@@ -714,13 +713,13 @@ class _ComplaintsPreview extends StatelessWidget {
                                   fontWeight:
                                       FontWeight.w500,
                                   color:
-                                      Color(0xFF0D2A5C))),
+                                      AppColors.primaryHeader)),
                           const SizedBox(height: 3),
                           Text(
                             'Filed: ${_fmt(c.createdAt)}',
                             style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[500]),
+                                color: AppColors.textMuted),
                           ),
                           if (c.resolutionNote
                               .isNotEmpty) ...[
@@ -729,7 +728,7 @@ class _ComplaintsPreview extends StatelessWidget {
                               'Resolution: ${c.resolutionNote}',
                               style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey[600]),
+                                  color: AppColors.textSecondary),
                             ),
                           ],
                         ],
@@ -773,12 +772,12 @@ class _EmptyState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 48, color: Colors.grey[300]),
+        Icon(icon, size: 48, color: AppColors.borderStrong),
         const SizedBox(height: 12),
         Text(message,
             style: TextStyle(
                 fontSize: 13.5,
-                color: Colors.grey[500])),
+                color: AppColors.textMuted)),
       ],
     ),
   );
@@ -798,17 +797,17 @@ class _PreviewStat extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(10),
       border:
-          Border.all(color: const Color(0xFFE0E8F4)),
+          Border.all(color: AppColors.border),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
             style: TextStyle(
-                fontSize: 12, color: Colors.grey[500])),
+                fontSize: 12, color: AppColors.textMuted)),
         const SizedBox(height: 4),
         Text(value,
             style: TextStyle(
@@ -826,17 +825,17 @@ class _StatusBadge extends StatelessWidget {
 
   Color get _fg {
     switch (status) {
-      case MemberStatus.active:     return const Color(0xFF1A7A4A);
-      case MemberStatus.inactive:   return const Color(0xFF7A6A1A);
-      case MemberStatus.delinquent: return const Color(0xFFCC2200);
+      case MemberStatus.active:     return AppColors.success;
+      case MemberStatus.inactive:   return AppColors.warning;
+      case MemberStatus.delinquent: return AppColors.danger;
     }
   }
 
   Color get _bg {
     switch (status) {
-      case MemberStatus.active:     return const Color(0xFFEAF7F0);
-      case MemberStatus.inactive:   return const Color(0xFFFFF8E0);
-      case MemberStatus.delinquent: return const Color(0xFFFFF0EE);
+      case MemberStatus.active:     return AppColors.successBg;
+      case MemberStatus.inactive:   return AppColors.warningBg;
+      case MemberStatus.delinquent: return AppColors.dangerBg;
     }
   }
 

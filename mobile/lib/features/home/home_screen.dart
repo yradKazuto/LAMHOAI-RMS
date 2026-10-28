@@ -9,21 +9,10 @@ import 'package:intl/intl.dart';
 import '../../core/models/payment_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/routing/app_router.dart';
+import '../../core/theme/design_tokens.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-
-  static const _blue700 = Color(0xFF1A3D6B);
-  static const _blue600 = Color(0xFF1E52A0);
-  static const _blue500 = Color(0xFF2563EB);
-  static const _blue200 = Color(0xFFBAD9FD);
-  static const _gold    = Color(0xFFC9A84C);
-  static const _gray50  = Color(0xFFF8FAFC);
-  static const _gray100 = Color(0xFFEEF2F7);
-  static const _gray400 = Color(0xFF8A9BB0);
-  static const _gray600 = Color(0xFF4A5A6E);
-  static const _gray800 = Color(0xFF1E2A3A);
-  static const _danger  = Color(0xFFDC2626);
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +22,7 @@ class HomeScreen extends StatelessWidget {
     final uid         = user?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
@@ -60,7 +49,7 @@ class HomeScreen extends StatelessWidget {
     final initials = _initials(name);
 
     return Container(
-      color: _blue700,
+      color: AppColors.primaryHeader,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -68,13 +57,13 @@ class HomeScreen extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(greeting, style: const TextStyle(fontSize: 10, color: _blue200)),
+              Text(greeting, style: AppTypography.caption.copyWith(color: AppPrimitiveColors.blue200)),
               Text(
                 name,
                 style: const TextStyle(
-                  fontFamily: 'Georgia',
+                  fontFamily: AppTypography.fontFamily,
                   fontSize: 16,
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -86,14 +75,14 @@ class HomeScreen extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _blue500,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.textInverted.withValues(alpha: 0.2), width: 2),
               ),
               child: Center(
                 child: Text(
                   initials,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textInverted),
                 ),
               ),
             ),
@@ -138,89 +127,72 @@ class HomeScreen extends StatelessWidget {
         return Container(
           margin: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1E52A0), Color(0xFF2563EB)],
-            ),
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.primaryHeader,
+            borderRadius: AppRadius.cardBorderRadius,
+            border: Border.all(color: AppColors.primary),
           ),
           padding: const EdgeInsets.all(18),
-          child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Positioned(
-                right: -20,
-                top: -20,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.06),
-                  ),
+              Text(
+                'Total balance due',
+                style: AppTypography.caption.copyWith(
+                  color: AppPrimitiveColors.blue200,
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TOTAL BALANCE DUE',
-                    style: TextStyle(fontSize: 10, color: _blue200, letterSpacing: 1),
-                  ),
-                  const SizedBox(height: 4),
-                  snap.connectionState == ConnectionState.waiting
-                      ? const SizedBox(
-                          height: 36,
-                          child: Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            ),
-                          ),
-                        )
-                      : Text(
-                          '₱${fmt.format(totalDue)}',
-                          style: const TextStyle(
-                            fontFamily: 'Georgia',
-                            fontSize: 28,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+              const SizedBox(height: 4),
+              snap.connectionState == ConnectionState.waiting
+                  ? const SizedBox(
+                      height: 36,
+                      child: Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: AppColors.textInverted, strokeWidth: 2),
                         ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: hasOverdue
-                          ? _danger.withOpacity(0.25)
-                          : Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
+                      ),
+                    )
+                  : Text(
+                      '₱${fmt.format(totalDue)}',
+                      style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        fontSize: 28,
+                        color: AppColors.textInverted,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: hasOverdue ? const Color(0xFFFCA5A5) : const Color(0xFF4ADE80),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          totalDue == 0
-                              ? 'All payments settled ✓'
-                              : hasOverdue
-                                  ? '$overdueCount overdue payment${overdueCount > 1 ? 's' : ''}'
-                                  : 'Payments pending',
-                          style: const TextStyle(fontSize: 10, color: Colors.white),
-                        ),
-                      ],
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: hasOverdue ? AppColors.errorBg : AppColors.successBg,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: hasOverdue ? AppColors.error : AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 5),
+                    Text(
+                      totalDue == 0
+                          ? 'All payments settled'
+                          : hasOverdue
+                              ? '$overdueCount overdue payment${overdueCount > 1 ? 's' : ''}'
+                              : 'Payments pending',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -233,10 +205,10 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildQuickAccess(BuildContext context) {
     final items = [
-      _QuickItem(emoji: '💳', label: 'Payments',      sub: 'View records',  bg: const Color(0xFFEFF6FF), route: Routes.payments),
-      _QuickItem(emoji: '📣', label: 'Complaints',    sub: 'Submit issue',  bg: const Color(0xFFEFF6FF), route: Routes.complaints),
-      _QuickItem(emoji: '🔔', label: 'Notifications', sub: 'View alerts',   bg: const Color(0xFFFEF9C3), route: Routes.notifications),
-      _QuickItem(emoji: '👤', label: 'Profile',       sub: 'View info',     bg: const Color(0xFFEEF2F7), route: Routes.profile),
+      _QuickItem(icon: Icons.receipt_long_outlined, label: 'Payments',      sub: 'View records',  route: Routes.payments),
+      _QuickItem(icon: Icons.report_problem_outlined, label: 'Complaints',    sub: 'Submit issue',  route: Routes.complaints),
+      _QuickItem(icon: Icons.notifications_none_outlined, label: 'Notifications', sub: 'View alerts',   route: Routes.notifications),
+      _QuickItem(icon: Icons.person_outline, label: 'Profile',       sub: 'View info',     route: Routes.profile),
     ];
 
     return Padding(
@@ -244,10 +216,7 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Quick Access',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _gray800),
-          ),
+          Text('Quick access', style: AppTypography.sectionHeader),
           const SizedBox(height: 10),
           GridView.count(
             crossAxisCount: 2,
@@ -268,9 +237,9 @@ class HomeScreen extends StatelessWidget {
       onTap: () => context.go(item.route),
       child: Container(
         decoration: BoxDecoration(
-          color: _gray50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _gray100),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border),
         ),
         padding: const EdgeInsets.all(10),
         child: Row(
@@ -278,11 +247,10 @@ class HomeScreen extends StatelessWidget {
             Container(
               width: 32,
               height: 32,
-              decoration: BoxDecoration(
-                color: item.bg,
-                borderRadius: BorderRadius.circular(8),
+              decoration: AppComponents.iconBoxDecoration(AppColors.primary),
+              child: Center(
+                child: Icon(item.icon, size: 17, color: AppColors.primary),
               ),
-              child: Center(child: Text(item.emoji, style: const TextStyle(fontSize: 14))),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -290,10 +258,8 @@ class HomeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(item.label,
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _gray800)),
-                  Text(item.sub,
-                      style: const TextStyle(fontSize: 9, color: _gray400)),
+                  Text(item.label, style: AppTypography.bodyMedium),
+                  Text(item.sub, style: AppTypography.caption),
                 ],
               ),
             ),
@@ -313,12 +279,16 @@ class HomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Notifications',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _gray800)),
+              Text('Notifications', style: AppTypography.sectionHeader),
               GestureDetector(
                 onTap: () => context.go(Routes.notifications),
-                child: const Text('See all',
-                    style: TextStyle(fontSize: 11, color: _blue500, fontWeight: FontWeight.w500)),
+                child: Text(
+                  'See all',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -335,8 +305,7 @@ class HomeScreen extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(
-                    child: Text('No notifications yet.',
-                        style: TextStyle(fontSize: 11, color: _gray400)),
+                    child: Text('No notifications yet.', style: AppTypography.caption),
                   ),
                 );
               }
@@ -346,12 +315,14 @@ class HomeScreen extends StatelessWidget {
                   final type    = data['type']   as String? ?? 'general';
                   final isRead  = data['isRead'] as bool?   ?? false;
                   final created = (data['createdAt'] as Timestamp?)?.toDate();
-                  final color   = type == 'announcement' ? _gold : _blue500;
+                  final color   = type == 'announcement'
+                      ? AppPrimitiveColors.gold
+                      : AppColors.primary;
 
                   return Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: _gray100)),
+                      border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +333,7 @@ class HomeScreen extends StatelessWidget {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: isRead ? _gray400 : color,
+                              color: isRead ? AppColors.textMuted : color,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -374,16 +345,15 @@ class HomeScreen extends StatelessWidget {
                             children: [
                               Text(
                                 data['title'] as String? ?? '',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: _gray600,
+                                style: AppTypography.caption.copyWith(
+                                  color: AppColors.textSecondary,
                                   height: 1.5,
-                                  fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
+                                  fontWeight:
+                                      isRead ? FontWeight.w400 : FontWeight.w600,
                                 ),
                               ),
                               if (created != null)
-                                Text(_timeAgo(created),
-                                    style: const TextStyle(fontSize: 10, color: _gray400)),
+                                Text(_timeAgo(created), style: AppTypography.caption),
                             ],
                           ),
                         ),
@@ -409,12 +379,16 @@ class HomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Announcements',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _gray800)),
+              Text('Announcements', style: AppTypography.sectionHeader),
               GestureDetector(
                 onTap: () => context.go(Routes.announcements),
-                child: const Text('See all',
-                    style: TextStyle(fontSize: 11, color: _blue500, fontWeight: FontWeight.w500)),
+                child: Text(
+                  'See all',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -434,8 +408,7 @@ class HomeScreen extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(
-                    child: Text('No announcements.',
-                        style: TextStyle(fontSize: 11, color: _gray400)),
+                    child: Text('No announcements.', style: AppTypography.caption),
                   ),
                 );
               }
@@ -450,9 +423,9 @@ class HomeScreen extends StatelessWidget {
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _gray50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _gray100),
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,11 +433,16 @@ class HomeScreen extends StatelessWidget {
                           Container(
                             width: 32,
                             height: 32,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF9C3),
-                              borderRadius: BorderRadius.circular(8),
+                            decoration: AppComponents.iconBoxDecoration(
+                              AppPrimitiveColors.gold,
                             ),
-                            child: const Center(child: Text('📢', style: TextStyle(fontSize: 14))),
+                            child: Center(
+                              child: Icon(
+                                Icons.campaign_outlined,
+                                size: 17,
+                                color: AppPrimitiveColors.gold,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -473,28 +451,23 @@ class HomeScreen extends StatelessWidget {
                               children: [
                                 Text(
                                   data['title'] as String? ?? '',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: _gray800,
-                                  ),
+                                  style: AppTypography.bodyMedium,
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   data['body'] as String? ?? '',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 10, color: _gray400),
+                                  style: AppTypography.caption,
                                 ),
                                 if (created != null) ...[
                                   const SizedBox(height: 2),
-                                  Text(_timeAgo(created),
-                                      style: const TextStyle(fontSize: 9, color: _gray400)),
+                                  Text(_timeAgo(created), style: AppTypography.caption),
                                 ],
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right, size: 14, color: _gray400),
+                          const Icon(Icons.chevron_right, size: 14, color: AppColors.textMuted),
                         ],
                       ),
                     ),
@@ -526,7 +499,12 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _QuickItem {
-  final String emoji, label, sub, route;
-  final Color  bg;
-  const _QuickItem({required this.emoji, required this.label, required this.sub, required this.bg, required this.route});
+  final IconData icon;
+  final String label, sub, route;
+  const _QuickItem({
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.route,
+  });
 }

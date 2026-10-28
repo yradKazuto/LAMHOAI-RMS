@@ -158,7 +158,7 @@ class _UploadProgressDialog extends StatelessWidget {
                       color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               Text(fileName,
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis),
               const SizedBox(height: 22),
               ValueListenableBuilder<double>(
@@ -176,7 +176,7 @@ class _UploadProgressDialog extends StatelessWidget {
                           // real determinate bar.
                           value: value > 0 ? value : null,
                           minHeight: 8,
-                          backgroundColor: const Color(0xFFE8EDF5),
+                          backgroundColor: AppColors.borderSubtle,
                           valueColor:
                               const AlwaysStoppedAnimation(AppColors.primary),
                         ),
@@ -184,7 +184,7 @@ class _UploadProgressDialog extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text('$percent%',
                           style: TextStyle(
-                              fontSize: 12, color: Colors.grey[600])),
+                              fontSize: 12, color: AppColors.textSecondary)),
                     ],
                   );
                 },
@@ -233,17 +233,17 @@ class _UploadDialogState extends State<UploadDialog> {
 
   InputDecoration _dec([String? hint]) => InputDecoration(
     hintText: hint,
-    hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+    hintStyle: TextStyle(fontSize: 13, color: AppColors.textMuted),
     filled: true,
-    fillColor: const Color(0xFFF7F9FC),
+    fillColor: AppColors.background,
     contentPadding:
         const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
@@ -272,20 +272,20 @@ class _UploadDialogState extends State<UploadDialog> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF0F4FB),
+                  color: AppColors.background,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.attach_file,
-                        size: 14, color: Color(0xFF5A7099)),
+                        size: 14, color: AppColors.textSecondary),
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(widget.fileName,
                           style: const TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF5A7099)),
+                              color: AppColors.textSecondary),
                           overflow: TextOverflow.ellipsis),
                     ),
                   ],
@@ -304,15 +304,15 @@ class _UploadDialogState extends State<UploadDialog> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0F4FB),
+                    color: AppColors.background,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: const Color(0xFFD0DBEE)),
+                        color: AppColors.borderStrong),
                   ),
                   child: Text(_memberName ?? '',
                       style: const TextStyle(
                           fontSize: 13.5,
-                          color: Color(0xFF1A2B4A))),
+                          color: AppColors.textPrimary)),
                 )
               else
                 StreamBuilder<List<MemberModel>>(
@@ -324,10 +324,10 @@ class _UploadDialogState extends State<UploadDialog> {
                       hint: Text('Select member',
                           style: TextStyle(
                               fontSize: 13,
-                              color: Colors.grey[400])),
+                              color: AppColors.textMuted)),
                       style: const TextStyle(
                           fontSize: 13.5,
-                          color: Color(0xFF1A2B4A)),
+                          color: AppColors.textPrimary),
                       decoration: _dec(),
                       items: members
                           .map((m) => DropdownMenuItem<String>(
@@ -358,7 +358,7 @@ class _UploadDialogState extends State<UploadDialog> {
               DropdownButtonFormField<DocumentType>(
                 value: _docType,
                 style: const TextStyle(
-                    fontSize: 13.5, color: Color(0xFF1A2B4A)),
+                    fontSize: 13.5, color: AppColors.textPrimary),
                 decoration: _dec(),
                 items: DocumentType.values
                     .map((t) => DropdownMenuItem<DocumentType>(
@@ -372,23 +372,23 @@ class _UploadDialogState extends State<UploadDialog> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F4FF),
+                  color: AppColors.primaryBg,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: const Color(0xFF2E6BE6)
+                      color: AppColors.primaryHover
                           .withOpacity(0.2)),
                 ),
                 child: const Row(
                   children: [
                     Icon(Icons.cloud_upload_outlined,
-                        size: 15, color: Color(0xFF2E6BE6)),
+                        size: 15, color: AppColors.primaryHover),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'File will be uploaded to Cloudinary CDN.',
                         style: TextStyle(
                             fontSize: 12,
-                            color: Color(0xFF1A4A9C)),
+                            color: AppColors.dataInk),
                       ),
                     ),
                   ],
@@ -401,7 +401,7 @@ class _UploadDialogState extends State<UploadDialog> {
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Cancel',
-                        style: TextStyle(color: Colors.grey)),
+                        style: TextStyle(color: AppColors.textMuted)),
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton(
@@ -417,7 +417,7 @@ class _UploadDialogState extends State<UploadDialog> {
                             ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.textPrimary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.textInverted,
                       disabledBackgroundColor:
                           AppColors.textPrimary.withOpacity(0.4),
                       shape: RoundedRectangleBorder(

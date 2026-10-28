@@ -38,6 +38,17 @@ abstract class AppPrimitiveColors {
   static const Color navy900 = Color(0xFF1E293B); // Sidebar bg & main text
   static const Color navy950 = Color(0xFF111A2E);
 
+  // Deep brand-blue tones (sidebar chrome)
+  static const Color brandBlue900 = Color(0xFF1A3A7C);
+  static const Color brandBlue800 = Color(0xFF1E3E7C);
+  static const Color brandBlue600 = Color(0xFF1A4A9C);
+
+  // Hue-free neutrals (selected / active surfaces)
+  static const Color neutral700 = Color(0xFF3F3F46);
+
+  // Accent (audit-only)
+  static const Color purple600 = Color(0xFF5A1A7A);
+
   // Gray scale
   static const Color gray50  = Color(0xFFF8FAFC);
   static const Color gray100 = Color(0xFFF3F4F6);
@@ -134,6 +145,10 @@ abstract class AppColors {
   static const Color primaryHover     = AppPrimitiveColors.blue600;
   static const Color primaryActive    = AppPrimitiveColors.blue700;
   static const Color primaryHeader    = AppPrimitiveColors.blue900;
+  static const Color primaryBg        = AppPrimitiveColors.blue50;
+  // Deep brand blue — the one accent used for data emphasis (e.g. the
+  // compliance-rate figure). Same hue family as `primary`, darker.
+  static const Color dataInk          = AppPrimitiveColors.brandBlue600;
 
   // Borders & Dividers
   static const Color border           = AppPrimitiveColors.navy200;
@@ -151,9 +166,15 @@ abstract class AppColors {
 
   // Navigation Sidebar
   static const Color sidebarBg        = AppPrimitiveColors.navy900;
-  static const Color sidebarBorder    = Color(0xFF1A3A7C);
+  static const Color sidebarBorder    = AppPrimitiveColors.brandBlue900;
+  static const Color sidebarDivider   = AppPrimitiveColors.brandBlue800;
   static const Color sidebarText      = AppPrimitiveColors.navy600;
   static const Color sidebarTextActive= AppPrimitiveColors.white;
+  // Selected nav pill — a hue-free grey so it reads as "current", not "brand".
+  static const Color sidebarSelectedBg= AppPrimitiveColors.neutral700;
+
+  // Accent (audit action coding only)
+  static const Color purple           = AppPrimitiveColors.purple600;
 }
 
 abstract class AppTypography {
@@ -216,9 +237,20 @@ abstract class AppTypography {
 }
 
 abstract class AppShadows {
+  // A soft aura behind every card — the "backdrop" the Figma reference
+  // shows under each panel. Wider and fainter than the drop shadow, so it
+  // reads as a glow rather than a second hard edge.
+  static final List<BoxShadow> cardGlow = [
+    BoxShadow(
+      color: AppColors.dataInk.withValues(alpha: 0.06),
+      blurRadius: 24,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
   static final List<BoxShadow> card = [
     BoxShadow(
-      color: const Color(0xFF1A4A9C).withOpacity(0.05),
+      color: AppColors.dataInk.withValues(alpha: 0.05),
       blurRadius: 10,
       offset: const Offset(0, 3),
     ),
@@ -226,7 +258,7 @@ abstract class AppShadows {
 
   static final List<BoxShadow> dropdown = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.08),
+      color: Colors.black.withValues(alpha: 0.08),
       blurRadius: 16,
       offset: const Offset(0, 4),
     ),
@@ -246,11 +278,14 @@ abstract class AppComponents {
         color: bg,
         borderRadius: AppRadius.cardBorderRadius,
         border: Border.all(color: border),
-        boxShadow: AppShadows.card,
+        boxShadow: [
+          ...AppShadows.cardGlow,
+          ...AppShadows.card,
+        ],
       );
 
   static BoxDecoration iconBoxDecoration(Color color) => BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppRadius.lg),
       );
 }

@@ -50,7 +50,7 @@ class AnalyticsScreen extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 13, color: Colors.grey[600])),
+                              fontSize: 13, color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -124,32 +124,22 @@ class _SummaryTilesRow extends StatelessWidget {
                 final tiles = [
                   _SummaryTile(
                     label: 'Collected This Month',
-                    value:
-                        '₱${thisMonth.toStringAsFixed(0)}',
-                    icon:  Icons.payments_outlined,
-                    color: const Color(0xFF1A7A4A),
+                    value: '₱${thisMonth.toStringAsFixed(0)}',
                   ),
                   _SummaryTile(
                     label: 'Active Members',
-                    value:
-                        '${memberBreakdown?.active ?? 0}',
-                    icon:  Icons.people_outline,
-                    color: const Color(0xFF1A4A9C),
+                    value: '${memberBreakdown?.active ?? 0}',
                   ),
                   _SummaryTile(
                     label: 'Overdue Payments',
-                    value:
-                        '${paymentBreakdown?.overdue ?? 0}',
-                    icon:  Icons.warning_amber_outlined,
-                    color: const Color(0xFFCC2200),
+                    value: '${paymentBreakdown?.overdue ?? 0}',
+                    valueColor: AppColors.danger,
                   ),
                   _SummaryTile(
                     label: 'Compliance Rate',
                     value: memberBreakdown != null
                         ? '${memberBreakdown.complianceRate.toStringAsFixed(0)}%'
                         : '—',
-                    icon:  Icons.verified_outlined,
-                    color: const Color(0xFF7A3A1A),
                   ),
                 ];
 
@@ -192,54 +182,38 @@ class _SummaryTilesRow extends StatelessWidget {
 }
 
 class _SummaryTile extends StatelessWidget {
-  final String  label, value;
-  final IconData icon;
-  final Color   color;
+  final String label, value;
+  final Color? valueColor;
 
   const _SummaryTile({
-    required this.label, required this.value,
-    required this.icon,  required this.color,
+    required this.label,
+    required this.value,
+    this.valueColor,
   });
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE0E8F4)),
+      color: AppColors.surface,
+      borderRadius: AppRadius.cardBorderRadius,
+      border: Border.all(color: AppColors.border),
     ),
-    child: Row(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 11.5,
-                      color: Colors.grey[600])),
-              Text(value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: color)),
-            ],
-          ),
-        ),
+        Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.label),
+        const SizedBox(height: 4),
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.greeting.copyWith(
+              fontSize: 20,
+              color: valueColor ?? AppColors.textPrimary,
+            )),
       ],
     ),
   );
@@ -256,9 +230,9 @@ class _MonthlyBarChart extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,7 +245,7 @@ class _MonthlyBarChart extends StatelessWidget {
           const SizedBox(height: 4),
           Text('Last 6 months',
               style: TextStyle(
-                  fontSize: 12, color: Colors.grey[500])),
+                  fontSize: 12, color: AppColors.textMuted)),
           const SizedBox(height: 24),
           FutureBuilder<List<MonthlyCollection>>(
             future: svc.getMonthlyCollections(months: 6),
@@ -292,7 +266,7 @@ class _MonthlyBarChart extends StatelessWidget {
                   child: Center(
                       child: Text('No data available.',
                           style: TextStyle(
-                              color: Colors.grey))),
+                              color: AppColors.textMuted))),
                 );
               }
 
@@ -313,7 +287,7 @@ class _MonthlyBarChart extends StatelessWidget {
                       drawVerticalLine: false,
                       horizontalInterval: maxY / 4,
                       getDrawingHorizontalLine: (_) => FlLine(
-                        color: const Color(0xFFE0E8F4),
+                        color: AppColors.border,
                         strokeWidth: 1,
                       ),
                     ),
@@ -328,7 +302,7 @@ class _MonthlyBarChart extends StatelessWidget {
                             '₱${(val / 1000).toStringAsFixed(0)}k',
                             style: TextStyle(
                                 fontSize: 10,
-                                color: Colors.grey[500]),
+                                color: AppColors.textMuted),
                           ),
                         ),
                       ),
@@ -353,7 +327,7 @@ class _MonthlyBarChart extends StatelessWidget {
                                   style: TextStyle(
                                       fontSize: 11,
                                       color:
-                                          Colors.grey[600])),
+                                          AppColors.textSecondary)),
                             );
                           },
                         ),
@@ -369,7 +343,7 @@ class _MonthlyBarChart extends StatelessWidget {
                               BarChartRodData(
                                 toY: e.value.total,
                                 color:
-                                    const Color(0xFF2563EB),
+                                    AppColors.primary,
                                 width: 28,
                                 borderRadius:
                                     const BorderRadius.vertical(
@@ -379,8 +353,7 @@ class _MonthlyBarChart extends StatelessWidget {
                                     BackgroundBarChartRodData(
                                   show: true,
                                   toY: maxY,
-                                  color: const Color(
-                                      0xFFF4F7FB),
+                                  color: AppColors.background,
                                 ),
                               ),
                             ],
@@ -390,13 +363,13 @@ class _MonthlyBarChart extends StatelessWidget {
                     barTouchData: BarTouchData(
                       touchTooltipData: BarTouchTooltipData(
                         getTooltipColor: (_) =>
-                            const Color(0xFF1E293B),
+                            AppColors.textPrimary,
                         getTooltipItem:
                             (group, groupIndex, rod, rodIndex) =>
                                 BarTooltipItem(
                           '₱${rod.toY.toStringAsFixed(0)}',
                           const TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textInverted,
                               fontSize: 12,
                               fontWeight: FontWeight.w600),
                         ),
@@ -433,9 +406,9 @@ class _MemberStatusPieChartState
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -448,7 +421,7 @@ class _MemberStatusPieChartState
           const SizedBox(height: 4),
           Text('Breakdown by status',
               style: TextStyle(
-                  fontSize: 12, color: Colors.grey[500])),
+                  fontSize: 12, color: AppColors.textMuted)),
           const SizedBox(height: 24),
           FutureBuilder<MemberStatusBreakdown>(
             future: widget.svc.getMemberStatusBreakdown(),
@@ -469,22 +442,22 @@ class _MemberStatusPieChartState
                   child: Center(
                       child: Text('No member data.',
                           style: TextStyle(
-                              color: Colors.grey))),
+                              color: AppColors.textMuted))),
                 );
               }
 
               final sections = [
                 _PieSection(
                     value: data.active.toDouble(),
-                    color: const Color(0xFF1A7A4A),
+                    color: AppColors.success,
                     label: 'Active'),
                 _PieSection(
                     value: data.inactive.toDouble(),
-                    color: const Color(0xFFF0B429),
+                    color: AppColors.warning,
                     label: 'Inactive'),
                 _PieSection(
                     value: data.delinquent.toDouble(),
-                    color: const Color(0xFFCC2200),
+                    color: AppColors.danger,
                     label: 'Delinquent'),
               ]
                   .where((s) => s.value > 0)
@@ -531,7 +504,7 @@ class _MemberStatusPieChartState
                             titleStyle: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white),
+                                color: AppColors.textInverted),
                           );
                         }).toList(),
                       ),
@@ -559,7 +532,7 @@ class _MemberStatusPieChartState
                                   style: TextStyle(
                                       fontSize: 12,
                                       color:
-                                          Colors.grey[600]),
+                                          AppColors.textSecondary),
                                 ),
                               ],
                             ))
@@ -596,9 +569,9 @@ class _PaymentComplianceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,7 +584,7 @@ class _PaymentComplianceCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text('All payment records',
               style: TextStyle(
-                  fontSize: 12, color: Colors.grey[500])),
+                  fontSize: 12, color: AppColors.textMuted)),
           const SizedBox(height: 20),
           FutureBuilder<PaymentStatusBreakdown>(
             future: svc.getPaymentStatusBreakdown(),
@@ -627,7 +600,7 @@ class _PaymentComplianceCard extends StatelessWidget {
                 return const Center(
                     child: Text('No payment data.',
                         style:
-                            TextStyle(color: Colors.grey)));
+                            TextStyle(color: AppColors.textMuted)));
               }
 
               return Column(
@@ -636,33 +609,33 @@ class _PaymentComplianceCard extends StatelessWidget {
                     label: 'Paid',
                     count: data.paid,
                     total: data.total,
-                    color: const Color(0xFF1A7A4A),
+                    color: AppColors.success,
                   ),
                   const SizedBox(height: 12),
                   _ComplianceBar(
                     label: 'Unpaid',
                     count: data.unpaid,
                     total: data.total,
-                    color: const Color(0xFFF0B429),
+                    color: AppColors.warning,
                   ),
                   const SizedBox(height: 12),
                   _ComplianceBar(
                     label: 'Overdue',
                     count: data.overdue,
                     total: data.total,
-                    color: const Color(0xFFCC2200),
+                    color: AppColors.danger,
                   ),
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF4F7FB),
+                      color: AppColors.surfaceAlt,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.verified_outlined,
-                            color: Color(0xFF1A4A9C),
+                            color: AppColors.dataInk,
                             size: 20),
                         const SizedBox(width: 12),
                         Expanded(
@@ -676,14 +649,14 @@ class _PaymentComplianceCard extends StatelessWidget {
                                   style: TextStyle(
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w600,
-                                      color: Color(0xFF1E293B))),
+                                      color: AppColors.textPrimary)),
                               Text(
                                 '${data.paidPercent.toStringAsFixed(1)}% of all payments are paid',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey[600]),
+                                    color: AppColors.textSecondary),
                               ),
                             ],
                           ),
@@ -694,7 +667,7 @@ class _PaymentComplianceCard extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF1A4A9C)),
+                              color: AppColors.dataInk),
                         ),
                       ],
                     ),
@@ -730,14 +703,14 @@ class _ComplianceBar extends StatelessWidget {
           width: 70,
           child: Text(label,
               style: const TextStyle(
-                  fontSize: 13, color: Color(0xFF1A2B4A))),
+                  fontSize: 13, color: AppColors.textPrimary)),
         ),
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: pct,
-              backgroundColor: const Color(0xFFEEF2F9),
+              backgroundColor: AppColors.borderSubtle,
               color: color,
               minHeight: 10,
             ),
@@ -751,7 +724,7 @@ class _ComplianceBar extends StatelessWidget {
             textAlign: TextAlign.right,
             style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey[600]),
+                color: AppColors.textSecondary),
           ),
         ),
       ],

@@ -46,23 +46,23 @@ class _AuditScreenState extends State<AuditScreen> {
 
   Color _actionColor(AuditAction a) {
     switch (a) {
-      case AuditAction.created:       return const Color(0xFF1A7A4A);
-      case AuditAction.updated:       return const Color(0xFF1A4A9C);
-      case AuditAction.deleted:       return const Color(0xFFCC2200);
-      case AuditAction.statusChanged: return const Color(0xFF7A6A1A);
-      case AuditAction.roleChanged:   return const Color(0xFF5A1A7A);
-      case AuditAction.login:         return const Color(0xFF5A7099);
+      case AuditAction.created:       return AppColors.success;
+      case AuditAction.updated:       return AppColors.dataInk;
+      case AuditAction.deleted:       return AppColors.danger;
+      case AuditAction.statusChanged: return AppColors.warning;
+      case AuditAction.roleChanged:   return AppColors.purple;
+      case AuditAction.login:         return AppColors.textSecondary;
     }
   }
 
   Color _actionBg(AuditAction a) {
     switch (a) {
-      case AuditAction.created:       return const Color(0xFFEAF7F0);
-      case AuditAction.updated:       return const Color(0xFFEEF4FF);
-      case AuditAction.deleted:       return const Color(0xFFFFF0EE);
-      case AuditAction.statusChanged: return const Color(0xFFFFF8E0);
-      case AuditAction.roleChanged:   return const Color(0xFFF5EEFF);
-      case AuditAction.login:         return const Color(0xFFF4F7FB);
+      case AuditAction.created:       return AppColors.successBg;
+      case AuditAction.updated:       return AppColors.primaryBg;
+      case AuditAction.deleted:       return AppColors.dangerBg;
+      case AuditAction.statusChanged: return AppColors.warningBg;
+      case AuditAction.roleChanged:   return AppColors.surfaceAlt;
+      case AuditAction.login:         return AppColors.background;
     }
   }
 
@@ -102,7 +102,7 @@ class _AuditScreenState extends State<AuditScreen> {
             Text('Track all admin actions and changes',
                 style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey[600])),
+                    color: AppColors.textSecondary)),
             const SizedBox(height: 24),
 
             // ── Filters ────────────────────────────────────────────────────
@@ -115,11 +115,11 @@ class _AuditScreenState extends State<AuditScreen> {
                     hintText: 'Search by staff or action...',
                     hintStyle: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[400]),
+                        color: AppColors.textMuted),
                     prefixIcon: const Icon(
                         Icons.search, size: 18),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.surface,
                     contentPadding:
                         const EdgeInsets.symmetric(
                             horizontal: 14,
@@ -128,12 +128,12 @@ class _AuditScreenState extends State<AuditScreen> {
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     enabledBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     focusedBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
@@ -205,7 +205,7 @@ class _AuditScreenState extends State<AuditScreen> {
                   label: const Text('Clear'),
                   style: TextButton.styleFrom(
                       foregroundColor:
-                          Colors.grey[600]),
+                          AppColors.textSecondary),
                 );
 
                 // Below this, the fixed-width search box plus two
@@ -261,7 +261,7 @@ class _AuditScreenState extends State<AuditScreen> {
                       ConnectionState.waiting) {
                     return const Center(
                         child: CircularProgressIndicator(
-                            color: Color(0xFF2563EB)));
+                            color: AppColors.primary));
                   }
 
                   if (snap.hasError) {
@@ -270,13 +270,13 @@ class _AuditScreenState extends State<AuditScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.history_toggle_off_outlined,
-                              size: 48, color: Colors.grey[300]),
+                              size: 48, color: AppColors.borderStrong),
                           const SizedBox(height: 14),
                           const Text('Could not load audit logs.',
                               style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1E293B))),
+                                  color: AppColors.textPrimary)),
                           const SizedBox(height: 6),
                           Text(
                             'Check Firestore rules — audit_logs needs\n'
@@ -284,7 +284,7 @@ class _AuditScreenState extends State<AuditScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[500])),
+                                color: AppColors.textMuted)),
                         ],
                       ),
                     );
@@ -302,20 +302,20 @@ class _AuditScreenState extends State<AuditScreen> {
                               Icons
                                   .history_toggle_off_outlined,
                               size: 52,
-                              color: Colors.grey[300]),
+                              color: AppColors.borderStrong),
                           const SizedBox(height: 14),
                           Text('No audit logs found.',
                               style: TextStyle(
                                   fontSize: 14,
                                   color:
-                                      Colors.grey[500])),
+                                      AppColors.textMuted)),
                           const SizedBox(height: 6),
                           Text(
                             'Actions performed by staff will appear here.',
                             style: TextStyle(
                                 fontSize: 12,
                                 color:
-                                    Colors.grey[400]),
+                                    AppColors.textMuted),
                           ),
                         ],
                       ),
@@ -324,12 +324,12 @@ class _AuditScreenState extends State<AuditScreen> {
 
                   return Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.textInverted,
                       borderRadius:
                           BorderRadius.circular(12),
                       border: Border.all(
                           color:
-                              const Color(0xFFE0E8F4)),
+                              AppColors.border),
                     ),
                     child: Column(
                       children: [
@@ -341,7 +341,7 @@ class _AuditScreenState extends State<AuditScreen> {
                                   vertical: 14),
                           decoration:
                               const BoxDecoration(
-                            color: Color(0xFFF7F9FC),
+                            color: AppColors.background,
                             borderRadius:
                                 BorderRadius.vertical(
                                     top: Radius.circular(
@@ -363,14 +363,14 @@ class _AuditScreenState extends State<AuditScreen> {
                                 style: TextStyle(
                                     fontSize: 12,
                                     color:
-                                        Colors.grey[500]),
+                                        AppColors.textMuted),
                               ),
                             ],
                           ),
                         ),
                         const Divider(
                             height: 1,
-                            color: Color(0xFFE0E8F4)),
+                            color: AppColors.border),
 
                         Expanded(
                           child: ListView.separated(
@@ -378,8 +378,7 @@ class _AuditScreenState extends State<AuditScreen> {
                             separatorBuilder: (_, __) =>
                                 const Divider(
                                     height: 1,
-                                    color: Color(
-                                        0xFFEEF2F9)),
+                                    color: AppColors.background),
                             itemBuilder: (_, i) {
                               final log = logs[i];
                               return Padding(
@@ -431,8 +430,7 @@ class _AuditScreenState extends State<AuditScreen> {
                                                 fontWeight:
                                                     FontWeight
                                                         .w500,
-                                                color: Color(
-                                                    0xFF1E293B)),
+                                                color: AppColors.textPrimary),
                                           ),
                                           const SizedBox(
                                               height: 3),
@@ -586,10 +584,10 @@ class _FilterDrop extends StatelessWidget {
     padding:
         const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(8),
       border: Border.all(
-          color: const Color(0xFFD0DBEE)),
+          color: AppColors.borderStrong),
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String?>(
@@ -597,10 +595,10 @@ class _FilterDrop extends StatelessWidget {
         hint: Text(hint,
             style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey[500])),
+                color: AppColors.textMuted)),
         style: const TextStyle(
             fontSize: 13,
-            color: Color(0xFF1A2B4A)),
+            color: AppColors.textPrimary),
         icon: const Icon(Icons.expand_more,
             size: 18),
         items: items,

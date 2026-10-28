@@ -45,6 +45,10 @@ class SimplePhaseMapView extends StatefulWidget {
       loadAssignableMembers;
   final Future<void> Function(LotModel lot)? onViewMember;
 
+  /// Lot (by document id) to zoom into and outline when the map opens —
+  /// e.g. arriving from Member Detail → Owned Lots.
+  final String? highlightLotId;
+
   const SimplePhaseMapView({
     super.key,
     required this.phaseMap,
@@ -54,6 +58,7 @@ class SimplePhaseMapView extends StatefulWidget {
     required this.currentUserId,
     required this.loadAssignableMembers,
     this.onViewMember,
+    this.highlightLotId,
   });
 
   @override
@@ -94,6 +99,10 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   static const double _minScale = 0.3;
   static const double _maxScale = 8.0;
 
+  // The highlightLotId we have already zoomed to, so the zoom runs
+  // once per target instead of on every rebuild.
+  String? _zoomedLotId;
+
   // ── Native digitize mode ────────────────────────────────────────────
   bool _digitizing = false;
   final List<Offset> _digitizePoints = []; // normalized 0.0-1.0 points
@@ -119,6 +128,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
         _transformController.value = tween.evaluate(_zoomCurve);
       }
     });
+    _scheduleHighlightZoom();
   }
 
   @override
@@ -131,6 +141,10 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
       _naturalHeight = null;
       _resolveImageSize(widget.phaseMap.imageUrl);
     }
+    if (widget.highlightLotId != oldWidget.highlightLotId) {
+      _zoomedLotId = null;
+    }
+    _scheduleHighlightZoom();
   }
 
   // Resolves the real pixel width/height of the uploaded image — used
@@ -151,6 +165,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
           _naturalWidth = w;
           _naturalHeight = h;
         });
+        _scheduleHighlightZoom();
       }
     });
     _imageStream!.addListener(_imageListener!);
@@ -234,7 +249,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${blocks.length} block(s) defined.',
-                      style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
                   const SizedBox(height: 12),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 220),
@@ -291,7 +306,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.textPrimary,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.textInverted,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),
@@ -334,6 +349,114 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     _zoomTween = Matrix4Tween(begin: _transformController.value, end: target);
     _zoomAnimController.reset();
     _zoomAnimController.forward();
+  }
+
+  // ── Zoom to a specific lot (arriving from Member Detail) ───────────
+  // Retried from initState, didUpdateWidget and _resolveImageSize,
+  // because the zoom can only run once the lots have loaded, the
+  // image size is known, and the content has been laid out.
+  void _scheduleHighlightZoom() {
+    final id = widget.highlightLotId;
+    if (id == null || id == _zoomedLotId) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _aspectRatio == null) return; // retried when image resolves
+      if (widget.highlightLotId != id || _zoomedLotId == id) return;
+
+      LotModel? found;
+      for (final l in widget.lots) {
+        if (l.id == id) {
+          found = l;
+          break;
+        }
+      }
+      // Not in this phase's lots yet (phase switch still pending) —
+      // didUpdateWidget will call us again once it is.
+      if (found == null) return;
+      final lot = found;
+
+      if (_zoomToLot(lot)) {
+        setState(() {
+          _zoomedLotId = id;
+          _selectedBlock = lot.block; // also spotlights its block
+        });
+      }
+    });
+  }
+
+  /// Frames a single lot in the viewport. Same math as [_zoomToBlock]
+  /// (letterbox margin + translate = viewportCenter - scale * target),
+  /// but for one lot's own bounding box, with a looser padding so the
+  /// neighbouring lots stay visible for context.
+  bool _zoomToLot(LotModel lot) {
+    final contentBox =
+        _contentKey.currentContext?.findRenderObject() as RenderBox?;
+    final viewportBox =
+        _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (contentBox == null ||
+        viewportBox == null ||
+        !contentBox.hasSize ||
+        !viewportBox.hasSize) {
+      return false;
+    }
+
+    final contentSize = contentBox.size;
+    final viewportSize = viewportBox.size;
+    final letterboxX = (viewportSize.width - contentSize.width) / 2;
+    final letterboxY = (viewportSize.height - contentSize.height) / 2;
+
+    double minX, maxX, minY, maxY;
+
+    if (lot.hasPolygon) {
+      final pts = lot.polygonPoints!;
+      minX = maxX = pts.first.x * contentSize.width;
+      minY = maxY = pts.first.y * contentSize.height;
+      for (final p in pts) {
+        final x = p.x * contentSize.width;
+        final y = p.y * contentSize.height;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    } else if (lot.mapX != null && lot.mapY != null) {
+      final cx = lot.mapX! * contentSize.width;
+      final cy = lot.mapY! * contentSize.height;
+      minX = cx - 40;
+      maxX = cx + 40;
+      minY = cy - 40;
+      maxY = cy + 40;
+    } else {
+      return false;
+    }
+
+    final boxW = (maxX - minX).clamp(40.0, double.infinity);
+    final boxH = (maxY - minY).clamp(40.0, double.infinity);
+
+    final target = Offset(
+      letterboxX + (minX + maxX) / 2,
+      letterboxY + (minY + maxY) / 2,
+    );
+
+    const paddingFactor = 4.0;
+    final scaleW = (viewportSize.width / (boxW * paddingFactor))
+        .clamp(_minScale, _maxScale)
+        .toDouble();
+    final scaleH = (viewportSize.height / (boxH * paddingFactor))
+        .clamp(_minScale, _maxScale)
+        .toDouble();
+    final s = scaleW < scaleH ? scaleW : scaleH;
+
+    final viewportCenter =
+        Offset(viewportSize.width / 2, viewportSize.height / 2);
+    final translate = viewportCenter - target * s;
+
+    _animateToMatrix(
+      Matrix4.identity()
+        ..translate(translate.dx, translate.dy)
+        ..scale(s),
+    );
+    return true;
   }
 
   /// Frames the given block's lots (polygon or pin) in the viewport.
@@ -540,7 +663,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Imported $count lot(s).'),
-            backgroundColor: const Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -619,7 +742,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
               'This boundary crosses itself — trace the outer edge in '
               'order, without the line crossing back over itself.',
             ),
-            backgroundColor: Color(0xFFCC2200),
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -637,7 +760,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
         const SnackBar(
           content: Text(
               'Boundary saved. "Digitize Lot" is now limited to inside it.'),
-          backgroundColor: Color(0xFF1A7A4A),
+          backgroundColor: AppColors.success,
         ),
       );
     }
@@ -659,7 +782,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Clear',
-                  style: TextStyle(color: Color(0xFFCC2200)))),
+                  style: TextStyle(color: AppColors.danger))),
         ],
       ),
     );
@@ -674,7 +797,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     }
   }
 
-Future<void> _saveDigitizedLot() async {
+  Future<void> _saveDigitizedLot() async {
     if (_digitizePoints.length < 3) return;
 
     final points = _digitizePoints.map((o) => LotPoint(o.dx, o.dy)).toList();
@@ -688,7 +811,7 @@ Future<void> _saveDigitizedLot() async {
               'overlap each other. Clear and re-trace the outline in order '
               'around the lot, without crossing back over an earlier line.',
             ),
-            backgroundColor: Color(0xFFCC2200),
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -714,7 +837,7 @@ Future<void> _saveDigitizedLot() async {
               'This shape overlaps an existing lot ($names). Adjust the '
               'boundary so it doesn\'t cross into another lot\'s area.',
             ),
-            backgroundColor: const Color(0xFFCC2200),
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -738,13 +861,13 @@ Future<void> _saveDigitizedLot() async {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('${_digitizePoints.length} points traced.',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
               const SizedBox(height: 14),
               if (blocks.isEmpty)
                 Text(
                   'No blocks defined for this phase yet. Add blocks first '
                   'from the Blocks panel\'s Manage button.',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                 )
               else
                 DropdownButtonFormField<String>(
@@ -770,7 +893,7 @@ Future<void> _saveDigitizedLot() async {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogCtx, false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -780,7 +903,7 @@ Future<void> _saveDigitizedLot() async {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.textPrimary,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textInverted,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
@@ -811,7 +934,7 @@ Future<void> _saveDigitizedLot() async {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Saved Block $block • Lot $lotNumber.'),
-            backgroundColor: const Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -821,7 +944,7 @@ Future<void> _saveDigitizedLot() async {
           SnackBar(
             content: Text(
                 'Could not save — conflicts found: ${e.conflicts.join('; ')}'),
-            backgroundColor: const Color(0xFFCC2200),
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -880,7 +1003,7 @@ Future<void> _saveDigitizedLot() async {
             content: Text(
                 'That\'s outside the property boundary — lots can only '
                 'be traced inside the sketched area.'),
-            backgroundColor: Color(0xFFCC2200),
+            backgroundColor: AppColors.danger,
             duration: Duration(seconds: 2),
           ),
         );
@@ -1028,6 +1151,15 @@ Future<void> _saveDigitizedLot() async {
             final pinLots =
                 widget.lots.where((l) => !l.hasPolygon).toList();
 
+            // The lot to outline (only polygon lots have a shape to draw).
+            LotModel? highlightedLot;
+            for (final l in widget.lots) {
+              if (l.id == widget.highlightLotId && l.hasPolygon) {
+                highlightedLot = l;
+                break;
+              }
+            }
+
             return InteractiveViewer(
               transformationController: _transformController,
               minScale: 0.3,
@@ -1067,7 +1199,7 @@ Future<void> _saveDigitizedLot() async {
                           image: NetworkImage(widget.phaseMap.imageUrl),
                           fit: BoxFit.fill,
                           errorBuilder: (context, error, stack) => Container(
-                            color: const Color(0xFFF0F1F3),
+                            color: AppColors.borderSubtle,
                             child: const Center(
                               child: Text('Could not load map image.'),
                             ),
@@ -1140,6 +1272,30 @@ Future<void> _saveDigitizedLot() async {
                           ),
                         ),
 
+                      // Targeted lot (from Member Detail → Owned Lots) —
+                      // amber outline + fill on top of the normal
+                      // polygon so it stands out from its neighbours.
+                      if (highlightedLot != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: AnimatedBuilder(
+                              animation: _transformController,
+                              builder: (context, _) {
+                                final scale = _transformController.value
+                                    .getMaxScaleOnAxis();
+                                return CustomPaint(
+                                  painter: _LotHighlightPainter(
+                                    points: highlightedLot!.polygonPoints!,
+                                    contentSize: contentSize,
+                                    strokeWidth:
+                                        (3.5 / scale).clamp(0.8, 6.0),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+
                       // Simple pin lots — no digitized boundary yet.
                       // Their own GestureDetector normally handles taps
                       // for opening the lot, but that was competing with
@@ -1175,7 +1331,7 @@ Future<void> _saveDigitizedLot() async {
                                         shape: BoxShape.circle,
                                         color: _colorFor(lot.status),
                                         border: Border.all(
-                                            color: Colors.white, width: 2),
+                                            color: AppColors.textInverted, width: 2),
                                         boxShadow: const [
                                           BoxShadow(
                                             color: Colors.black26,
@@ -1185,7 +1341,7 @@ Future<void> _saveDigitizedLot() async {
                                         ],
                                       ),
                                       child: Icon(_iconFor(lot.status),
-                                          size: 14, color: Colors.white),
+                                          size: 14, color: AppColors.textInverted),
                                     ),
                                   ),
                                 ),
@@ -1263,7 +1419,7 @@ Future<void> _saveDigitizedLot() async {
                 //       padding: const EdgeInsets.symmetric(
                 //           horizontal: 14, vertical: 10),
                 //       decoration: BoxDecoration(
-                //         color: Colors.white,
+                //         color: AppColors.textInverted,
                 //         borderRadius: BorderRadius.circular(8),
                 //         boxShadow: const [
                 //           BoxShadow(color: Colors.black12, blurRadius: 6),
@@ -1281,7 +1437,7 @@ Future<void> _saveDigitizedLot() async {
                 //       icon: const Icon(Icons.upload_file_outlined, size: 16),
                 //       label: const Text('Import Excel'),
                 //       style: ElevatedButton.styleFrom(
-                //         backgroundColor: Colors.white,
+                //         backgroundColor: AppColors.surface,
                 //         foregroundColor: AppColors.primary,
                 //         elevation: 2,
                 //         padding: const EdgeInsets.symmetric(
@@ -1352,12 +1508,12 @@ Future<void> _saveDigitizedLot() async {
                           child: Row(
                             children: [
                               Icon(Icons.delete_outline,
-                                  size: 17, color: Color(0xFFCC2200)),
+                                  size: 17, color: AppColors.danger),
                               SizedBox(width: 10),
                               Text('Remove Boundary',
                                   style: TextStyle(
                                       fontSize: 13.5,
-                                      color: Color(0xFFCC2200))),
+                                      color: AppColors.danger)),
                             ],
                           ),
                         ),
@@ -1367,7 +1523,7 @@ Future<void> _saveDigitizedLot() async {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: const [
                           BoxShadow(color: Colors.black12, blurRadius: 4),
@@ -1396,7 +1552,7 @@ Future<void> _saveDigitizedLot() async {
                     label: const Text('Stop Digitizing'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _orange,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.textInverted,
                       elevation: 2,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
@@ -1411,7 +1567,7 @@ Future<void> _saveDigitizedLot() async {
                     label: const Text('Cancel Boundary'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _purple,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.textInverted,
                       elevation: 2,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
@@ -1433,7 +1589,7 @@ Future<void> _saveDigitizedLot() async {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: const [
                     BoxShadow(color: Colors.black26, blurRadius: 10),
@@ -1467,7 +1623,7 @@ Future<void> _saveDigitizedLot() async {
                           : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.textPrimary,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.textInverted,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(
@@ -1492,7 +1648,7 @@ Future<void> _saveDigitizedLot() async {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: const [
                     BoxShadow(color: Colors.black26, blurRadius: 10),
@@ -1526,7 +1682,7 @@ Future<void> _saveDigitizedLot() async {
                       TextButton(
                         onPressed: _clearSavedBoundary,
                         style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFFCC2200)),
+                            foregroundColor: AppColors.danger),
                         child: const Text('Remove Boundary',
                             style: TextStyle(fontSize: 12.5)),
                       ),
@@ -1537,8 +1693,8 @@ Future<void> _saveDigitizedLot() async {
                           ? _saveBoundary
                           : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF9333EA),
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.purple,
+                        foregroundColor: AppColors.textInverted,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(
@@ -1597,7 +1753,7 @@ Future<void> _saveDigitizedLot() async {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: AppColors.borderStrong,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1612,7 +1768,7 @@ Future<void> _saveDigitizedLot() async {
                 const SizedBox(height: 4),
                 Text(
                   'Tap a block to zoom in.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 14),
                 // Flexible (not a fixed fraction of screen height) so
@@ -1647,7 +1803,7 @@ Future<void> _saveDigitizedLot() async {
 
   Widget _buildBlocksToggleButton() {
     return Material(
-      color: Colors.white,
+      color: AppColors.textInverted,
       elevation: 3,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
@@ -1678,9 +1834,9 @@ Future<void> _saveDigitizedLot() async {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE1E5EA)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1715,7 +1871,7 @@ Future<void> _saveDigitizedLot() async {
             'Tap again to reset.',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey[600],
+              color: AppColors.textSecondary,
               height: 1.3,
             ),
           ),
@@ -1727,7 +1883,7 @@ Future<void> _saveDigitizedLot() async {
                       'No blocks yet',
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: Colors.grey[500],
+                        color: AppColors.textMuted,
                       ),
                     ),
                   )
@@ -1752,7 +1908,7 @@ Future<void> _saveDigitizedLot() async {
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFFF4F7FB),
+              color: AppColors.background,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -1779,9 +1935,9 @@ Future<void> _saveDigitizedLot() async {
             width: double.infinity,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FB),
+              color: AppColors.background,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE2E5E9)),
+              border: Border.all(color: AppColors.border),
             ),
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1815,10 +1971,10 @@ Future<void> _saveDigitizedLot() async {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFFE8F0FE) : const Color(0xFFF8F9FB),
+            color: selected ? AppColors.primaryBg : AppColors.background,
             borderRadius: BorderRadius.circular(9),
             border: Border.all(
-              color: selected ? AppColors.primary : const Color(0xFFE2E5E9),
+              color: selected ? AppColors.primary : AppColors.border,
               width: selected ? 1.4 : 1,
             ),
           ),
@@ -1827,7 +1983,7 @@ Future<void> _saveDigitizedLot() async {
               Icon(
                 Icons.grid_view_rounded,
                 size: 16,
-                color: selected ? AppColors.primary : Colors.grey[500],
+                color: selected ? AppColors.primary : AppColors.textMuted,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1836,7 +1992,7 @@ Future<void> _saveDigitizedLot() async {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? AppColors.textPrimary : Colors.grey[800],
+                    color: selected ? AppColors.textPrimary : AppColors.textPrimary,
                   ),
                 ),
               ),
@@ -1907,7 +2063,7 @@ class _ManageBlockRowState extends State<_ManageBlockRow> {
               },
             ),
             IconButton(
-              icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+              icon: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
               tooltip: 'Cancel',
               onPressed: () => setState(() => _renaming = false),
             ),
@@ -1928,7 +2084,7 @@ class _ManageBlockRowState extends State<_ManageBlockRow> {
             _inUse ? '${widget.lotCount} lot(s)' : 'Empty',
             style: TextStyle(
                 fontSize: 12,
-                color: _inUse ? Colors.grey[600] : Colors.grey[400]),
+                color: _inUse ? AppColors.textSecondary : AppColors.textMuted),
           ),
           const SizedBox(width: 8),
           IconButton(
@@ -2071,13 +2227,13 @@ class _DigitizePreviewPainter extends CustomPainter {
       canvas.drawCircle(
         p,
         5,
-        Paint()..color = const Color(0xFFCC2200),
+        Paint()..color = AppColors.danger,
       );
       canvas.drawCircle(
         p,
         5,
         Paint()
-          ..color = Colors.white
+          ..color = AppColors.surface
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5,
       );
@@ -2139,6 +2295,55 @@ class _PolygonPainter extends CustomPainter {
         oldDelegate.contentSize != contentSize ||
         oldDelegate.strokeWidth != strokeWidth;
   }
+}
+
+// ── Targeted-lot highlight (amber outline + fill) ──────────────────────
+// Drawn on top of the normal polygon layer for the one lot we jumped
+// to from Member Detail, so it stands out from its neighbours.
+class _LotHighlightPainter extends CustomPainter {
+  final List<LotPoint> points; // normalized 0.0-1.0
+  final Size contentSize;
+  final double strokeWidth;
+
+  _LotHighlightPainter({
+    required this.points,
+    required this.contentSize,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 3) return;
+
+    final path = Path()
+      ..moveTo(points.first.x * contentSize.width,
+          points.first.y * contentSize.height);
+    for (final p in points.skip(1)) {
+      path.lineTo(p.x * contentSize.width, p.y * contentSize.height);
+    }
+    path.close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.amber.withOpacity(0.35)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.amber.shade800
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LotHighlightPainter oldDelegate) =>
+      oldDelegate.points != points ||
+      oldDelegate.contentSize != contentSize ||
+      oldDelegate.strokeWidth != strokeWidth;
 }
 
 // ── Selected-block spotlight — matches Phase 1's map_pin_view.dart ────
@@ -2225,7 +2430,7 @@ class _EmptyMapState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.map_outlined, size: 56, color: Colors.grey[300]),
+          Icon(Icons.map_outlined, size: 56, color: AppColors.borderStrong),
           const SizedBox(height: 16),
           Text('No map uploaded yet for $phaseName',
               style: const TextStyle(
@@ -2235,7 +2440,7 @@ class _EmptyMapState extends StatelessWidget {
             'Upload the subdivision map image for this phase\n'
             'once it\'s ready, and lots can be pinned onto it.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12.5, color: Colors.grey[500]),
+            style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
           ),
           if (canEdit) ...[
             const SizedBox(height: 20),
@@ -2251,7 +2456,7 @@ class _EmptyMapState extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text('${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               )
             else
@@ -2261,7 +2466,7 @@ class _EmptyMapState extends StatelessWidget {
                 label: const Text('Upload Map Image'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.textPrimary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.textInverted,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(

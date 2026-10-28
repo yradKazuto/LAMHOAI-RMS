@@ -5,6 +5,11 @@
 // UPDATED — Stat cards match the Figma: icon box, status bars, one pie chart
 // UPDATED — Stat cards are equal height; calendar and Pending Complaints removed
 // UPDATED — Added Outstanding Membership Balance from ledger
+// UPDATED — Insights are role based:
+//           Admin = Activity Log + Recent Payments
+//           Officer = Recent Pending Complaints + Recent Pending Feedback
+//           Accountant = Recent Payments
+// UPDATED — Fixed field names (ComplaintModel.subject, nullable FeedbackModel.title)
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -23,52 +28,7 @@ import '../../../core/models/feedback_model.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../audit/screens/audit_screen.dart';
 
-// ── Pending Insights row (Officer only) ───────────────────────────────────────
-
-class _PendingInsights extends StatelessWidget {
-  final UserRole role;
-  final _fs = FirestoreService();
-
-  _PendingInsights({required this.role});
-
-  @override
-  Widget build(BuildContext context) {
-    if (role != UserRole.admin && role != UserRole.officer) return const SizedBox.shrink();
-
-    return StreamBuilder<List<ComplaintModel>>(
-        stream: _fs.streamPendingComplaints(),
-        builder: (context, cSnap) {
-          return StreamBuilder<List<FeedbackModel>>(
-              stream: _fs.streamPendingFeedbacks(),
-              builder: (context, fSnap) {
-                final complaints = cSnap.data ?? [];
-                final feedbacks = fSnap.data ?? [];
-
-                return Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  children: [
-                    _PendingItemCard(
-                      label: 'Pending Complaints',
-                      count: complaints.length,
-                      icon: Icons.report_problem_outlined,
-                      onTap: () => context.go(AppRoutes.complaints),
-                    ),
-                    _PendingItemCard(
-                      label: 'Pending Feedback',
-                      count: feedbacks.length,
-                      icon: Icons.feedback_outlined,
-                      onTap: () => context.go(AppRoutes.feedback),
-                    ),
-                  ],
-                );
-              });
-        });
-  }
-}
-
-
-// Both insight cards use this height so they line up.
+// Every insight card uses this height so they line up.
 const double _insightCardHeight = 420;
 
 class DashboardScreen extends StatelessWidget {
@@ -102,15 +62,10 @@ class DashboardScreen extends StatelessWidget {
                 auth.role == UserRole.officer ||
                 auth.role == UserRole.accountant) ...[
               const SizedBox(height: 28),
-              _PendingInsights(role: auth.role),
-              const SizedBox(height: 28),
               const Text('Actionable Insights & Activity',
                   style: AppTypography.sectionHeader),
               const SizedBox(height: 14),
-              _InsightsRow(
-                showPayments: auth.role == UserRole.admin ||
-                    auth.role == UserRole.accountant,
-              ),
+              _InsightsRow(role: auth.role),
             ],
           ],
         ),
@@ -648,7 +603,7 @@ class _LoadingState extends StatelessWidget {
 }
 
 // ── Recent Payments card (Admin + Accountant) ────────────────────────────────
-// Fixed height (same as the activity card); the list scrolls inside it.
+// Fixed height (same as the other insight cards); the list scrolls inside it.
 class _RecentPaymentsCard extends StatefulWidget {
   const _RecentPaymentsCard();
 
@@ -804,39 +759,186 @@ class _RecentPaymentRow extends StatelessWidget {
   }
 }
 
-// ── Insights row: Activity Log + Recent Payments (same size) ─────────────────
-class _InsightsRow extends StatelessWidget {
-  final bool showPayments;
+// ── Recent list card (Pending Complaints / Pending Feedback — Officer) ───────
+class _RowData {
+  final String title;
+  final String subtitle;
+  final DateTime? date;
 
-  const _InsightsRow({required this.showPayments});
+  _RowData(String? title, String? subtitle, this.date)
+      : title = (title == null || title.isEmpty) ? 'Untitled' : title,
+        subtitle = subtitle ?? '';
+}
+
+class _RecentListCard<T> extends StatelessWidget {
+  final String title;
+  final String emptyText;
+  final IconData icon;
+  final Color color;
+  final Stream<List<T>> stream;
+  final _RowData Function(T) toRow;
+  final VoidCallback onViewAll;
+
+  const _RecentListCard({
+    required this.title,
+    required this.emptyText,
+    required this.icon,
+    required this.color,
+    required this.stream,
+    required this.toRow,
+    required this.onViewAll,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: _insightCardHeight,
+    padding: const EdgeInsets.all(AppSpacing.cardPadding),
+    decoration: AppComponents.cardDecoration(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CardHeader(title: title, onViewAll: onViewAll),
+        const SizedBox(height: AppSpacing.space1_5),
+        Expanded(
+          child: StreamBuilder<List<T>>(
+            stream: stream,
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return const _EmptyState('Could not load this list.');
+              }
+              if (snap.connectionState == ConnectionState.waiting &&
+                  !snap.hasData) {
+                return const _LoadingState();
+              }
+              final items = (snap.data ?? []).take(20).toList();
+              if (items.isEmpty) return _EmptyState(emptyText);
+
+              return SingleChildScrollView(
+                child: Column(
+                  children: [
+                    for (int i = 0; i < items.length; i++) ...[
+                      if (i > 0)
+                        const Divider(
+                            height: 18, color: AppColors.borderSubtle),
+                      _RecentListRow(
+                        data: toRow(items[i]),
+                        icon: icon,
+                        color: color,
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _RecentListRow extends StatelessWidget {
+  final _RowData data;
+  final IconData icon;
+  final Color color;
+  const _RecentListRow({
+    required this.data,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      Container(
+        width: 30,
+        height: 30,
+        decoration: AppComponents.iconBoxDecoration(color),
+        child: Icon(icon, size: 15, color: color),
+      ),
+      const SizedBox(width: AppSpacing.space2_5),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(data.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMedium
+                    .copyWith(color: AppColors.textPrimary)),
+            const SizedBox(height: 2),
+            Text(data.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption),
+          ],
+        ),
+      ),
+      if (data.date != null) ...[
+        const SizedBox(width: AppSpacing.space2_5),
+        Text(_timeAgo(data.date!), style: AppTypography.label),
+      ],
+    ],
+  );
+}
+
+// ── Insights row (cards depend on role) ──────────────────────────────────────
+class _InsightsRow extends StatelessWidget {
+  final UserRole role;
+  final _fs = FirestoreService();
+
+  _InsightsRow({required this.role});
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin      = role == UserRole.admin;
+    final isOfficer    = role == UserRole.officer;
+    final isAccountant = role == UserRole.accountant;
+
     final cards = <Widget>[
-      _RecentActivityCard(svc: SettingsService()),
-      if (showPayments) const _RecentPaymentsCard(),
+      // Admin: Activity Log first, then Recent Payments
+      if (isAdmin) _RecentActivityCard(svc: SettingsService()),
+      if (isAdmin || isAccountant) const _RecentPaymentsCard(),
+
+      // Officer: pending lists only
+      if (isOfficer) ...[
+        _RecentListCard<ComplaintModel>(
+          title: 'Recent Pending Complaints',
+          emptyText: 'No pending complaints.',
+          icon: Icons.report_problem_outlined,
+          color: AppColors.warning,
+          stream: _fs.streamPendingComplaints(),
+          toRow: (c) => _RowData(c.subject, c.memberName, c.createdAt),
+          onViewAll: () => context.go(AppRoutes.complaints),
+        ),
+        _RecentListCard<FeedbackModel>(
+          title: 'Recent Pending Feedback',
+          emptyText: 'No pending feedback.',
+          icon: Icons.feedback_outlined,
+          color: AppColors.primary,
+          stream: _fs.streamPendingFeedbacks(),
+          toRow: (f) => _RowData(
+              (f.title != null && f.title!.isNotEmpty) ? f.title : f.message,
+              f.memberName,
+              f.createdAt),
+          onViewAll: () => context.go(AppRoutes.feedback),
+        ),
+      ],
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // One card per row when there isn't room side by side.
-        if (constraints.maxWidth < 760) {
-          return Column(
-            children: [
-              for (int i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(height: 14),
-                cards[i],
-              ],
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        const gap = 14.0;
+        final canSplit = constraints.maxWidth >= 760;
+        final cols = (!canSplit || cards.length == 1) ? 1 : 2;
+        final itemWidth = (constraints.maxWidth - gap * (cols - 1)) / cols;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
           children: [
-            for (int i = 0; i < cards.length; i++) ...[
-              if (i > 0) const SizedBox(width: 14),
-              Expanded(child: cards[i]),
-            ],
+            for (final c in cards) SizedBox(width: itemWidth, child: c),
           ],
         );
       },
@@ -844,7 +946,7 @@ class _InsightsRow extends StatelessWidget {
   }
 }
 
-// ── Recent Activity Log card (sourced from Audit Log) ────────────────────────
+// ── Recent Activity Log card (Admin only, sourced from Audit Log) ────────────
 class _RecentActivityCard extends StatelessWidget {
   final SettingsService svc;
   const _RecentActivityCard({required this.svc});

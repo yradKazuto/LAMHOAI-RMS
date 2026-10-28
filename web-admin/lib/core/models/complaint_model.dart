@@ -52,6 +52,9 @@ class ComplaintModel {
     this.updatedAt,
   });
 
+  /// Alias for [subject]. The mobile app stores this field as 'title'.
+  String get title => subject;
+
   factory ComplaintModel.fromMap(
       Map<String, dynamic> map, String id) {
     return ComplaintModel(
@@ -78,7 +81,8 @@ class ComplaintModel {
   Map<String, dynamic> toMap() => {
     'uid':            uid,
     'memberName':     memberName,
-    'subject':        subject,
+    'title':          subject,   // key the mobile app reads and writes
+    'subject':        subject,   // kept for backward compatibility
     'description':    description,
     'status':         status.name,
     'resolvedBy':     resolvedBy,

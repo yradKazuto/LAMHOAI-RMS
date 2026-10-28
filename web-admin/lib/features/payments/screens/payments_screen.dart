@@ -147,7 +147,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B))),
+                color: AppColors.textPrimary)),
         content: const Text(
             'Notify members whose unpaid dues are coming up within. '
             'Members with overdue payments are always included:',
@@ -160,7 +160,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             ),
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, null),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
         ],
       ),
@@ -244,7 +244,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                    fontSize: 13, color: Colors.grey[600])),
+                                    fontSize: 13, color: AppColors.textSecondary)),
                           ],
                         ],
                       ),
@@ -268,7 +268,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     child: Tooltip(
                       message: tooltip,
                       child: Material(
-                        color: filled ? AppColors.textPrimary : Colors.white,
+                        color: filled ? AppColors.textPrimary : AppColors.surface,
                         borderRadius: BorderRadius.circular(8),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(8),
@@ -291,13 +291,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                         child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                             color: filled
-                                                ? Colors.white
+                                                ? AppColors.surface
                                                 : AppColors.textPrimary),
                                       )
                                     : Icon(icon,
                                         size: 15,
                                         color: filled
-                                            ? Colors.white
+                                            ? AppColors.surface
                                             : AppColors.textPrimary),
                                 const SizedBox(height: 2),
                                 Text(label,
@@ -307,7 +307,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                         color: filled
-                                            ? Colors.white
+                                            ? AppColors.surface
                                             : AppColors.textPrimary)),
                               ],
                             ),
@@ -403,7 +403,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       label: const Text('Record Payment'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.textPrimary,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.textInverted,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -536,7 +536,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   icon: const Icon(Icons.clear, size: 15),
                   label: const Text('Clear'),
                   style:
-                      TextButton.styleFrom(foregroundColor: Colors.grey[600]),
+                      TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
                 );
 
                 void openFilterSheet() {
@@ -566,7 +566,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                   margin:
                                       const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[300],
+                                    color: AppColors.borderStrong,
                                     borderRadius:
                                         BorderRadius.circular(2),
                                   ),
@@ -596,7 +596,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[600])),
+                                      color: AppColors.textSecondary)),
                               const SizedBox(height: 6),
                               SizedBox(
                                 width: double.infinity,
@@ -618,7 +618,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[600])),
+                                      color: AppColors.textSecondary)),
                               const SizedBox(height: 6),
                               SizedBox(
                                 width: double.infinity,
@@ -648,7 +648,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.textPrimary,
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: AppColors.textInverted,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
                                     shape: RoundedRectangleBorder(
@@ -673,7 +673,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 // On phones, replace the two dropdowns with a single
                 // "Filter" button that opens a bottom sheet.
                 final filterButton = Material(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
@@ -687,7 +687,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         border: Border.all(
                             color: activeFilterCount > 0
                                 ? AppColors.primary
-                                : const Color(0xFFD0DBEE)),
+                                : AppColors.borderStrong),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -696,7 +696,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                               size: 18,
                               color: activeFilterCount > 0
                                   ? AppColors.primary
-                                  : Colors.grey[600]),
+                                  : AppColors.textSecondary),
                           const SizedBox(width: 6),
                           Text(
                               activeFilterCount > 0
@@ -707,7 +707,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                   fontWeight: FontWeight.w600,
                                   color: activeFilterCount > 0
                                       ? AppColors.primary
-                                      : const Color(0xFF1A2B4A))),
+                                      : AppColors.textPrimary)),
                         ],
                       ),
                     ),
@@ -851,7 +851,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 padding: EdgeInsets.symmetric(vertical: 40),
                                 child: Center(
                                   child: Text('No payment records found.',
-                                      style: TextStyle(color: Colors.grey)),
+                                      style: TextStyle(color: AppColors.textMuted)),
                                 ),
                               )
                             else
@@ -860,7 +860,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: payments.length,
                                 separatorBuilder: (_, __) => const Divider(
-                                    height: 1, color: Color(0xFFEEF2F9)),
+                                    height: 1, color: AppColors.background),
                                 itemBuilder: (_, i) => _PaymentTableRow(
                                     payment: payments[i],
                                     fs: _fs,
@@ -884,16 +884,16 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   InputDecoration _searchDec(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+    hintStyle: TextStyle(fontSize: 13, color: AppColors.textMuted),
     prefixIcon: const Icon(Icons.search, size: 18),
-    filled: true, fillColor: Colors.white,
+    filled: true, fillColor: AppColors.surface,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5)),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
   );
 }
 
@@ -920,9 +920,9 @@ class _SummaryCard extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.textInverted,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE0E8F4)),
+          border: Border.all(color: AppColors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -940,7 +940,7 @@ class _SummaryCard extends StatelessWidget {
             Text(label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10.5, color: Colors.grey[600])),
+                style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
             const SizedBox(height: 2),
             Text('₱${amount.toStringAsFixed(0)}',
                 maxLines: 1,
@@ -957,12 +957,12 @@ class _SummaryCard extends StatelessWidget {
     return Container(
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE0E8F4)),
+      border: Border.all(color: AppColors.border),
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF1A4A9C).withOpacity(0.05),
+          color: AppColors.dataInk.withOpacity(0.05),
           blurRadius: 10,
           offset: const Offset(0, 3),
         ),
@@ -987,7 +987,7 @@ class _SummaryCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      fontSize: 12, color: Colors.grey[600])),
+                      fontSize: 12, color: AppColors.textSecondary)),
               const SizedBox(height: 3),
               Text('₱${amount.toStringAsFixed(2)}',
                   maxLines: 1,
@@ -1226,13 +1226,13 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                 style: TextStyle(
                     fontSize: 13.5, fontWeight: FontWeight.w500,
                     color: widget.onMemberTap == null
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFF2563EB),
+                        ? AppColors.textPrimary
+                        : AppColors.primary,
                     decoration: widget.onMemberTap == null
                         ? TextDecoration.none
                         : TextDecoration.underline,
                     decorationColor:
-                        const Color(0xFF2563EB).withOpacity(0.35)),
+                        AppColors.primary.withOpacity(0.35)),
                 overflow: TextOverflow.ellipsis),
           )),
           Expanded(flex: 2, child: Column(
@@ -1292,7 +1292,7 @@ class _TH extends StatelessWidget {
   Widget build(BuildContext context) => Text(text,
       style: const TextStyle(
           fontSize: 12, fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099), letterSpacing: 0.4));
+          color: AppColors.textSecondary, letterSpacing: 0.4));
 }
 
 // ── Filter popover button (desktop) ──────────────────────────────────────────
@@ -1355,10 +1355,10 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                       width: 300,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(12),
                         border:
-                            Border.all(color: const Color(0xFFE0E8F4)),
+                            Border.all(color: AppColors.border),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.12),
@@ -1404,7 +1404,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.textPrimary,
-                                foregroundColor: Colors.white,
+                                foregroundColor: AppColors.textInverted,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
                                 shape: RoundedRectangleBorder(
@@ -1447,7 +1447,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
     return CompositedTransformTarget(
       link: _link,
       child: Material(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -1460,7 +1460,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
               border: Border.all(
                   color: widget.activeFilterCount > 0
                       ? AppColors.primary
-                      : const Color(0xFFD0DBEE)),
+                      : AppColors.borderStrong),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1469,7 +1469,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                     size: 18,
                     color: widget.activeFilterCount > 0
                         ? AppColors.primary
-                        : Colors.grey[600]),
+                        : AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(
                     widget.activeFilterCount > 0
@@ -1480,9 +1480,9 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         fontWeight: FontWeight.w600,
                         color: widget.activeFilterCount > 0
                             ? AppColors.primary
-                            : const Color(0xFF1A2B4A))),
+                            : AppColors.textPrimary)),
                 const SizedBox(width: 4),
-                Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
+                Icon(Icons.expand_more, size: 16, color: AppColors.textMuted),
               ],
             ),
           ),
@@ -1524,16 +1524,16 @@ class _FilterChipGroup<T> extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primary.withOpacity(0.1)
-                : const Color(0xFFF7F9FC),
+                : AppColors.background,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: selected ? AppColors.primary : const Color(0xFFD0DBEE)),
+                color: selected ? AppColors.primary : AppColors.borderStrong),
           ),
           child: Text(opt.value,
               style: TextStyle(
                   fontSize: 12.5,
                   color:
-                      selected ? AppColors.primary : const Color(0xFF1A2B4A),
+                      selected ? AppColors.primary : AppColors.textPrimary,
                   fontWeight:
                       selected ? FontWeight.w600 : FontWeight.w400)),
         ),
@@ -1558,7 +1558,7 @@ class _PopoverFilterField extends StatelessWidget {
             style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600])),
+                color: AppColors.textSecondary)),
         const SizedBox(height: 5),
         SizedBox(width: double.infinity, child: child),
       ],
@@ -1584,17 +1584,17 @@ class _FilterDrop<T> extends StatelessWidget {
     height: 42,
     padding: const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0xFFD0DBEE)),
+      border: Border.all(color: AppColors.borderStrong),
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<T>(
         value: value,
         hint: Text(hint,
-            style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+            style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
         style: const TextStyle(
-            fontSize: 13, color: Color(0xFF1A2B4A)),
+            fontSize: 13, color: AppColors.textPrimary),
         icon: const Icon(Icons.expand_more, size: 18),
         items: items.map((i) => DropdownMenuItem<T>(
             value: i, child: Text(labelOf(i)))).toList(),
@@ -1658,13 +1658,13 @@ class _MemberPaymentsDialog extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: 'Close',
-                    icon: const Icon(Icons.close, color: Colors.grey),
+                    icon: const Icon(Icons.close, color: AppColors.textMuted),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
               const Text('Payment records',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey)),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
               const SizedBox(height: 14),
               Flexible(
                 child: StreamBuilder<List<PaymentModel>>(
@@ -1676,7 +1676,7 @@ class _MemberPaymentsDialog extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Text('Could not load payments: ${snap.error}',
                             style:
-                                const TextStyle(color: Color(0xFFCC2200))),
+                                const TextStyle(color: AppColors.danger)),
                       );
                     }
                     if (!snap.hasData) {
@@ -1696,7 +1696,7 @@ class _MemberPaymentsDialog extends StatelessWidget {
                         padding: EdgeInsets.symmetric(vertical: 24),
                         child: Center(
                           child: Text('No payment records found.',
-                              style: TextStyle(color: Colors.grey)),
+                              style: TextStyle(color: AppColors.textMuted)),
                         ),
                       );
                     }
@@ -1720,14 +1720,14 @@ class _MemberPaymentsDialog extends StatelessWidget {
                               child: _MiniStat(
                                   label: 'Paid',
                                   amount: totalPaid,
-                                  color: const Color(0xFF1A7A4A)),
+                                  color: AppColors.success),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: _MiniStat(
                                   label: 'Outstanding',
                                   amount: totalDue,
-                                  color: const Color(0xFFCC2200)),
+                                  color: AppColors.danger),
                             ),
                           ],
                         ),
@@ -1737,7 +1737,7 @@ class _MemberPaymentsDialog extends StatelessWidget {
                             shrinkWrap: true,
                             itemCount: records.length,
                             separatorBuilder: (_, __) => const Divider(
-                                height: 1, color: Color(0xFFEEF2F9)),
+                                height: 1, color: AppColors.background),
                             itemBuilder: (_, i) => _PaymentTableRow(
                               payment: records[i],
                               fs: fs,
@@ -1779,7 +1779,7 @@ class _MiniStat extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label,
-                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             const SizedBox(height: 2),
             Text('₱${amount.toStringAsFixed(2)}',
                 maxLines: 1,

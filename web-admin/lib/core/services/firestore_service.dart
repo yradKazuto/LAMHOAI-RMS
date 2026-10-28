@@ -299,20 +299,47 @@ class FirestoreService {
     final data = await ref.get();
     if (!data.exists) return;
     final type = PaymentTypeExt.fromString(data['type'] as String?);
-    final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+    var amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+    final uid = data['uid'] as String? ?? '';
+
+    // Annual fee: monthly payments already reduced the ledger, so only the
+    // remaining balance is actually being paid now (e.g. 2000 fee with
+    // 150 already paid via monthly → this payment is 1850). The
+    // `bal < amount` check keeps a penalty-inflated amount from being
+    // lowered by mistake.
+    if (type == PaymentType.membershipFee && uid.isNotEmpty) {
+      final ledgerSnap = await _ledgers.doc(uid).get();
+      final bal =
+          (ledgerSnap.data()?['currentBalance'] as num?)?.toDouble();
+      if (bal != null && bal >= 0 && bal < amount) amount = bal;
+    }
+
     await ref.update({
+      'amount':   amount,
       'status':   PaymentStatus.paid.name,
       'paidDate': Timestamp.fromDate(DateTime.now()),
     });
-    // Deduct monthly membership payments from the ledger balance
-    if (type == PaymentType.monthlyMembership && amount > 0) {
+
+    // Both annual and monthly membership payments reduce the member's
+    // outstanding balance.
+    final reducesBalance = type == PaymentType.monthlyMembership ||
+        type == PaymentType.membershipFee;
+    if (reducesBalance && amount > 0) {
       await _db.runTransaction((transaction) async {
         final ledgerRef = _ledgers.doc(data['uid'] as String? ?? '');
         final ledgerDoc = await transaction.get(ledgerRef);
         if (!ledgerDoc.exists) return;
-        final current = (ledgerDoc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
+        final current =
+            (ledgerDoc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
+
+        // Paying the annual fee settles the whole balance, so it can
+        // never go below zero (e.g. 1875 left - 2000 paid = 0, not -125).
+        final next = type == PaymentType.membershipFee
+            ? (current - amount).clamp(0.0, double.infinity).toDouble()
+            : current - amount;
+
         transaction.update(ledgerRef, {
-          'currentBalance': current - amount,
+          'currentBalance': next,
           'updatedAt': Timestamp.now(),
         });
       });
@@ -933,9 +960,6 @@ class FirestoreService {
   // ════════════════════════════════════════════════════════════════════════════
   // FEEDBACK
   // ════════════════════════════════════════════════════════════════════════════
-
-  late final CollectionReference<Map<String, dynamic>> _feedbacks =
-      FirebaseFirestore.instance.collection('feedback');
 
   Stream<List<FeedbackModel>> streamFeedback() {
     return _feedbacks

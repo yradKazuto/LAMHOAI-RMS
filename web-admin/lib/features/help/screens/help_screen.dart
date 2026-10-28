@@ -206,7 +206,7 @@ class _FaqItem extends StatelessWidget {
       ),
       Text(
         answer,
-        style: const TextStyle(fontSize: 13, height: 1.5, color: Colors.black87),
+        style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.textPrimary),
       ),
     ],
   );

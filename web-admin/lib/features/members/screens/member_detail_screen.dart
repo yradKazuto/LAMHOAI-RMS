@@ -79,7 +79,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
   late TextEditingController _address;
   late MemberStatus _status;
 
-@override
+  @override
   void initState() {
     super.initState();
     final auth = context.read<AuthProvider>();
@@ -160,7 +160,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                 Navigator.pop(context, false),
             child: const Text('Cancel',
                 style:
-                    TextStyle(color: Colors.grey)),
+                    TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () =>
@@ -168,7 +168,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor:
                   AppColors.textPrimary,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius:
                       BorderRadius.circular(8)),
@@ -319,6 +319,25 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
     final tightHeader =
         widget.compactHeader || MediaQuery.of(context).size.width < 560;
 
+    // Back arrow now lives in the same row as the member's name, so the
+    // name sits directly beside it instead of on a separate line below.
+    final Widget? backButton = widget.showBreadcrumb
+        ? Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => Navigator.canPop(context)
+                  ? Navigator.pop(context)
+                  : context.go(widget.originRoute),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.arrow_back,
+                    color: AppColors.textPrimary, size: 22),
+              ),
+            ),
+          )
+        : null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Padding(
@@ -328,26 +347,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Back button ───────────────────────────────────────────────
-            if (widget.showBreadcrumb) ...[
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => Navigator.canPop(context)
-                      ? Navigator.pop(context)
-                      : context.go(widget.originRoute),
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.arrow_back,
-                        color: AppColors.textPrimary, size: 22),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // ── Name + actions ───────────────────────────────────────────────
+            // ── Back arrow + name + actions (single row) ───────────────────
             LayoutBuilder(
               builder: (context, constraints) {
                 final nameText = Text(widget.member.name,
@@ -398,13 +398,13 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                       }),
                       child: const Text('Cancel',
                           style: TextStyle(
-                              color: Colors.grey)),
+                              color: AppColors.textMuted)),
                     ),
                     ElevatedButton(
                       onPressed: _saving ? null : _saveEdits,
                       style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.textPrimary,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.textInverted,
                           shape: RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius.circular(8)),
@@ -419,19 +419,16 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                               child:
                                   CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white))
+                                      color: AppColors.textInverted))
                           : const Text('Save'),
                     ),
                   ],
                 ];
 
                 // Compact layout: always a single row of small icon
-                // buttons instead of full labeled buttons wrapping
-                // below the name. Used both for the modal preview
-                // (compactHeader, regardless of width) and for the
-                // full page on narrow screens, where the old
-                // stack-below-name behavior pushed the tabs and
-                // profile card further down than necessary.
+                // buttons instead of full labeled buttons. Used both for
+                // the modal preview (compactHeader, regardless of width)
+                // and for the full page on narrow screens.
                 final isCompact =
                     widget.compactHeader || constraints.maxWidth < 560;
 
@@ -468,13 +465,13 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                           _initControllers(widget.member);
                         }),
                         child: const Text('Cancel',
-                            style: TextStyle(color: Colors.grey)),
+                            style: TextStyle(color: AppColors.textMuted)),
                       ),
                       ElevatedButton(
                         onPressed: _saving ? null : _saveEdits,
                         style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.textPrimary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColors.textInverted,
                             shape: RoundedRectangleBorder(
                                 borderRadius:
                                     BorderRadius.circular(8)),
@@ -486,14 +483,19 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                                 height: 14,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white))
+                                    color: AppColors.textInverted))
                             : const Text('Save'),
                       ),
                     ],
                   ];
 
                   return Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      if (backButton != null) ...[
+                        backButton,
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(child: nameText),
                       for (int i = 0;
                           i < compactButtons.length;
@@ -512,7 +514,12 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
                 }
 
                 return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    if (backButton != null) ...[
+                      backButton,
+                      const SizedBox(width: 10),
+                    ],
                     Expanded(child: nameText),
                     for (int i = 0;
                         i < actionButtons.length;
@@ -527,14 +534,23 @@ class _MemberDetailScreenState extends State<MemberDetailScreen>
             SizedBox(height: tightHeader ? 8 : 18),
 
             // ── Tabs ───────────────────────────────────────────────────────────
+            // Symmetric label padding + label-sized indicator so the
+            // hover/press highlight and the underline are centered on
+            // the tab text instead of being pushed left by right-only
+            // padding. tabAlignment.start + zero padding removes the
+            // default scrollable-TabBar left inset.
             TabBar(
               controller: _tabs,
               isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              padding: EdgeInsets.zero,
               labelColor: AppColors.textPrimary,
-              unselectedLabelColor: Colors.grey,
+              unselectedLabelColor: AppColors.textMuted,
               indicatorColor: AppColors.primary,
+              indicatorSize: TabBarIndicatorSize.label,
+              dividerColor: Colors.transparent,
               labelPadding:
-                  const EdgeInsets.only(right: 28),
+                  const EdgeInsets.symmetric(horizontal: 16),
               labelStyle: const TextStyle(
                   fontWeight: FontWeight.w600, fontSize: 13.5),
               tabs: [
@@ -596,7 +612,6 @@ class _ProfileTab extends StatelessWidget {
     required void Function(bool uploading) onUploadingChanged,
   }) onChangePhoto;
 
-  
   const _ProfileTab({
     required this.member, required this.photoUrl, required this.editMode,
     required this.canEditPhoto, required this.lotService,
@@ -692,8 +707,8 @@ class _ProfileSidebarCard extends StatefulWidget {
 class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
   bool _uploading = false;
   double _progress = 0;
+  String? _selectedLotId;
 
-  
   String _fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/'
       '${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -705,7 +720,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -749,7 +764,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                           strokeWidth: 3,
                           value: _progress > 0 ? _progress : null,
                           valueColor:
-                              const AlwaysStoppedAnimation(Colors.white),
+                              const AlwaysStoppedAnimation(AppColors.surface),
                         ),
                       ),
                     ),
@@ -773,10 +788,10 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(color: AppColors.textInverted, width: 2),
                       ),
                       child: const Icon(Icons.camera_alt,
-                          size: 14, color: Colors.white),
+                          size: 14, color: AppColors.textInverted),
                     ),
                   ),
                 ),
@@ -793,7 +808,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
           const SizedBox(height: 4),
           Text(member.email,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
           const SizedBox(height: 10),
           _StatusBadge(status: member.status),
 
@@ -808,12 +823,12 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
-                      color: Colors.grey[600])),
+                      color: AppColors.textSecondary)),
               const Spacer(),
               if (widget.ownedLots.isNotEmpty)
                 Text('${widget.ownedLots.length}',
                     style: TextStyle(
-                        fontSize: 12, color: Colors.grey[500])),
+                        fontSize: 12, color: AppColors.textMuted)),
             ],
           ),
           const SizedBox(height: 10),
@@ -822,7 +837,7 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text('No lots assigned.',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey[400])),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
             )
           else
             Column(
@@ -831,7 +846,11 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: _OwnedLotTile(
                           lot: lot,
-                          onTap: () => widget.onViewLot(lot),
+                          isSelected: _selectedLotId == lot.id,
+                          onTap: () {
+                            setState(() => _selectedLotId = lot.id);
+                            widget.onViewLot(lot);
+                          },
                         ),
                       ))
                   .toList(),
@@ -870,11 +889,15 @@ int _compareLots(LotModel a, LotModel b) {
 // ── One owned-lot row (e.g. "Phase 1" / "Block 1 • Lot 1") ──────────────────
 class _OwnedLotTile extends StatelessWidget {
   final LotModel lot;
+  final bool isSelected;
   final VoidCallback onTap;
 
-  const _OwnedLotTile({required this.lot, required this.onTap});
+  const _OwnedLotTile({
+    required this.lot,
+    required this.isSelected,
+    required this.onTap,
+  });
 
-  
   @override
   Widget build(BuildContext context) {
     final block = lot.block.isEmpty ? '—' : lot.block;
@@ -897,14 +920,16 @@ class _OwnedLotTile extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: isSelected ? AppColors.primary.withOpacity(0.1) : AppColors.background,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.borderStrong),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.borderStrong,
+          ),
         ),
         child: Row(
           children: [
-            const Icon(Icons.location_on_outlined,
-                size: 15, color: AppColors.primary),
+            Icon(Icons.location_on_outlined,
+                size: 15, color: isSelected ? AppColors.primary : AppColors.primary),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -912,24 +937,24 @@ class _OwnedLotTile extends StatelessWidget {
                 children: [
                   if (phaseLabel.isNotEmpty) ...[
                     Text(phaseLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.3,
-                            color: AppColors.primary),
+                            color: isSelected ? AppColors.primary : AppColors.primary),
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
                   ],
                   Text('Block $block • Lot $lotNo',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary),
+                          color: isSelected ? AppColors.primary : AppColors.textPrimary),
                       overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
+            Icon(Icons.chevron_right, size: 16, color: isSelected ? AppColors.primary : AppColors.textMuted),
           ],
         ),
       ),
@@ -947,7 +972,7 @@ class _SidebarRow extends StatelessWidget {
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
       Text(label,
-          style: TextStyle(fontSize: 12.5, color: Colors.grey[500])),
+          style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
       Flexible(
         child: Text(value.isEmpty ? '—' : value,
             textAlign: TextAlign.end,
@@ -969,7 +994,6 @@ class _MemberInfoCard extends StatelessWidget {
   final String memberStatusLabel;
   final void Function(MemberStatus) onStatusChanged;
 
-  
   const _MemberInfoCard({
     required this.editMode,
     required this.name, required this.email,
@@ -984,7 +1008,7 @@ class _MemberInfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -1000,7 +1024,7 @@ class _MemberInfoCard extends StatelessWidget {
           Text(
             'Lot ownership is managed from Location Mapping — '
             'see "Owned Lots" on the left.',
-            style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+            style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
           ),
           const SizedBox(height: 20),
           LayoutBuilder(builder: (context, c) {
@@ -1073,7 +1097,6 @@ class _PaymentsTab extends StatelessWidget {
     required this.auth,
   });
 
-  
   @override
   Widget build(BuildContext context) {
     final canRecord = auth.isAdmin || auth.isAccountant;
@@ -1101,7 +1124,7 @@ class _PaymentsTab extends StatelessWidget {
                     label: const Text('Add Payment'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.textPrimary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.textInverted,
                       shape: RoundedRectangleBorder(
                           borderRadius:
                               BorderRadius.circular(8)),
@@ -1143,7 +1166,7 @@ class _PaymentsTab extends StatelessWidget {
                 if (payments.isEmpty) {
                   return const Center(
                       child: Text('No payment records found.',
-                          style: TextStyle(color: Colors.grey)));
+                          style: TextStyle(color: AppColors.textMuted)));
                 }
                 return LayoutBuilder(
                   builder: (context, c) {
@@ -1154,7 +1177,7 @@ class _PaymentsTab extends StatelessWidget {
 
                     return Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                             color: AppColors.border),
@@ -1193,7 +1216,6 @@ class _DocumentsTab extends StatelessWidget {
     required this.auth,
   });
 
-  
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1243,7 +1265,7 @@ class _DocumentsTab extends StatelessWidget {
                     label: const Text('Upload Document'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.textPrimary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.textInverted,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(
@@ -1284,7 +1306,7 @@ class _DocumentsTab extends StatelessWidget {
                 if (docs.isEmpty) {
                   return const Center(
                       child: Text('No documents uploaded yet.',
-                          style: TextStyle(color: Colors.grey)));
+                          style: TextStyle(color: AppColors.textMuted)));
                 }
                 return GridView.builder(
                   gridDelegate:
@@ -1346,7 +1368,7 @@ class _DetailField extends StatelessWidget {
   final TextEditingController controller;
   final bool readOnly;
   final int maxLines;
-  
+
   const _DetailField({
     required this.label,
     required this.controller,
@@ -1371,7 +1393,7 @@ class _DetailField extends StatelessWidget {
           filled: true,
           fillColor: readOnly
               ? AppColors.background
-              : Colors.white,
+              : AppColors.surface,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           border: OutlineInputBorder(
@@ -1450,7 +1472,7 @@ class _DropdownField<T> extends StatelessWidget {
         value: value,
         style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary),
         decoration: InputDecoration(
-          filled: true, fillColor: Colors.white,
+          filled: true, fillColor: AppColors.surface,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           border: OutlineInputBorder(
@@ -1480,6 +1502,13 @@ class _PaymentRow extends StatelessWidget {
   final bool compact;
   const _PaymentRow(
       {required this.payment, required this.fs, this.compact = false});
+
+  // Fixed-width slots for the trailing status pill and the "Mark Paid"
+  // button. Without these, rows that have a Mark Paid button (e.g. an
+  // Overdue Penalty) leave less room for the Expanded columns than rows
+  // that don't, which shifted Type/Amount/Due/Paid out of line.
+  static const double _statusSlotWidth = 90;
+  static const double _actionSlotWidth = 92;
 
   Color _statusColor(PaymentStatus s) {
     switch (s) {
@@ -1570,7 +1599,7 @@ class _PaymentRow extends StatelessWidget {
             Text(
               'Due ${_fmt(payment.dueDate)}'
               '${payment.paidDate != null ? '  ·  Paid ${_fmt(payment.paidDate)}' : ''}',
-              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 12, color: AppColors.textMuted),
             ),
             if (_canMarkPaid) ...[
               const SizedBox(height: 6),
@@ -1597,6 +1626,7 @@ class _PaymentRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(flex: 3, child: Text(payment.type.label,
               style: const TextStyle(fontSize: 13.5,
@@ -1605,20 +1635,36 @@ class _PaymentRow extends StatelessWidget {
               '₱${payment.amount.toStringAsFixed(2)}',
               style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary))),
           Expanded(flex: 2, child: Text(_fmt(payment.dueDate),
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary))),
           Expanded(flex: 2, child: Text(_fmt(payment.paidDate),
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
-          _statusPill(),
-          if (_canMarkPaid) ...[
-            const SizedBox(width: 10),
-            TextButton(
-              onPressed: () => _markPaid(context),
-              style: TextButton.styleFrom(
-                  foregroundColor: AppColors.success),
-              child: const Text('Mark Paid',
-                  style: TextStyle(fontSize: 12)),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+          // Status pill: fixed slot, right-aligned so every row's pill
+          // ends on the same edge.
+          SizedBox(
+            width: _statusSlotWidth,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _statusPill(),
             ),
-          ],
+          ),
+          const SizedBox(width: 10),
+          // Action slot: always reserved, empty when there's nothing to
+          // mark paid, so the columns above never shift.
+          SizedBox(
+            width: _actionSlotWidth,
+            child: _canMarkPaid
+                ? Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => _markPaid(context),
+                      style: TextButton.styleFrom(
+                          foregroundColor: AppColors.success),
+                      child: const Text('Mark Paid',
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                  )
+                : null,
+          ),
         ],
       ),
     );
@@ -1640,7 +1686,7 @@ class _DocCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
@@ -1680,7 +1726,7 @@ class _DocCard extends StatelessWidget {
                   }
                 },
                 child: const Icon(Icons.delete_outline,
-                    size: 18, color: Colors.grey),
+                    size: 18, color: AppColors.textMuted),
               ),
             ],
           ),

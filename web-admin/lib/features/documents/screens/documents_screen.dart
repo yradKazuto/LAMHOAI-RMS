@@ -45,7 +45,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   
   
   
-  static const Color _red    = Color(0xFFCC2200);
+  static const Color _red    = AppColors.danger;
 
   @override
   void dispose() {
@@ -85,7 +85,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Document uploaded successfully.'),
-            backgroundColor: Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -110,7 +110,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       backgroundColor: AppColors.background,
       appBar: isFiltered
           ? AppBar(
-              backgroundColor: Colors.white,
+              backgroundColor: AppColors.surface,
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
@@ -146,7 +146,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       Text(
                         'Property titles, IDs, and uploaded files',
                         style: TextStyle(
-                            fontSize: 13, color: Colors.grey[600]),
+                            fontSize: 13, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -174,15 +174,15 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: const LinearProgressIndicator(
-                  backgroundColor: Color(0xFFD0DBEE),
-                  color: Color(0xFF2563EB),
+                  backgroundColor: AppColors.borderStrong,
+                  color: AppColors.primary,
                   minHeight: 3,
                 ),
               ),
               const SizedBox(height: 4),
               Text('Uploading to Cloudinary…',
                   style: TextStyle(
-                      fontSize: 12, color: Colors.grey[500])),
+                      fontSize: 12, color: AppColors.textMuted)),
               const SizedBox(height: 12),
             ],
 
@@ -191,7 +191,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0EE),
+                  color: AppColors.dangerBg,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                       color: _red.withOpacity(0.3)),
@@ -229,21 +229,21 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     decoration: InputDecoration(
                       hintText: 'Search member or file name…',
                       hintStyle: TextStyle(
-                          fontSize: 13, color: Colors.grey[400]),
+                          fontSize: 13, color: AppColors.textMuted),
                       prefixIcon:
                           const Icon(Icons.search, size: 18),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: AppColors.surface,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
-                              color: Color(0xFFD0DBEE))),
+                              color: AppColors.borderStrong)),
                       enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
-                              color: Color(0xFFD0DBEE))),
+                              color: AppColors.borderStrong)),
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(
@@ -269,7 +269,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     icon: const Icon(Icons.clear, size: 15),
                     label: const Text('Clear'),
                     style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[600]),
+                        foregroundColor: AppColors.textSecondary),
                   ),
                 ],
               ],
@@ -298,19 +298,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                         children: [
                           Icon(Icons.folder_open_outlined,
                               size: 52,
-                              color: Colors.grey[300]),
+                              color: AppColors.borderStrong),
                           const SizedBox(height: 14),
                           Text('No documents found.',
                               style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey[500])),
+                                  color: AppColors.textMuted)),
                           if (canUpload) ...[
                             const SizedBox(height: 8),
                             Text(
                               'Click "Upload Document" to add one.',
                               style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey[400]),
+                                  color: AppColors.textMuted),
                             ),
                           ],
                         ],
@@ -357,12 +357,12 @@ class _UploadButton extends StatelessWidget {
         ? const SizedBox(
             width: 16, height: 16,
             child: CircularProgressIndicator(
-                strokeWidth: 2, color: Colors.white))
+                strokeWidth: 2, color: AppColors.textInverted))
         : const Icon(Icons.upload_file_outlined, size: 18),
     label: Text(uploading ? 'Uploading…' : 'Upload Document'),
     style: ElevatedButton.styleFrom(
       backgroundColor: AppColors.textPrimary,
-      foregroundColor: Colors.white,
+      foregroundColor: AppColors.textInverted,
       disabledBackgroundColor: AppColors.textPrimary.withOpacity(0.5),
       padding: const EdgeInsets.symmetric(
           horizontal: 20, vertical: 14),
@@ -383,18 +383,18 @@ class _TypeFilterDropdown extends StatelessWidget {
     height: 42,
     padding: const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0xFFD0DBEE)),
+      border: Border.all(color: AppColors.borderStrong),
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<DocumentType?>(
         value: value,
         hint: Text('All Types',
             style:
-                TextStyle(fontSize: 13, color: Colors.grey[500])),
+                TextStyle(fontSize: 13, color: AppColors.textMuted)),
         style: const TextStyle(
-            fontSize: 13, color: Color(0xFF1A2B4A)),
+            fontSize: 13, color: AppColors.textPrimary),
         icon: const Icon(Icons.expand_more, size: 18),
         items: [
           const DropdownMenuItem<DocumentType?>(
@@ -433,10 +433,10 @@ class _DocumentCard extends StatelessWidget {
 
   Color _color(DocumentType t) {
     switch (t) {
-      case DocumentType.propertyTitle:    return const Color(0xFF1A4A9C);
-      case DocumentType.governmentId:     return const Color(0xFF1A7A4A);
-      case DocumentType.proofOfResidency: return const Color(0xFF7A3A1A);
-      case DocumentType.other:            return const Color(0xFF5A7099);
+      case DocumentType.propertyTitle:    return AppColors.dataInk;
+      case DocumentType.governmentId:     return AppColors.success;
+      case DocumentType.proofOfResidency: return AppColors.warning;
+      case DocumentType.other:            return AppColors.textSecondary;
     }
   }
 
@@ -455,9 +455,9 @@ class _DocumentCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
               color: color.withOpacity(0.05),
@@ -483,35 +483,35 @@ class _DocumentCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F7FB),
+                  color: AppColors.background,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(_ext(doc.fileName),
                     style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF5A7099))),
+                        color: AppColors.textSecondary)),
               ),
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F4FF),
+                  color: AppColors.primaryBg,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text('CDN',
                     style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF2563EB))),
+                        color: AppColors.primary)),
               ),
               if (canDelete) ...[
                 const SizedBox(width: 6),
                 InkWell(
                   onTap: () => _confirmDelete(context),
                   child: const Icon(Icons.delete_outline,
-                      size: 17, color: Colors.grey),
+                      size: 17, color: AppColors.textMuted),
                 ),
               ],
             ],
@@ -521,26 +521,26 @@ class _DocumentCard extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF5A7099),
+                  color: AppColors.textSecondary,
                   letterSpacing: 0.3)),
           const SizedBox(height: 3),
           Text(doc.fileName,
               style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A2B4A)),
+                  color: AppColors.textPrimary),
               overflow: TextOverflow.ellipsis),
           const SizedBox(height: 3),
           Text(doc.memberName,
               style: TextStyle(
-                  fontSize: 11.5, color: Colors.grey[500]),
+                  fontSize: 11.5, color: AppColors.textMuted),
               overflow: TextOverflow.ellipsis),
           const SizedBox(height: 8),
           Row(
             children: [
               Text(_fmt(doc.createdAt),
                   style: TextStyle(
-                      fontSize: 11, color: Colors.grey[400])),
+                      fontSize: 11, color: AppColors.textMuted)),
               const Spacer(),
               InkWell(
                 onTap: () async {
@@ -554,7 +554,7 @@ class _DocumentCard extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF2563EB))),
+                        color: AppColors.primary)),
               ),
             ],
           ),
@@ -573,7 +573,7 @@ class _DocumentCard extends StatelessWidget {
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B))),
+                color: AppColors.textPrimary)),
         content: Text(
           'Are you sure you want to delete "${doc.fileName}"?\n'
           'This will remove it from Cloudinary and Firestore.',
@@ -583,13 +583,13 @@ class _DocumentCard extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel',
-                style: TextStyle(color: Colors.grey)),
+                style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFCC2200),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.danger,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),

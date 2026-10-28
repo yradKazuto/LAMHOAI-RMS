@@ -941,7 +941,7 @@ class _VacantLotDialogState
                     child:
                         CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: AppColors.textInverted,
                     ),
                   )
                 : const Icon(
@@ -2101,7 +2101,7 @@ class _AddLotDialogState
                   child:
                       CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Colors.white,
+                    color: AppColors.textInverted,
                   ),
                 )
               : const Icon(
@@ -2261,7 +2261,7 @@ Widget _infoRow(
           child: Icon(
             icon,
             size: 18,
-            color: Colors.grey[600],
+            color: AppColors.textSecondary,
           ),
         ),
         const SizedBox(width: 4),
@@ -2270,7 +2270,7 @@ Widget _infoRow(
           child: Text(
             label,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: AppColors.textSecondary,
               fontSize: 13,
               fontWeight:
                   FontWeight.w500,
@@ -2282,7 +2282,7 @@ Widget _infoRow(
           child: Text(
             value,
             style: const TextStyle(
-              color: Colors.black87,
+              color: AppColors.textPrimary,
               fontSize: 13,
               fontWeight:
                   FontWeight.w600,
@@ -2302,18 +2302,18 @@ Widget _notesBox(
     padding:
         const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: const Color(0xFFF6F8FA),
+      color: AppColors.background,
       borderRadius:
           BorderRadius.circular(10),
       border: Border.all(
-        color: const Color(0xFFE2E6EA),
+        color: AppColors.border,
       ),
     ),
     child: Text(
       text,
       style: const TextStyle(
         fontSize: 13,
-        color: Colors.black87,
+        color: AppColors.textPrimary,
         height: 1.4,
       ),
     ),
@@ -2346,13 +2346,13 @@ Widget _textField({
       ),
       filled: true,
       fillColor: enabled
-          ? const Color(0xFFF8F9FB)
-          : const Color(0xFFF0F1F3),
+          ? AppColors.background
+          : AppColors.borderSubtle,
       border: OutlineInputBorder(
         borderRadius:
             BorderRadius.circular(10),
         borderSide: const BorderSide(
-          color: Color(0xFFE0E4E8),
+          color: AppColors.border,
         ),
       ),
       enabledBorder:
@@ -2360,7 +2360,7 @@ Widget _textField({
         borderRadius:
             BorderRadius.circular(10),
         borderSide: const BorderSide(
-          color: Color(0xFFE0E4E8),
+          color: AppColors.border,
         ),
       ),
       focusedBorder:

@@ -47,8 +47,17 @@ flutter:
   # assets:
   #   - images/
 
-  # Add custom fonts below
-  # fonts:
-  #   - family: YourFont
-  #     fonts:
-  #       - asset: fonts/YourFont-Regular.ttf
+  # Inter — the brand typeface (docs/brand-guidelines.md). Bundled so the
+  # app renders the same face on every platform instead of falling back to
+  # the system default. Licence: OFL, see assets/fonts/LICENSE.txt.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

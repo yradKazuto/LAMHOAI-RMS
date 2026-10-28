@@ -36,7 +36,7 @@ class LamhoaiApp extends StatelessWidget {
           final router = createRouter(authProvider);
 
           return MaterialApp.router(
-            title: 'LAMHOAI – RMS',
+            title: 'LAMHSYS',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             routerConfig: router,

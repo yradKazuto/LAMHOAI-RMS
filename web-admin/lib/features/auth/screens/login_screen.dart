@@ -25,11 +25,11 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ── Brand colours ──────────────────────────────────────────────────────────
   
-  static const Color _blue = Color(0xFF1A4A9C);
+  static const Color _blue = AppColors.dataInk;
   
-  static const Color _lightBg = Color(0xFFF0F4FB);
-  static const Color _border = Color(0xFFD0DBEE);
-  static const Color _error = Color(0xFFCC2200);
+  static const Color _lightBg = AppColors.background;
+  static const Color _border = AppColors.borderStrong;
+  static const Color _error = AppColors.danger;
 
   @override
   void initState() {
@@ -156,7 +156,7 @@ class _LeftPanel extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: AppColors.textInverted.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Image.asset(
@@ -172,7 +172,7 @@ class _LeftPanel extends StatelessWidget {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E6BE6),
+                    color: AppColors.primaryHover,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -180,7 +180,7 @@ class _LeftPanel extends StatelessWidget {
                 const Text(
                   'La Milagrosa\nHomeowners\nAssociation',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textInverted,
                     fontSize: 40,
                     fontWeight: FontWeight.w800,
                     height: 1.15,
@@ -191,7 +191,7 @@ class _LeftPanel extends StatelessWidget {
                 Text(
                   'Residence Map Management',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: AppColors.textInverted.withOpacity(0.9),
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
@@ -201,7 +201,7 @@ class _LeftPanel extends StatelessWidget {
                 Text(
                   'Centralized administration dashboard for authorized personnel to manage community operations and records.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.75),
+                    color: AppColors.textInverted.withOpacity(0.75),
                     fontSize: 13.5,
                     height: 1.5,
                   ),
@@ -213,7 +213,7 @@ class _LeftPanel extends StatelessWidget {
                 Text(
                   '© ${DateTime.now().year} LAMHSYS ',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.45),
+                    color: AppColors.textInverted.withOpacity(0.45),
                     fontSize: 11.5,
                   ),
                 ),
@@ -231,7 +231,7 @@ class _GeoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.05)
+      ..color = AppColors.surface.withOpacity(0.05)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
@@ -263,7 +263,7 @@ class _LoginCard extends StatelessWidget {
   final VoidCallback onSubmit;
 
   
-  static const Color _error = Color(0xFFCC2200);
+  static const Color _error = AppColors.danger;
 
   const _LoginCard({
     required this.formKey,
@@ -282,11 +282,11 @@ class _LoginCard extends StatelessWidget {
           margin: const EdgeInsets.all(24),
           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 44),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.textInverted,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0D2A5C).withOpacity(0.12),
+                color: AppColors.primaryHeader.withOpacity(0.12),
                 blurRadius: 40,
                 offset: const Offset(0, 12),
               ),
@@ -313,7 +313,7 @@ class _LoginCard extends StatelessWidget {
                   'Sign in to the LAMHOAI admin portal',
                   style: TextStyle(
                     fontSize: 13.5,
-                    color: Colors.grey[600],
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -324,7 +324,7 @@ class _LoginCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF0EE),
+                      color: AppColors.dangerBg,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: _error.withOpacity(0.3),
@@ -399,7 +399,7 @@ class _LoginCard extends StatelessWidget {
                     onPressed: auth.isLoading ? null : onSubmit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.textPrimary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.textInverted,
                       disabledBackgroundColor: AppColors.textPrimary.withOpacity(0.5),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -412,7 +412,7 @@ class _LoginCard extends StatelessWidget {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: AppColors.textInverted,
                             ),
                           )
                         : const Text(
@@ -435,7 +435,7 @@ class _LoginCard extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 11.5,
-                      color: Colors.grey[500],
+                      color: AppColors.textMuted,
                       height: 1.6,
                     ),
                   ),
@@ -461,7 +461,7 @@ class _FieldLabel extends StatelessWidget {
       style: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF0D2A5C),
+        color: AppColors.primaryHeader,
         letterSpacing: 0.1,
       ),
     );
@@ -481,7 +481,7 @@ class _AuthField extends StatelessWidget {
   final void Function(String)? onFieldSubmitted;
 
   
-  static const Color _border = Color(0xFFD0DBEE);
+  static const Color _border = AppColors.borderStrong;
 
   const _AuthField({
     required this.controller,
@@ -505,24 +505,24 @@ class _AuthField extends StatelessWidget {
       onFieldSubmitted: onFieldSubmitted,
       style: const TextStyle(
         fontSize: 14,
-        color: Color(0xFF1A2B4A),
+        color: AppColors.textPrimary,
       ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
-          color: Colors.grey[400],
+          color: AppColors.textMuted,
           fontSize: 14,
         ),
-        prefixIcon: Icon(prefixIcon, size: 18, color: Colors.grey[500]),
+        prefixIcon: Icon(prefixIcon, size: 18, color: AppColors.textMuted),
         suffixIcon: suffixIcon != null
             ? IconButton(
-                icon: Icon(suffixIcon, size: 18, color: Colors.grey[500]),
+                icon: Icon(suffixIcon, size: 18, color: AppColors.textMuted),
                 onPressed: onSuffixTap,
                 splashRadius: 18,
               )
             : null,
         filled: true,
-        fillColor: const Color(0xFFF7F9FC),
+        fillColor: AppColors.background,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
@@ -539,15 +539,15 @@ class _AuthField extends StatelessWidget {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFCC2200)),
+          borderSide: const BorderSide(color: AppColors.danger),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFCC2200), width: 1.5),
+          borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
         ),
         errorStyle: const TextStyle(
           fontSize: 11.5,
-          color: Color(0xFFCC2200),
+          color: AppColors.danger,
         ),
       ),
     );

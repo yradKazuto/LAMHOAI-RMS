@@ -48,19 +48,19 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
 
   Color _statusColor(ComplaintStatus s) {
     switch (s) {
-      case ComplaintStatus.pending:   return const Color(0xFF7A6A1A);
-      case ComplaintStatus.reviewing: return const Color(0xFF1A4A9C);
-      case ComplaintStatus.resolved:  return const Color(0xFF1A7A4A);
-      case ComplaintStatus.rejected:  return const Color(0xFFCC2200);
+      case ComplaintStatus.pending:   return AppColors.warning;
+      case ComplaintStatus.reviewing: return AppColors.dataInk;
+      case ComplaintStatus.resolved:  return AppColors.success;
+      case ComplaintStatus.rejected:  return AppColors.danger;
     }
   }
 
   Color _statusBg(ComplaintStatus s) {
     switch (s) {
-      case ComplaintStatus.pending:   return const Color(0xFFFFF8E0);
-      case ComplaintStatus.reviewing: return const Color(0xFFEEF4FF);
-      case ComplaintStatus.resolved:  return const Color(0xFFEAF7F0);
-      case ComplaintStatus.rejected:  return const Color(0xFFFFF0EE);
+      case ComplaintStatus.pending:   return AppColors.warningBg;
+      case ComplaintStatus.reviewing: return AppColors.primaryBg;
+      case ComplaintStatus.resolved:  return AppColors.successBg;
+      case ComplaintStatus.rejected:  return AppColors.dangerBg;
     }
   }
 
@@ -103,7 +103,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                         'Review and resolve homeowner complaints',
                         style: TextStyle(
                             fontSize: 13,
-                            color: Colors.grey[600])),
+                            color: AppColors.textSecondary)),
                   ],
                 ),
               ],
@@ -120,11 +120,11 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                     hintText: 'Search member or subject...',
                     hintStyle: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[400]),
+                        color: AppColors.textMuted),
                     prefixIcon:
                         const Icon(Icons.search, size: 18),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.surface,
                     contentPadding:
                         const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
@@ -132,12 +132,12 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     enabledBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: Color(0xFFD0DBEE))),
+                            color: AppColors.borderStrong)),
                     focusedBorder: OutlineInputBorder(
                         borderRadius:
                             BorderRadius.circular(8),
@@ -158,7 +158,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                   icon: const Icon(Icons.clear, size: 15),
                   label: const Text('Clear'),
                   style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey[600]),
+                      foregroundColor: AppColors.textSecondary),
                 );
 
                 void openFilterSheet() {
@@ -187,7 +187,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                   margin:
                                       const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[300],
+                                    color: AppColors.borderStrong,
                                     borderRadius:
                                         BorderRadius.circular(2),
                                   ),
@@ -214,7 +214,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[600])),
+                                      color: AppColors.textSecondary)),
                               const SizedBox(height: 6),
                               SizedBox(
                                 width: double.infinity,
@@ -223,12 +223,12 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: AppColors.textInverted,
                                     borderRadius:
                                         BorderRadius.circular(8),
                                     border: Border.all(
                                         color:
-                                            const Color(0xFFD0DBEE)),
+                                            AppColors.borderStrong),
                                   ),
                                   child: DropdownButtonHideUnderline(
                                     child: DropdownButton<String?>(
@@ -237,10 +237,10 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                       hint: Text('All Statuses',
                                           style: TextStyle(
                                               fontSize: 13,
-                                              color: Colors.grey[500])),
+                                              color: AppColors.textMuted)),
                                       style: const TextStyle(
                                           fontSize: 13,
-                                          color: Color(0xFF1A2B4A)),
+                                          color: AppColors.textPrimary),
                                       icon: const Icon(Icons.expand_more,
                                           size: 18),
                                       items: [
@@ -270,7 +270,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.textPrimary,
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: AppColors.textInverted,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
                                     shape: RoundedRectangleBorder(
@@ -289,7 +289,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                 }
 
                 final filterButton = Material(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
@@ -303,7 +303,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                         border: Border.all(
                             color: _statusFilter != null
                                 ? AppColors.primary
-                                : const Color(0xFFD0DBEE)),
+                                : AppColors.borderStrong),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -312,7 +312,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                               size: 18,
                               color: _statusFilter != null
                                   ? AppColors.primary
-                                  : Colors.grey[600]),
+                                  : AppColors.textSecondary),
                           const SizedBox(width: 6),
                           Text(
                               _statusFilter != null
@@ -323,7 +323,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                   fontWeight: FontWeight.w600,
                                   color: _statusFilter != null
                                       ? AppColors.primary
-                                      : const Color(0xFF1A2B4A))),
+                                      : AppColors.textPrimary)),
                         ],
                       ),
                     ),
@@ -415,13 +415,13 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.textInverted,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: const Color(0xFFE0E8F4)),
+                              color: AppColors.border),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF1A4A9C)
+                              color: AppColors.dataInk
                                   .withOpacity(0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
@@ -438,7 +438,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 20, vertical: 14),
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFFF7F9FC),
+                                  color: AppColors.background,
                                   borderRadius:
                                       BorderRadius.vertical(
                                           top: Radius.circular(12)),
@@ -455,7 +455,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                               ),
                               const Divider(
                                   height: 1,
-                                  color: Color(0xFFE0E8F4)),
+                                  color: AppColors.border),
                             ],
 
                             if (complaints.isEmpty)
@@ -464,7 +464,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                   child: Text(
                                       'No complaints found.',
                                       style: TextStyle(
-                                          color: Colors.grey)),
+                                          color: AppColors.textMuted)),
                                 ),
                               )
                             else
@@ -475,7 +475,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                                       const Divider(
                                           height: 1,
                                           color:
-                                              Color(0xFFEEF2F9)),
+                                              AppColors.background),
                                   itemBuilder: (context, i) =>
                                       _ComplaintRow(
                                     complaint:  complaints[i],
@@ -558,7 +558,7 @@ class _ComplaintRow extends StatelessWidget {
         ),
         child: InkWell(
         onTap: () => _showDetailSheet(context),
-        hoverColor: const Color(0xFFF4F7FB),
+        hoverColor: AppColors.background,
         child: Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: 16, vertical: 14),
@@ -572,7 +572,7 @@ class _ComplaintRow extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E293B)),
+                            color: AppColors.textPrimary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                   ),
@@ -584,7 +584,7 @@ class _ComplaintRow extends StatelessWidget {
               Text(complaint.subject,
                   style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[700]),
+                      color: AppColors.textSecondary),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
               const SizedBox(height: 6),
@@ -593,10 +593,10 @@ class _ComplaintRow extends StatelessWidget {
                   Text(_fmt(complaint.createdAt),
                       style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[500])),
+                          color: AppColors.textMuted)),
                   const Spacer(),
                   Icon(Icons.chevron_right,
-                      size: 18, color: Colors.grey[400]),
+                      size: 18, color: AppColors.textMuted),
                 ],
               ),
             ],
@@ -615,7 +615,7 @@ class _ComplaintRow extends StatelessWidget {
       ),
       child: InkWell(
       onTap: () => _showDetailSheet(context),
-      hoverColor: const Color(0xFFF4F7FB),
+      hoverColor: AppColors.background,
       child: Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: 20, vertical: 14),
@@ -627,7 +627,7 @@ class _ComplaintRow extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF1E293B)),
+                      color: AppColors.textPrimary),
                   overflow: TextOverflow.ellipsis),
             ),
             Expanded(
@@ -635,7 +635,7 @@ class _ComplaintRow extends StatelessWidget {
               child: Text(complaint.subject,
                   style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[700]),
+                      color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis),
             ),
             Expanded(
@@ -643,7 +643,7 @@ class _ComplaintRow extends StatelessWidget {
               child: Text(_fmt(complaint.createdAt),
                   style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[600])),
+                      color: AppColors.textSecondary)),
             ),
             Expanded(
               flex: 2,
@@ -652,7 +652,7 @@ class _ComplaintRow extends StatelessWidget {
             SizedBox(
               width: 48,
               child: Icon(Icons.chevron_right,
-                  size: 18, color: Colors.grey[400]),
+                  size: 18, color: AppColors.textMuted),
             ),
           ],
         ),
@@ -788,7 +788,7 @@ class _ComplaintDetailSheetState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Complaint status updated.'),
-            backgroundColor: Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -807,7 +807,7 @@ class _ComplaintDetailSheetState
       minChildSize: 0.4,
       builder: (_, controller) => Container(
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.textInverted,
           borderRadius:
               BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -821,7 +821,7 @@ class _ComplaintDetailSheetState
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: AppColors.borderStrong,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -862,10 +862,10 @@ class _ComplaintDetailSheetState
               'Filed by ${widget.complaint.memberName} on '
               '${_fmt(widget.complaint.createdAt)}',
               style: TextStyle(
-                  fontSize: 12.5, color: Colors.grey[500]),
+                  fontSize: 12.5, color: AppColors.textMuted),
             ),
             const SizedBox(height: 16),
-            const Divider(color: Color(0xFFE0E8F4)),
+            const Divider(color: AppColors.border),
             const SizedBox(height: 12),
 
             // Description
@@ -885,16 +885,16 @@ class _ComplaintDetailSheetState
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF7F9FC),
+                        color: AppColors.background,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: const Color(0xFFE0E8F4)),
+                            color: AppColors.border),
                       ),
                       child: Text(
                         widget.complaint.description,
                         style: const TextStyle(
                             fontSize: 13.5,
-                            color: Color(0xFF1A2B4A),
+                            color: AppColors.textPrimary,
                             height: 1.55),
                       ),
                     ),
@@ -917,13 +917,13 @@ class _ComplaintDetailSheetState
                                   selected:
                                       _selectedStatus == s,
                                   selectedColor:
-                                      const Color(0xFF1E293B),
+                                      AppColors.textPrimary,
                                   labelStyle: TextStyle(
                                       fontSize: 12.5,
                                       color:
                                           _selectedStatus == s
-                                              ? Colors.white
-                                              : Colors.grey[700]),
+                                              ? AppColors.surface
+                                              : AppColors.textSecondary),
                                   onSelected: (_) => setState(
                                       () => _selectedStatus =
                                           s),
@@ -949,10 +949,10 @@ class _ComplaintDetailSheetState
                               'Add a resolution note...',
                           hintStyle: TextStyle(
                               fontSize: 13,
-                              color: Colors.grey[400]),
+                              color: AppColors.textMuted),
                           filled: true,
                           fillColor:
-                              const Color(0xFFF7F9FC),
+                              AppColors.background,
                           contentPadding:
                               const EdgeInsets.all(14),
                           border: OutlineInputBorder(
@@ -960,18 +960,18 @@ class _ComplaintDetailSheetState
                                   BorderRadius.circular(8),
                               borderSide: const BorderSide(
                                   color:
-                                      Color(0xFFD0DBEE))),
+                                      AppColors.borderStrong)),
                           enabledBorder: OutlineInputBorder(
                               borderRadius:
                                   BorderRadius.circular(8),
                               borderSide: const BorderSide(
                                   color:
-                                      Color(0xFFD0DBEE))),
+                                      AppColors.borderStrong)),
                           focusedBorder: OutlineInputBorder(
                               borderRadius:
                                   BorderRadius.circular(8),
                               borderSide: const BorderSide(
-                                  color: Color(0xFF2563EB),
+                                  color: AppColors.primary,
                                   width: 1.5)),
                         ),
                       ),
@@ -984,7 +984,7 @@ class _ComplaintDetailSheetState
                               _loading ? null : _updateStatus,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.textPrimary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColors.textInverted,
                             shape: RoundedRectangleBorder(
                                 borderRadius:
                                     BorderRadius.circular(8)),
@@ -1000,7 +1000,7 @@ class _ComplaintDetailSheetState
                                       CircularProgressIndicator(
                                           strokeWidth: 2,
                                           color:
-                                              Colors.white))
+                                              AppColors.surface))
                               : const Text('Save Status',
                                   style: TextStyle(
                                       fontWeight:
@@ -1079,10 +1079,10 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                       width: 300,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(12),
                         border:
-                            Border.all(color: const Color(0xFFE0E8F4)),
+                            Border.all(color: AppColors.border),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.12),
@@ -1128,7 +1128,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.textPrimary,
-                                foregroundColor: Colors.white,
+                                foregroundColor: AppColors.textInverted,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
                                 shape: RoundedRectangleBorder(
@@ -1171,7 +1171,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
     return CompositedTransformTarget(
       link: _link,
       child: Material(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -1184,7 +1184,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
               border: Border.all(
                   color: widget.activeFilterCount > 0
                       ? AppColors.primary
-                      : const Color(0xFFD0DBEE)),
+                      : AppColors.borderStrong),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1193,7 +1193,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                     size: 18,
                     color: widget.activeFilterCount > 0
                         ? AppColors.primary
-                        : Colors.grey[600]),
+                        : AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(
                     widget.activeFilterCount > 0
@@ -1204,9 +1204,9 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                         fontWeight: FontWeight.w600,
                         color: widget.activeFilterCount > 0
                             ? AppColors.primary
-                            : const Color(0xFF1A2B4A))),
+                            : AppColors.textPrimary)),
                 const SizedBox(width: 4),
-                Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
+                Icon(Icons.expand_more, size: 16, color: AppColors.textMuted),
               ],
             ),
           ),
@@ -1248,16 +1248,16 @@ class _FilterChipGroup<T> extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primary.withOpacity(0.1)
-                : const Color(0xFFF7F9FC),
+                : AppColors.background,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: selected ? AppColors.primary : const Color(0xFFD0DBEE)),
+                color: selected ? AppColors.primary : AppColors.borderStrong),
           ),
           child: Text(opt.value,
               style: TextStyle(
                   fontSize: 12.5,
                   color:
-                      selected ? AppColors.primary : const Color(0xFF1A2B4A),
+                      selected ? AppColors.primary : AppColors.textPrimary,
                   fontWeight:
                       selected ? FontWeight.w600 : FontWeight.w400)),
         ),
@@ -1282,7 +1282,7 @@ class _PopoverFilterField extends StatelessWidget {
             style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600])),
+                color: AppColors.textSecondary)),
         const SizedBox(height: 5),
         SizedBox(width: double.infinity, child: child),
       ],
@@ -1298,6 +1298,6 @@ class _TH extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099),
+          color: AppColors.textSecondary,
           letterSpacing: 0.4));
 }

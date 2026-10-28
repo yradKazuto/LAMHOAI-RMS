@@ -64,7 +64,7 @@ LayoutBuilder(
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[600])),
+                      color: AppColors.textSecondary)),
             ],
           ),
         ),
@@ -79,7 +79,7 @@ LayoutBuilder(
             label: const Text('Post Announcement'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.textPrimary,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.textInverted,
               padding: const EdgeInsets.symmetric(
                   horizontal: 20, vertical: 14),
               shape: RoundedRectangleBorder(
@@ -136,19 +136,19 @@ LayoutBuilder(
                         children: [
                           Icon(Icons.campaign_outlined,
                               size: 52,
-                              color: Colors.grey[300]),
+                              color: AppColors.borderStrong),
                           const SizedBox(height: 14),
                           Text('No announcements yet.',
                               style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey[500])),
+                                  color: AppColors.textMuted)),
                           if (canPost) ...[
                             const SizedBox(height: 8),
                             Text(
                               'Click "Post Announcement" to create one.',
                               style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey[400]),
+                                  color: AppColors.textMuted),
                             ),
                           ],
                         ],
@@ -215,7 +215,7 @@ LayoutBuilder(
               height: 10,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: item.isActive ? const Color(0xFF1A7A4A) : Colors.grey,
+                color: item.isActive ? AppColors.success : AppColors.textMuted,
               ),
             ),
             const SizedBox(width: 10),
@@ -236,15 +236,15 @@ LayoutBuilder(
               children: [
                 Row(
                   children: [
-                    Icon(Icons.person_outline, size: 14, color: Colors.grey[500]),
+                    Icon(Icons.person_outline, size: 14, color: AppColors.textMuted),
                     const SizedBox(width: 4),
-                    Text(item.postedByName, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    Text(item.postedByName, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                     const SizedBox(width: 16),
-                    Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey[500]),
+                    Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.textMuted),
                     const SizedBox(width: 4),
                     Text(
                       '${item.createdAt.day.toString().padLeft(2, '0')}/${item.createdAt.month.toString().padLeft(2, '0')}/${item.createdAt.year}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -305,16 +305,16 @@ class _AnnouncementCard extends StatelessWidget {
         return Container(
       padding: EdgeInsets.all(compact ? 14 : 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: announcement.isActive
-              ? const Color(0xFFE0E8F4)
-              : const Color(0xFFEEEEEE),
+              ? AppColors.border
+              : AppColors.border,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1A4A9C).withOpacity(0.04),
+            color: AppColors.dataInk.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -330,8 +330,8 @@ class _AnnouncementCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: announcement.isActive
-                      ? const Color(0xFF1A7A4A)
-                      : Colors.grey[400],
+                      ? AppColors.success
+                      : AppColors.textMuted,
                 ),
               );
 
@@ -343,15 +343,15 @@ class _AnnouncementCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       color: announcement.isActive
                           ? AppColors.textPrimary
-                          : Colors.grey[500]));
+                          : AppColors.textMuted));
 
               final statusBadge = Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: announcement.isActive
-                      ? const Color(0xFFEAF7F0)
-                      : const Color(0xFFF4F7FB),
+                      ? AppColors.successBg
+                      : AppColors.background,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -362,8 +362,8 @@ class _AnnouncementCard extends StatelessWidget {
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                       color: announcement.isActive
-                          ? const Color(0xFF1A7A4A)
-                          : Colors.grey),
+                          ? AppColors.success
+                          : AppColors.textMuted),
                 ),
               );
 
@@ -385,7 +385,7 @@ class _AnnouncementCard extends StatelessWidget {
                       PopupMenuButton<String>(
                         icon: Icon(Icons.more_vert,
                             size: 18,
-                            color: Colors.grey[600]),
+                            color: AppColors.textSecondary),
                         padding: EdgeInsets.zero,
                         onSelected: (v) {
                           switch (v) {
@@ -444,7 +444,7 @@ class _AnnouncementCard extends StatelessWidget {
                         announcement.isActive
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined,
-                        size: 18, color: Colors.grey[500],
+                        size: 18, color: AppColors.textMuted,
                       ),
                       tooltip: announcement.isActive
                           ? 'Deactivate'
@@ -456,14 +456,14 @@ class _AnnouncementCard extends StatelessWidget {
                     ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined,
-                          size: 18, color: Color(0xFF2563EB)),
+                          size: 18, color: AppColors.primary),
                       tooltip: 'Edit',
                       onPressed: onEdit,
                     ),
                     IconButton(
                       icon: const Icon(
                           Icons.notifications_outlined,
-                          size: 18, color: Color(0xFF2563EB)),
+                          size: 18, color: AppColors.primary),
                       tooltip: 'Resend notification',
                       onPressed: () =>
                           _resendNotification(context),
@@ -472,7 +472,7 @@ class _AnnouncementCard extends StatelessWidget {
                   if (canDelete)
                     IconButton(
                       icon: const Icon(Icons.delete_outline,
-                          size: 18, color: Color(0xFFCC2200)),
+                          size: 18, color: AppColors.danger),
                       tooltip: 'Delete',
                       onPressed: () => _confirmDelete(context),
                     ),
@@ -485,27 +485,27 @@ class _AnnouncementCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: compact ? 13 : 13.5,
                   color: announcement.isActive
-                      ? const Color(0xFF1A2B4A)
-                      : Colors.grey[400],
+                      ? AppColors.textPrimary
+                      : AppColors.textMuted,
                   height: 1.5)),
           SizedBox(height: compact ? 8 : 12),
           Row(
             children: [
               Icon(Icons.person_outline,
-                  size: 13, color: Colors.grey[400]),
+                  size: 13, color: AppColors.textMuted),
               const SizedBox(width: 4),
               Text(announcement.postedByName,
                   style: TextStyle(
                       fontSize: compact ? 11 : 12,
-                      color: Colors.grey[500])),
+                      color: AppColors.textMuted)),
               SizedBox(width: compact ? 10 : 14),
               Icon(Icons.calendar_today_outlined,
-                  size: 13, color: Colors.grey[400]),
+                  size: 13, color: AppColors.textMuted),
               const SizedBox(width: 4),
               Text(_fmt(announcement.createdAt),
                   style: TextStyle(
                       fontSize: compact ? 11 : 12,
-                      color: Colors.grey[500])),
+                      color: AppColors.textMuted)),
             ],
           ),
         ],
@@ -529,8 +529,8 @@ class _AnnouncementCard extends StatelessWidget {
               ? 'Sent to ${result.sent} members.'
               : result.message),
           backgroundColor: result.success
-              ? const Color(0xFF1A7A4A)
-              : const Color(0xFFCC2200),
+              ? AppColors.success
+              : AppColors.danger,
         ),
       );
     }
@@ -546,7 +546,7 @@ class _AnnouncementCard extends StatelessWidget {
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B))),
+                color: AppColors.textPrimary)),
         content: Text(
             'Delete "${announcement.title}"? '
             'This cannot be undone.',
@@ -555,13 +555,13 @@ class _AnnouncementCard extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel',
-                style: TextStyle(color: Colors.grey)),
+                style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFCC2200),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.danger,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -675,8 +675,8 @@ class _PostDialogState extends State<_PostDialog> {
                   ? '${_isEdit ? 'Updated' : 'Posted'}. Sent to ${result.sent} members.'
                   : '${_isEdit ? 'Updated' : 'Posted'}. Notification failed: ${result.message}'),
               backgroundColor: result.success
-                  ? const Color(0xFF1A7A4A)
-                  : const Color(0xFF7A6A1A),
+                  ? AppColors.success
+                  : AppColors.warning,
             ),
           );
         }
@@ -693,23 +693,23 @@ class _PostDialogState extends State<_PostDialog> {
   InputDecoration _dec(String hint) => InputDecoration(
     hintText: hint,
     hintStyle:
-        TextStyle(fontSize: 13, color: Colors.grey[400]),
+        TextStyle(fontSize: 13, color: AppColors.textMuted),
     filled: true,
-    fillColor: const Color(0xFFF7F9FC),
+    fillColor: AppColors.background,
     contentPadding: const EdgeInsets.symmetric(
         horizontal: 14, vertical: 13),
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide:
-            const BorderSide(color: Color(0xFFD0DBEE))),
+            const BorderSide(color: AppColors.borderStrong)),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide:
-            const BorderSide(color: Color(0xFFD0DBEE))),
+            const BorderSide(color: AppColors.borderStrong)),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(
-            color: Color(0xFF2563EB), width: 1.5)),
+            color: AppColors.primary, width: 1.5)),
   );
 
   @override
@@ -777,10 +777,10 @@ class _PostDialogState extends State<_PostDialog> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F4FF),
+                  color: AppColors.primaryBg,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: const Color(0xFF2563EB)
+                      color: AppColors.primary
                           .withOpacity(0.2)),
                 ),
                 child: Row(
@@ -788,7 +788,7 @@ class _PostDialogState extends State<_PostDialog> {
                     const Icon(
                         Icons.notifications_outlined,
                         size: 18,
-                        color: Color(0xFF2563EB)),
+                        color: AppColors.primary),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -800,20 +800,20 @@ class _PostDialogState extends State<_PostDialog> {
                             style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1A4A9C)),
+                                color: AppColors.dataInk),
                           ),
                           Text(
                             '$_tokenCount members will be notified',
                             style: TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.grey[600]),
+                                color: AppColors.textSecondary),
                           ),
                         ],
                       ),
                     ),
                     Switch(
                       value: _sendPush,
-                      activeColor: const Color(0xFF1A4A9C),
+                      activeColor: AppColors.dataInk,
                       onChanged: (v) =>
                           setState(() => _sendPush = v),
                     ),
@@ -831,7 +831,7 @@ class _PostDialogState extends State<_PostDialog> {
                         Navigator.pop(context),
                     child: const Text('Cancel',
                         style: TextStyle(
-                            color: Colors.grey)),
+                            color: AppColors.textMuted)),
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton(
@@ -839,7 +839,7 @@ class _PostDialogState extends State<_PostDialog> {
                         _loading ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.textPrimary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.textInverted,
                       shape: RoundedRectangleBorder(
                           borderRadius:
                               BorderRadius.circular(8)),
@@ -854,7 +854,7 @@ class _PostDialogState extends State<_PostDialog> {
                             child:
                                 CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.white))
+                                    color: AppColors.textInverted))
                         : Text(_isEdit
                             ? 'Save'
                             : 'Post'),

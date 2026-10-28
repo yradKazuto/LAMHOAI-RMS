@@ -6,14 +6,18 @@ import '../../../core/utils/enum_utils.dart';
 
 // Stored in Firestore by `name` — never rename a value once records exist.
 // `dues` = per-lot MONTHLY dues, `membershipFee` = ANNUAL association fee,
-// `lotPayment` = payments made toward a lot (amortization / installments).
+// `monthlyMembership` = recurring monthly membership (different concept from
+// per-lot dues but same frequency — stored as its own type so annual reports
+// and duplicate-prevention logic keep correct grouping), `lotPayment` =
+// payments made toward a lot (amortization / installments).
 // Monthly dues and lot payments belong to ONE specific lot (lotId).
-enum PaymentType { dues, membershipFee, lotPayment, penalty, specialAssessment, other }
+enum PaymentType { dues, membershipFee, monthlyMembership, lotPayment, penalty, specialAssessment, other }
 
 const Map<PaymentType, String> _paymentTypeLabels = {
   PaymentType.dues: 'Monthly Dues',
   PaymentType.membershipFee: 'Annual Membership Fee',
-  PaymentType.lotPayment: 'Lot Amortization',
+  PaymentType.monthlyMembership: 'Monthly Membership Fee',
+  PaymentType.lotPayment: 'Monthly Lot Dues',
   PaymentType.penalty: 'Penalty',
   PaymentType.specialAssessment: 'Special Assessment',
   PaymentType.other: 'Other',
@@ -22,6 +26,7 @@ const Map<PaymentType, String> _paymentTypeLabels = {
 const Map<String, PaymentType> _paymentTypeLookup = {
   'dues': PaymentType.dues,
   'membershipfee': PaymentType.membershipFee,
+  'monthlymembership': PaymentType.monthlyMembership,
   'lotpayment': PaymentType.lotPayment,
   'penalty': PaymentType.penalty,
   'specialassessment': PaymentType.specialAssessment,

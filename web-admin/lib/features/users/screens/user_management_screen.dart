@@ -74,7 +74,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 13,
-                            color: Colors.grey[600])),
+                            color: AppColors.textSecondary)),
                   ],
                 );
 
@@ -130,11 +130,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     hintText: 'Search name or email...',
                     hintStyle: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[400]),
+                        color: AppColors.textMuted),
                     prefixIcon:
                         const Icon(Icons.search, size: 18),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.surface,
                     contentPadding:
                         const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
@@ -171,7 +171,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   icon: const Icon(Icons.clear, size: 15),
                   label: const Text('Clear all'),
                   style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey[600]),
+                      foregroundColor: AppColors.textSecondary),
                 );
 
                 // A 280px search box plus two dropdowns can't share
@@ -206,7 +206,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   margin:
                                       const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[300],
+                                    color: AppColors.borderStrong,
                                     borderRadius:
                                         BorderRadius.circular(2),
                                   ),
@@ -236,7 +236,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[600])),
+                                      color: AppColors.textSecondary)),
                               const SizedBox(height: 6),
                               SizedBox(
                                 width: double.infinity,
@@ -266,7 +266,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[600])),
+                                      color: AppColors.textSecondary)),
                               const SizedBox(height: 6),
                               SizedBox(
                                 width: double.infinity,
@@ -301,7 +301,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primaryHeader,
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: AppColors.textInverted,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
                                     shape: RoundedRectangleBorder(
@@ -328,7 +328,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 // full-size dropdowns plus Clear was a lot of buttons
                 // for a small screen.
                 final filterButton = Material(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
@@ -351,7 +351,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               size: 18,
                               color: activeFilterCount > 0
                                   ? AppColors.primary
-                                  : Colors.grey[600]),
+                                  : AppColors.textSecondary),
                           const SizedBox(width: 6),
                           Text(
                               activeFilterCount > 0
@@ -457,7 +457,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     return Center(
                         child: Text('Error: ${snap.error}',
                             style: const TextStyle(
-                                color: Colors.red)));
+                                color: AppColors.error)));
                   }
 
                   final staff = _filtered(snap.data ?? []);
@@ -471,13 +471,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.textInverted,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                               color: AppColors.border),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF1A4A9C)
+                              color: AppColors.dataInk
                                   .withOpacity(0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
@@ -491,7 +491,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 20, vertical: 14),
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFFF7F9FC),
+                                  color: AppColors.background,
                                   borderRadius: BorderRadius.vertical(
                                       top: Radius.circular(12)),
                                 ),
@@ -518,7 +518,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                           ? 'No staff accounts found.'
                                           : 'No staff match these filters.',
                                       style: const TextStyle(
-                                          color: Colors.grey)),
+                                          color: AppColors.textMuted)),
                                 ),
                               )
                             else
@@ -528,7 +528,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                   separatorBuilder: (_, __) =>
                                       const Divider(
                                           height: 1,
-                                          color: Color(0xFFEEF2F9)),
+                                          color: AppColors.background),
                                   itemBuilder: (context, i) =>
                                       _StaffRow(
                                     staff:    staff[i],
@@ -601,13 +601,13 @@ class _StaffRow extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF1E293B)),
+                    color: AppColors.textPrimary),
                 overflow: TextOverflow.ellipsis),
             if (isSelf)
               const Text('(You)',
                   style: TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF2563EB))),
+                      color: AppColors.primary)),
           ],
         ),
       ),
@@ -619,8 +619,8 @@ class _StaffRow extends StatelessWidget {
         horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
       color: staff.isActive
-          ? const Color(0xFFEAF7F0)
-          : const Color(0xFFF4F7FB),
+          ? AppColors.successBg
+          : AppColors.background,
       borderRadius: BorderRadius.circular(20),
     ),
     child: Text(
@@ -630,8 +630,8 @@ class _StaffRow extends StatelessWidget {
           fontSize: 11.5,
           fontWeight: FontWeight.w600,
           color: staff.isActive
-              ? const Color(0xFF1A7A4A)
-              : Colors.grey),
+              ? AppColors.success
+              : AppColors.textMuted),
     ),
   );
 
@@ -640,7 +640,7 @@ class _StaffRow extends StatelessWidget {
       : [
           IconButton(
             icon: const Icon(Icons.manage_accounts_outlined,
-                size: 18, color: Color(0xFF2563EB)),
+                size: 18, color: AppColors.primary),
             tooltip: 'Change role',
             onPressed: () =>
                 _showChangeRoleDialog(context, staff, fs),
@@ -652,8 +652,8 @@ class _StaffRow extends StatelessWidget {
                   : Icons.person_outlined,
               size: 18,
               color: staff.isActive
-                  ? const Color(0xFFCC2200)
-                  : const Color(0xFF1A7A4A),
+                  ? AppColors.danger
+                  : AppColors.success,
             ),
             tooltip:
                 staff.isActive ? 'Deactivate' : 'Activate',
@@ -676,7 +676,7 @@ class _StaffRow extends StatelessWidget {
           border: Border(
             left: BorderSide(
               color: staff.isActive
-                  ? const Color(0xFF1A7A4A)
+                  ? AppColors.success
                   : Colors.transparent,
               width: 3,
             ),
@@ -699,7 +699,7 @@ class _StaffRow extends StatelessWidget {
               padding: const EdgeInsets.only(left: 42),
               child: Text(staff.email,
                   style: TextStyle(
-                      fontSize: 13, color: Colors.grey[600]),
+                      fontSize: 13, color: AppColors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
             ),
@@ -729,7 +729,7 @@ class _StaffRow extends StatelessWidget {
           border: Border(
             left: BorderSide(
               color: staff.isActive
-                  ? const Color(0xFF1A7A4A)
+                  ? AppColors.success
                   : Colors.transparent,
               width: 3,
             ),
@@ -747,7 +747,7 @@ class _StaffRow extends StatelessWidget {
               flex: 3,
               child: Text(staff.email,
                   style: TextStyle(
-                      fontSize: 13, color: Colors.grey[600]),
+                      fontSize: 13, color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis),
             ),
             // Role
@@ -776,10 +776,10 @@ class _StaffRow extends StatelessWidget {
 
   Color _roleColor(UserRole role) {
     switch (role) {
-      case UserRole.admin:      return const Color(0xFF1E293B);
-      case UserRole.accountant: return const Color(0xFF1A7A4A);
-      case UserRole.officer:    return const Color(0xFF7A3A1A);
-      default:                  return Colors.grey;
+      case UserRole.admin:      return AppColors.textPrimary;
+      case UserRole.accountant: return AppColors.success;
+      case UserRole.officer:    return AppColors.warning;
+      default:                  return AppColors.textMuted;
     }
   }
 
@@ -795,7 +795,7 @@ class _StaffRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B))),
+                color: AppColors.textPrimary)),
         content: StatefulBuilder(
           builder: (context, setState) =>
               Column(
@@ -805,7 +805,7 @@ class _StaffRow extends StatelessWidget {
                       value: r,
                       groupValue: selected,
                       title: Text(r.label),
-                      activeColor: const Color(0xFF1E293B),
+                      activeColor: AppColors.textPrimary,
                       onChanged: (v) =>
                           setState(() => selected = v),
                     ))
@@ -816,7 +816,7 @@ class _StaffRow extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel',
-                style: TextStyle(color: Colors.grey)),
+                style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -826,8 +826,8 @@ class _StaffRow extends StatelessWidget {
               Navigator.pop(dialogCtx);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E293B),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.textPrimary,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -851,7 +851,7 @@ class _StaffRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B))),
+                color: AppColors.textPrimary)),
         content: Text(
             'Are you sure you want to $action this account?',
             style: const TextStyle(fontSize: 13.5)),
@@ -859,15 +859,15 @@ class _StaffRow extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancel',
-                style: TextStyle(color: Colors.grey)),
+                style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: s.isActive
-                  ? const Color(0xFFCC2200)
-                  : const Color(0xFF1A7A4A),
-              foregroundColor: Colors.white,
+                  ? AppColors.danger
+                  : AppColors.success,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -955,7 +955,7 @@ class _StaffDetailDialog extends StatelessWidget {
                   IconButton(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
-                    color: Colors.grey,
+                    color: AppColors.textMuted,
                   ),
                 ],
               ),
@@ -992,8 +992,8 @@ class _StaffDetailDialog extends StatelessWidget {
                     label: 'Status',
                     value: staff.isActive ? 'Active' : 'Inactive',
                     valueColor: staff.isActive
-                        ? const Color(0xFF1A7A4A)
-                        : const Color(0xFFCC2200),
+                        ? AppColors.success
+                        : AppColors.danger,
                   ),
                 ],
               ),
@@ -1008,7 +1008,7 @@ class _StaffDetailDialog extends StatelessWidget {
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryHeader,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.textInverted,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -1045,7 +1045,7 @@ class _DetailRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: Colors.grey[400]),
+        Icon(icon, size: 20, color: AppColors.textMuted),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -1055,7 +1055,7 @@ class _DetailRow extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[500],
+                  color: AppColors.textMuted,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1162,7 +1162,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Staff account created successfully.'),
-            backgroundColor: Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -1202,9 +1202,9 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
 
   InputDecoration _dec(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+    hintStyle: TextStyle(fontSize: 13, color: AppColors.textMuted),
     filled: true,
-    fillColor: const Color(0xFFF7F9FC),
+    fillColor: AppColors.background,
     contentPadding:
         const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     border: OutlineInputBorder(
@@ -1216,10 +1216,10 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(
-            color: Color(0xFF2563EB), width: 1.5)),
+            color: AppColors.primary, width: 1.5)),
     errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFCC2200))),
+        borderSide: const BorderSide(color: AppColors.danger)),
   );
 
   @override
@@ -1255,7 +1255,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                 Text(
                   'Creates a Firebase Auth account and staff profile.',
                   style: TextStyle(
-                      fontSize: 12.5, color: Colors.grey[500]),
+                      fontSize: 12.5, color: AppColors.textMuted),
                 ),
                 const SizedBox(height: 20),
 
@@ -1267,20 +1267,20 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                       color: AppColors.dangerBg,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(0xFFCC2200)
+                          color: AppColors.danger
                               .withOpacity(0.3)),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.error_outline,
                             size: 15,
-                            color: Color(0xFFCC2200)),
+                            color: AppColors.danger),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(_error!,
                               style: const TextStyle(
                                   fontSize: 12.5,
-                                  color: Color(0xFFCC2200))),
+                                  color: AppColors.danger)),
                         ),
                       ],
                     ),
@@ -1366,14 +1366,14 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                       onPressed: () => Navigator.pop(context),
                       child: const Text('Cancel',
                           style:
-                              TextStyle(color: Colors.grey)),
+                              TextStyle(color: AppColors.textMuted)),
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
                       onPressed: _loading ? null : _submit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryHeader,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.textInverted,
                         shape: RoundedRectangleBorder(
                             borderRadius:
                                 BorderRadius.circular(8)),
@@ -1386,7 +1386,7 @@ class _AddStaffDialogState extends State<_AddStaffDialog> {
                               height: 16,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white))
+                                  color: AppColors.textInverted))
                           : const Text('Create Account'),
                     ),
                   ],
@@ -1458,7 +1458,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                       width: 300,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(12),
                         border:
                             Border.all(color: AppColors.border),
@@ -1507,7 +1507,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primaryHeader,
-                                foregroundColor: Colors.white,
+                                foregroundColor: AppColors.textInverted,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
                                 shape: RoundedRectangleBorder(
@@ -1550,7 +1550,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
     return CompositedTransformTarget(
       link: _link,
       child: Material(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -1572,7 +1572,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                     size: 18,
                     color: widget.activeFilterCount > 0
                         ? AppColors.primary
-                        : Colors.grey[600]),
+                        : AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(
                     widget.activeFilterCount > 0
@@ -1585,7 +1585,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                             ? AppColors.primary
                             : AppColors.textPrimary)),
                 const SizedBox(width: 4),
-                Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
+                Icon(Icons.expand_more, size: 16, color: AppColors.textMuted),
               ],
             ),
           ),
@@ -1614,7 +1614,7 @@ class _DropdownFilter extends StatelessWidget {
     height: 42,
     padding: const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(8),
       border: Border.all(color: AppColors.borderStrong),
     ),
@@ -1622,7 +1622,7 @@ class _DropdownFilter extends StatelessWidget {
       child: DropdownButton<String?>(
         value: value,
         hint: Text(hint,
-            style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+            style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
         style: const TextStyle(
             fontSize: 13, color: AppColors.textPrimary),
         icon: const Icon(Icons.expand_more, size: 18),
@@ -1654,7 +1654,7 @@ class _Label extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF1E293B)));
+          color: AppColors.textPrimary));
 }
 
 class _RoleBadge extends StatelessWidget {
@@ -1663,10 +1663,10 @@ class _RoleBadge extends StatelessWidget {
 
   Color get _color {
     switch (role) {
-      case UserRole.admin:      return const Color(0xFF1E293B);
-      case UserRole.accountant: return const Color(0xFF1A7A4A);
-      case UserRole.officer:    return const Color(0xFF7A3A1A);
-      default:                  return Colors.grey;
+      case UserRole.admin:      return AppColors.textPrimary;
+      case UserRole.accountant: return AppColors.success;
+      case UserRole.officer:    return AppColors.warning;
+      default:                  return AppColors.textMuted;
     }
   }
 

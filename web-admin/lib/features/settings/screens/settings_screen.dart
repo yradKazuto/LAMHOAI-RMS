@@ -1,5 +1,12 @@
 import 'dart:async';
 // features/settings/screens/settings_screen.dart
+//
+// Annual Dues and the Monthly Dues Rate are LINKED (annual = 12 x monthly):
+//   • Changing Annual Dues and saving sets the monthly rate to annual / 12
+//     (RateHistoryService.setRatesFromAnnual).
+//   • Adding / removing a monthly rate updates the saved Annual Dues to
+//     12 x that rate (_syncAnnualFromRate), and RateHistoryService moves the
+//     open annual fees for the year by the difference.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,8 +31,13 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _svc = SettingsService();
+  final _svc     = SettingsService();
+  final _rateSvc = RateHistoryService();
   bool  _saving = false;
+
+  // Set by _persist() when saving the annual fee also changed the monthly
+  // rate, so the success message can say so.
+  String? _rateNote;
 
   final _name          = TextEditingController();
   final _address       = TextEditingController();
@@ -77,6 +89,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _fmt(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
+  double _round2(double v) => (v * 100).round() / 100;
+
   void _fillDuesFields(HoaSettingsModel settings) {
     _annual.text     = _fmt(settings.dues.annual);
     _assessment.text = _fmt(settings.dues.specialAssessment);
@@ -92,6 +106,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       setState(() => _fillDuesFields(settings));
     } catch (_) {}
+  }
+
+  /// A monthly rate was added/removed: the saved Annual Dues becomes
+  /// 12 x [monthly]. Only the annual amount is changed — the rest of the
+  /// saved settings are written back exactly as they were.
+  Future<void> _syncAnnualFromRate(double monthly) async {
+    final annual = _round2(monthly * 12);
+    try {
+      final auth   = context.read<AuthProvider>();
+      final before = await _svc.getSettings();
+
+      if (before.dues.annual != annual) {
+        final newDues = DuesConfig(
+          annual:            annual,
+          specialAssessment: before.dues.specialAssessment,
+          penalty:           before.dues.penalty,
+          penaltyGraceDays:  before.dues.penaltyGraceDays,
+        );
+        await _svc.saveSettings(HoaSettingsModel(
+          name:          before.name,
+          address:       before.address,
+          contactNumber: before.contactNumber,
+          email:         before.email,
+          president:     before.president,
+          dues:          newDues,
+        ));
+        try {
+          await _svc.recordDuesConfigChange(
+            newDues,
+            changedBy: auth.userModel?.displayName ?? auth.userModel?.uid ?? '',
+          );
+        } catch (_) {}
+      }
+      if (mounted) setState(() => _annual.text = _fmt(annual));
+    } catch (_) {
+      // The rate itself is already saved; the annual field just stays as is.
+    }
   }
 
   @override
@@ -140,6 +191,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final auth = context.read<AuthProvider>();
+      _rateNote = null;
 
       // Fetched fresh (not from the in-memory fields) so the comparison
       // reflects what's actually on the server right now, not just what
@@ -149,6 +201,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                            before.dues.specialAssessment != newDues.specialAssessment ||
                            before.dues.penalty           != newDues.penalty ||
                            before.dues.penaltyGraceDays  != newDues.penaltyGraceDays;
+
+      // Annual fee changed → monthly rate = annual / 12. Done BEFORE saving
+      // so that if the rate can't be set (e.g. a rate already starts next
+      // month), nothing is saved and the user sees why.
+      if (annual > 0 && before.dues.annual != annual) {
+        final monthly   = _round2(annual / 12);
+        final now       = DateTime.now();
+        final nextMonth = DateTime(now.year, now.month + 1, 1);
+        final scheduled = await _rateSvc.getRateForMonth(nextMonth);
+        // Already the rate from next month on → nothing to add.
+        if (scheduled != monthly) {
+          try {
+            await _rateSvc.setRatesFromAnnual(
+              annual: annual,
+              setBy:  auth.userModel?.uid ?? '',
+            );
+            _rateNote = 'Monthly rate set to ₱${monthly.toStringAsFixed(2)} '
+                '(annual ÷ 12).';
+          } catch (e) {
+            return e.toString().replaceFirst('Exception: ', '');
+          }
+        }
+      }
 
       await _svc.saveSettings(HoaSettingsModel(
         name:          _name.text.trim(),
@@ -195,9 +270,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _saving = false);
     ScaffoldMessenger.of(context).showSnackBar(
       error == null
-          ? const SnackBar(
-              content: Text('Settings saved successfully.'),
-              backgroundColor: Color(0xFF1A7A4A),
+          ? SnackBar(
+              content: Text(_rateNote == null
+                  ? 'Settings saved successfully.'
+                  : 'Settings saved. $_rateNote'),
+              backgroundColor: AppColors.success,
             )
           : SnackBar(content: Text(error)),
     );
@@ -266,6 +343,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     assessment: _assessment,
                     penalty:    _penalty,
                     graceDays:  _graceDays,
+                    onMonthlyRateSet: _syncAnnualFromRate,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -282,15 +360,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFDECEA),
+                            color: AppColors.dangerBg,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: const Color(0xFFF2B8B0)),
+                                color: AppColors.dangerBg),
                           ),
                           child: Text(dialogError!,
                               style: const TextStyle(
                                   fontSize: 12.5,
-                                  color: Color(0xFFCC2200))),
+                                  color: AppColors.danger)),
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -305,7 +383,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     _reloadDues();
                                   },
                             child: const Text('Cancel',
-                                style: TextStyle(color: Colors.grey)),
+                                style: TextStyle(color: AppColors.textMuted)),
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
@@ -328,15 +406,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     Navigator.pop(dialogCtx);
                                     if (!mounted) return;
                                     ScaffoldMessenger.of(context)
-                                        .showSnackBar(const SnackBar(
-                                      content:
-                                          Text('Dues settings saved.'),
-                                      backgroundColor: Color(0xFF1A7A4A),
+                                        .showSnackBar(SnackBar(
+                                      content: Text(_rateNote == null
+                                          ? 'Dues settings saved.'
+                                          : 'Dues settings saved. $_rateNote'),
+                                      backgroundColor: AppColors.success,
                                     ));
                                   },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.textPrimary,
-                              foregroundColor: Colors.white,
+                              foregroundColor: AppColors.textInverted,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                             ),
@@ -346,7 +425,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     height: 14,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        color: Colors.white))
+                                        color: AppColors.textInverted))
                                 : const Text('Save'),
                           ),
                         ],
@@ -405,7 +484,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                   fontSize: 13,
-                                  color: Colors.grey[600])),
+                                  color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
@@ -416,7 +495,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: _saving ? null : _save,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.textPrimary,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.textInverted,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -428,7 +507,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           width: 16, height: 16,
                           child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white))
+                              color: AppColors.textInverted))
                       : const Text('Save Changes'),
                 );
 
@@ -502,10 +581,10 @@ class _ProfileTab extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.textInverted,
           borderRadius: BorderRadius.circular(12),
           border:
-              Border.all(color: const Color(0xFFE0E8F4)),
+              Border.all(color: AppColors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -569,8 +648,8 @@ class _ProfileTab extends StatelessWidget {
               icon: const Icon(Icons.payments_outlined, size: 16),
               label: const Text('Dues Configuration'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF2563EB),
-                side: const BorderSide(color: Color(0xFF2563EB)),
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 10),
                 shape: RoundedRectangleBorder(
@@ -587,6 +666,10 @@ class _ProfileTab extends StatelessWidget {
 class _DuesTab extends StatelessWidget {
   final TextEditingController annual, assessment, penalty, graceDays;
 
+  /// Called after a monthly rate is added/removed with the rate now in
+  /// effect, so the saved Annual Dues can follow (12 x monthly).
+  final Future<void> Function(double monthly) onMonthlyRateSet;
+
   
 
   const _DuesTab({
@@ -594,6 +677,7 @@ class _DuesTab extends StatelessWidget {
     required this.assessment,
     required this.penalty,
     required this.graceDays,
+    required this.onMonthlyRateSet,
   });
 
   @override
@@ -603,16 +687,17 @@ class _DuesTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Set the default amounts for each payment type. Monthly rates are '
-            'saved as soon as you add them; the amounts below are saved '
-            'with the Save button.',
+            'Set the default amounts for each payment type. Annual Dues and '
+            'the Monthly Rate are linked (annual = 12 × monthly): changing '
+            'one updates the other. Monthly rates are saved as soon as you '
+            'add them; the amounts below are saved with the Save button.',
             style: TextStyle(
-                fontSize: 13, color: Colors.grey[500]),
+                fontSize: 13, color: AppColors.textMuted),
           ),
           const SizedBox(height: 20),
 
           // ── Monthly rate now uses history instead of a single field ──────
-          const _MonthlyRateSection(),
+          _MonthlyRateSection(onRateSet: onMonthlyRateSet),
           const SizedBox(height: 16),
 
           LayoutBuilder(
@@ -624,15 +709,15 @@ class _DuesTab extends StatelessWidget {
                 hint:        '2000',
                 ctrl:        annual,
                 icon:        Icons.calendar_month_outlined,
-                color:       const Color(0xFF1A7A4A),
-                description: 'Full year payment',
+                color:       AppColors.success,
+                description: 'Full year payment (12 × monthly rate)',
               );
               final assessmentField = _DuesField(
                 label:       'Special Assessment',
                 hint:        '500',
                 ctrl:        assessment,
                 icon:        Icons.assignment_outlined,
-                color:       const Color(0xFF7A3A1A),
+                color:       AppColors.warning,
                 description: 'One-time special charge',
               );
               final penaltyField = _DuesField(
@@ -640,7 +725,7 @@ class _DuesTab extends StatelessWidget {
                 hint:        '50',
                 ctrl:        penalty,
                 icon:        Icons.warning_amber_outlined,
-                color:       const Color(0xFFCC2200),
+                color:       AppColors.danger,
                 description: 'Flat late payment penalty',
               );
               final graceField = _DuesField(
@@ -648,7 +733,7 @@ class _DuesTab extends StatelessWidget {
                 hint:        '5',
                 ctrl:        graceDays,
                 icon:        Icons.hourglass_empty,
-                color:       const Color(0xFF7A6A1A),
+                color:       AppColors.warning,
                 description:
                     'Days after due date before penalty applies',
                 isWholeNumber: true,
@@ -685,17 +770,17 @@ class _DuesTab extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F4FF),
+              color: AppColors.primaryBg,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                  color: const Color(0xFF2563EB)
+                  color: AppColors.primary
                       .withOpacity(0.2)),
             ),
             child: const Row(
               children: [
                 Icon(Icons.info_outline,
                     size: 16,
-                    color: Color(0xFF2563EB)),
+                    color: AppColors.primary),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -703,7 +788,7 @@ class _DuesTab extends StatelessWidget {
                     'You can still enter a different amount per transaction.',
                     style: TextStyle(
                         fontSize: 12.5,
-                        color: Color(0xFF1A4A9C)),
+                        color: AppColors.dataInk),
                   ),
                 ),
               ],
@@ -735,7 +820,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
   Widget _historyTable(List<DuesConfigHistoryModel> history) {
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE0E8F4)),
+        border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -743,7 +828,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
-              color: Color(0xFFF7F9FC),
+              color: AppColors.background,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(8),
                 topRight: Radius.circular(8),
@@ -767,7 +852,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
                 border: i == history.length - 1
                     ? null
                     : const Border(
-                        bottom: BorderSide(color: Color(0xFFEEF2F9))),
+                        bottom: BorderSide(color: AppColors.background)),
               ),
               child: Row(
                 children: [
@@ -786,7 +871,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 11, color: Colors.grey[500])),
+                                  fontSize: 11, color: AppColors.textMuted)),
                       ],
                     ),
                   ),
@@ -822,7 +907,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
             margin: EdgeInsets.only(bottom: i == history.length - 1 ? 0 : 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFE0E8F4)),
+              border: Border.all(color: AppColors.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -843,7 +928,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                                fontSize: 11, color: Colors.grey[500])),
+                                fontSize: 11, color: AppColors.textMuted)),
                       ),
                   ],
                 ),
@@ -887,7 +972,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
         Text(
           'Every change to the amounts above, so you can see what was in '
           'effect for a given month or year.',
-          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
         ),
         const SizedBox(height: 10),
         StreamBuilder<List<DuesConfigHistoryModel>>(
@@ -896,7 +981,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
             if (snap.hasError) {
               return Text('Could not load history: ${snap.error}',
                   style: const TextStyle(
-                      fontSize: 12.5, color: Color(0xFFCC2200)));
+                      fontSize: 12.5, color: AppColors.danger));
             }
             if (!snap.hasData) {
               return const Padding(
@@ -912,7 +997,7 @@ class _DuesConfigHistoryTable extends StatelessWidget {
               return Text(
                   'No changes recorded yet — this table fills in the next '
                   'time you change one of the amounts above.',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey[500]));
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted));
             }
 
             // Dialog can be as narrow as ~85% of a phone's width — five
@@ -943,12 +1028,12 @@ class _CardStat extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(label,
-              style: TextStyle(fontSize: 10.5, color: Colors.grey[500])),
+              style: TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
           Text(value,
               style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E293B))),
+                  color: AppColors.textPrimary)),
         ],
       );
 }
@@ -959,7 +1044,7 @@ class _HCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(text,
       style: TextStyle(
-          fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[600]));
+          fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary));
 }
 
 class _HVal extends StatelessWidget {
@@ -969,12 +1054,16 @@ class _HVal extends StatelessWidget {
   Widget build(BuildContext context) => Text(text,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(fontSize: 12.5, color: Color(0xFF1E293B)));
+      style: const TextStyle(fontSize: 12.5, color: AppColors.textPrimary));
 }
 
 // ── Monthly rate history section ────────────────────────────────────────────
 class _MonthlyRateSection extends StatefulWidget {
-  const _MonthlyRateSection();
+  /// Called after a rate is added/removed with the rate now in effect, so the
+  /// saved Annual Dues can follow (12 x monthly).
+  final Future<void> Function(double monthly) onRateSet;
+
+  const _MonthlyRateSection({required this.onRateSet});
 
   @override
   State<_MonthlyRateSection> createState() => _MonthlyRateSectionState();
@@ -1058,6 +1147,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
     }
 
     final effective = _selectedMonth(_monthOptions());
+    final hadRates  = _hasRates;
 
     setState(() {
       _adding = true;
@@ -1070,9 +1160,13 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
         effectiveMonth: effective,
         setBy:          auth.userModel?.uid ?? '',
       );
+      // Annual Dues follows the new rate (12 x monthly).
+      await widget.onRateSet(amount);
       _newAmount.clear();
       _setNotice('New rate of ₱${amount.toStringAsFixed(2)} '
-          'set to start ${_monthLabel(effective)}.');
+          'set to start ${_monthLabel(effective)}. Annual Dues is now '
+          '₱${(amount * 12).toStringAsFixed(2)} (12 × monthly)'
+          '${hadRates ? ', and open annual fees for ${effective.year} were adjusted.' : '.'}');
     } catch (e) {
       _setNotice(
           e.toString().replaceFirst('Exception: ', ''), error: true);
@@ -1104,6 +1198,13 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
     if (ok != true) return;
     try {
       await _rateSvc.deleteScheduledRate(r.id);
+
+      // Annual Dues goes back to 12 x the rate that now applies.
+      final now = DateTime.now();
+      final remaining = await _rateSvc
+          .getRateForMonth(DateTime(now.year, now.month + 1, 1));
+      if (remaining > 0) await widget.onRateSet(remaining);
+
       _setNotice('Scheduled rate removed.');
     } catch (e) {
       _setNotice(
@@ -1119,26 +1220,27 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A4A9C).withOpacity(0.04),
+        color: AppColors.dataInk.withOpacity(0.04),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF1A4A9C).withOpacity(0.15)),
+        border: Border.all(color: AppColors.dataInk.withOpacity(0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.calendar_today_outlined, size: 18, color: Color(0xFF1A4A9C)),
+              Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.dataInk),
               SizedBox(width: 10),
               Text('Monthly Dues Rate',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A4A9C))),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.dataInk)),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             'Per lot per month. New rates only take effect next month '
-            'onward — past and current months keep the rate they were billed at.',
-            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            'onward — past and current months keep the rate they were billed at. '
+            'Annual Dues is 12 × the monthly rate.',
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
           ),
           const SizedBox(height: 14),
 
@@ -1148,7 +1250,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
               if (snap.hasError) {
                 return Text('Could not load rates: ${snap.error}',
                     style: const TextStyle(
-                        fontSize: 12.5, color: Color(0xFFCC2200)));
+                        fontSize: 12.5, color: AppColors.danger));
               }
               if (!snap.hasData) {
                 return const Padding(
@@ -1162,7 +1264,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
               final rates = snap.data!;
               if (rates.isEmpty) {
                 return Text('No rate set yet — add one below.',
-                    style: TextStyle(fontSize: 12.5, color: Colors.grey[500]));
+                    style: TextStyle(fontSize: 12.5, color: AppColors.textMuted));
               }
 
               final now           = DateTime.now();
@@ -1177,22 +1279,22 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF1A7A4A).withOpacity(0.3)),
+                        border: Border.all(color: AppColors.success.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
                           Text('₱${current.amount.toStringAsFixed(2)}',
                               style: const TextStyle(
                                   fontSize: 18, fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1A7A4A))),
+                                  color: AppColors.success)),
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text('current — since ${_monthLabel(current.effectiveStart)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                           ),
                         ],
                       ),
@@ -1202,7 +1304,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
                     Container(
                       padding: const EdgeInsets.only(left: 14, right: 4, top: 4, bottom: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF8E0),
+                        color: AppColors.warningBg,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -1210,13 +1312,13 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
                           Text('₱${r.amount.toStringAsFixed(2)}',
                               style: const TextStyle(
                                   fontSize: 14, fontWeight: FontWeight.w700,
-                                  color: Color(0xFF7A6A1A))),
+                                  color: AppColors.warning)),
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text('scheduled — starts ${_monthLabel(r.effectiveStart)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                           ),
                           const Spacer(),
                           IconButton(
@@ -1234,14 +1336,14 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
                     Text('History',
                         style: TextStyle(
                             fontSize: 11, fontWeight: FontWeight.w600,
-                            color: Colors.grey[500])),
+                            color: AppColors.textMuted)),
                     const SizedBox(height: 4),
                     for (final r in currentOrPast.skip(1))
                       Padding(
                         padding: const EdgeInsets.only(bottom: 3),
                         child: Text(
                           '₱${r.amount.toStringAsFixed(2)} — since ${_monthLabel(r.effectiveStart)}',
-                          style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+                          style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
                         ),
                       ),
                   ],
@@ -1263,7 +1365,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
                     labelText: 'New rate (₱)',
                     isDense: true,
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.surface,
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -1280,7 +1382,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
                     labelText: 'Starts',
                     isDense: true,
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.surface,
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -1299,7 +1401,7 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
           if (!_hasRates) ...[
             const SizedBox(height: 6),
             Text('No rate exists yet, so this first one can start this month.',
-                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
           ],
           const SizedBox(height: 10),
           SizedBox(
@@ -1308,14 +1410,14 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
               onPressed: _adding ? null : _submitNewRate,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.textPrimary,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textInverted,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               child: _adding
                   ? const SizedBox(
                       width: 14, height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textInverted))
                   : const Text('Add rate'),
             ),
           ),
@@ -1325,8 +1427,8 @@ class _MonthlyRateSectionState extends State<_MonthlyRateSection> {
                 style: TextStyle(
                     fontSize: 12.5,
                     color: _noticeIsError
-                        ? const Color(0xFFCC2200)
-                        : const Color(0xFF1A7A4A))),
+                        ? AppColors.danger
+                        : AppColors.success)),
           ],
         ],
       ),
@@ -1363,27 +1465,27 @@ class _SettingsField extends StatelessWidget {
         maxLines:   maxLines,
         style: const TextStyle(
             fontSize: 13.5,
-            color: Color(0xFF1A2B4A)),
+            color: AppColors.textPrimary),
         decoration: InputDecoration(
           hintText:  hint,
           hintStyle: TextStyle(
-              fontSize: 13, color: Colors.grey[400]),
+              fontSize: 13, color: AppColors.textMuted),
           filled:    true,
-          fillColor: const Color(0xFFF7F9FC),
+          fillColor: AppColors.background,
           contentPadding: const EdgeInsets.symmetric(
               horizontal: 14, vertical: 13),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFFD0DBEE))),
+                  color: AppColors.borderStrong)),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFFD0DBEE))),
+                  color: AppColors.borderStrong)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFF2563EB), width: 1.5)),
+                  color: AppColors.primary, width: 1.5)),
         ),
       ),
     ],
@@ -1445,7 +1547,7 @@ class _DuesField extends StatelessWidget {
                   Text(description,
                       style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey[500])),
+                          color: AppColors.textMuted)),
                 ],
               ),
             ),
@@ -1472,7 +1574,7 @@ class _DuesField extends StatelessWidget {
                 fontSize: 18,
                 color: color.withOpacity(0.3)),
             filled:    true,
-            fillColor: Colors.white,
+            fillColor: AppColors.surface,
             contentPadding:
                 const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 12),

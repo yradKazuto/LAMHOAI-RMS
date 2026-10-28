@@ -141,6 +141,8 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       case PaymentType.membershipFee:
         return 'Yearly association membership fee. Normally created in bulk '
             'from Membership Dues → Generate.';
+      case PaymentType.monthlyMembership:
+        return 'Monthly membership fee.';
       case PaymentType.lotPayment:
         return 'Payment toward one lot (amortization / installment). '
             'Separate from monthly and annual dues.';
@@ -167,6 +169,9 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
             .getRateForMonth(DateTime(forDue.year, forDue.month, 1));
       } else if (forType == PaymentType.membershipFee) {
         suggested = (await _settings.getSettings()).dues.annual;
+      } else if (forType == PaymentType.monthlyMembership) {
+        suggested = await _rateSvc
+            .getRateForMonth(DateTime(forDue.year, forDue.month, 1));
       }
     } catch (_) {
       return; // suggestion is a convenience — never block the form on it
@@ -187,7 +192,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   /// record for the same period would make totals/rows ambiguous, so block it.
   /// (Lot payments are installments — multiple per month are legitimate.)
   Future<String?> _duplicateMessage() async {
-    if (_type != PaymentType.dues && _type != PaymentType.membershipFee) {
+    if (_type != PaymentType.dues && _type != PaymentType.membershipFee && _type != PaymentType.monthlyMembership) {
       return null;
     }
     // Two equality filters only — no composite index needed; the period
@@ -206,7 +211,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
         return '$_memberName already has a ${_dueDate.year} membership '
             'fee record (${p.displayStatus.label}).';
       }
-      if (_type == PaymentType.dues && sameYear && sameMonth) {
+      if (_type == PaymentType.monthlyMembership && sameYear && sameMonth) {
         final lot = _selectedLot;
         if (lot != null) {
           // A record with no lotId predates per-lot billing and counts as
@@ -353,8 +358,8 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                 ? 'Payment saved, but the audit log entry could not be written.'
                 : 'Payment recorded successfully.'),
             backgroundColor: auditFailed
-                ? const Color(0xFF7A6A1A)
-                : const Color(0xFF1A7A4A),
+                ? AppColors.warning
+                : AppColors.success,
           ),
         );
       }
@@ -370,7 +375,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       clipBehavior: Clip.antiAlias,
@@ -395,7 +400,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                         ),
                         IconButton(
                           tooltip: 'Close',
-                          icon: const Icon(Icons.close, color: Colors.grey),
+                          icon: const Icon(Icons.close, color: AppColors.textMuted),
                           onPressed:
                               _loading ? null : () => Navigator.pop(context),
                         ),
@@ -461,7 +466,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                       const SizedBox(height: 8),
                       Text(_typeHint,
                           style: TextStyle(
-                              fontSize: 12, color: Colors.grey[600])),
+                              fontSize: 12, color: AppColors.textSecondary)),
                     ],
                     const SizedBox(height: 20),
 
@@ -472,22 +477,22 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                       if (_lotsLoading)
                         Text('Loading lots...',
                             style: TextStyle(
-                                fontSize: 12.5, color: Colors.grey[600]))
+                                fontSize: 12.5, color: AppColors.textSecondary))
                       else if (_memberLots.isEmpty)
                         Text(
                             'This member has no lot assigned yet. Assign one '
                             'from Location Mapping before recording '
                             '${_type.label}.',
                             style: const TextStyle(
-                                fontSize: 12.5, color: Color(0xFFCC2200)))
+                                fontSize: 12.5, color: AppColors.danger))
                       else
                         DropdownButtonFormField<String>(
                           value: _selectedLot?.id,
                           hint: Text('Select a lot',
                               style: TextStyle(
-                                  fontSize: 13, color: Colors.grey[400])),
+                                  fontSize: 13, color: AppColors.textMuted)),
                           style: const TextStyle(
-                              fontSize: 13.5, color: Color(0xFF1A2B4A)),
+                              fontSize: 13.5, color: AppColors.textPrimary),
                           validator: (v) =>
                               v == null ? 'Please select a lot' : null,
                           decoration: _fieldDec(''),
@@ -568,15 +573,15 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFDECEA),
+                          color: AppColors.dangerBg,
                           borderRadius: BorderRadius.circular(8),
                           border:
-                              Border.all(color: const Color(0xFFF2B8B0)),
+                              Border.all(color: AppColors.dangerBg),
                         ),
                         child: Text(_formError!,
                             style: const TextStyle(
                                 fontSize: 12.5,
-                                color: Color(0xFFCC2200))),
+                                color: AppColors.danger)),
                       ),
                       const SizedBox(height: 16),
                     ],
@@ -588,14 +593,14 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                         TextButton(
                           onPressed: () => Navigator.pop(context),
                           child: const Text('Cancel',
-                              style: TextStyle(color: Colors.grey)),
+                              style: TextStyle(color: AppColors.textMuted)),
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton(
                           onPressed: _loading ? null : _submit,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.textPrimary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColors.textInverted,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
                             padding: const EdgeInsets.symmetric(
@@ -607,7 +612,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                                   height: 16,
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white))
+                                      color: AppColors.textInverted))
                               : const Text('Save Payment',
                                   style: TextStyle(
                                       fontWeight: FontWeight.w600)),
@@ -624,24 +629,24 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
 
   InputDecoration _fieldDec(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+    hintStyle: TextStyle(fontSize: 13, color: AppColors.textMuted),
     filled: true,
-    fillColor: const Color(0xFFF7F9FC),
+    fillColor: AppColors.background,
     contentPadding:
         const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFD0DBEE))),
+        borderSide: const BorderSide(color: AppColors.borderStrong)),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(
-            color: Color(0xFF2E6BE6), width: 1.5)),
+            color: AppColors.primaryHover, width: 1.5)),
     errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFCC2200))),
+        borderSide: const BorderSide(color: AppColors.danger)),
   );
 }
 
@@ -654,7 +659,7 @@ class _SectionLabel extends StatelessWidget {
       style: const TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF0D2A5C)));
+          color: AppColors.primaryHeader));
 }
 
 // ── Readonly chip ─────────────────────────────────────────────────────────────
@@ -666,13 +671,13 @@ class _ReadonlyChip extends StatelessWidget {
     padding:
         const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
-      color: const Color(0xFFF0F4FB),
+      color: AppColors.background,
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0xFFD0DBEE)),
+      border: Border.all(color: AppColors.borderStrong),
     ),
     child: Text(label,
         style: const TextStyle(
-            fontSize: 13.5, color: Color(0xFF1A2B4A))),
+            fontSize: 13.5, color: AppColors.textPrimary)),
   );
 }
 
@@ -702,28 +707,28 @@ class _MemberSelector extends StatelessWidget {
           value: selectedId,
           hint: Text('Select a member',
               style:
-                  TextStyle(fontSize: 13, color: Colors.grey[400])),
+                  TextStyle(fontSize: 13, color: AppColors.textMuted)),
           style: const TextStyle(
-              fontSize: 13.5, color: Color(0xFF1A2B4A)),
+              fontSize: 13.5, color: AppColors.textPrimary),
           validator: (v) =>
               v == null ? 'Please select a member' : null,
           decoration: InputDecoration(
             filled: true,
-            fillColor: const Color(0xFFF7F9FC),
+            fillColor: AppColors.background,
             contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14, vertical: 13),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide:
-                    const BorderSide(color: Color(0xFFD0DBEE))),
+                    const BorderSide(color: AppColors.borderStrong)),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide:
-                    const BorderSide(color: Color(0xFFD0DBEE))),
+                    const BorderSide(color: AppColors.borderStrong)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(
-                    color: Color(0xFF2E6BE6), width: 1.5)),
+                    color: AppColors.primaryHover, width: 1.5)),
           ),
           items: members
               .map((m) => DropdownMenuItem<String>(
@@ -767,29 +772,29 @@ class _FormDropdown<T> extends StatelessWidget {
           style: const TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF0D2A5C))),
+              color: AppColors.primaryHeader)),
       const SizedBox(height: 6),
       DropdownButtonFormField<T>(
         value: value,
         style: const TextStyle(
-            fontSize: 13.5, color: Color(0xFF1A2B4A)),
+            fontSize: 13.5, color: AppColors.textPrimary),
         decoration: InputDecoration(
           filled: true,
-          fillColor: const Color(0xFFF7F9FC),
+          fillColor: AppColors.background,
           contentPadding: const EdgeInsets.symmetric(
               horizontal: 14, vertical: 13),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide:
-                  const BorderSide(color: Color(0xFFD0DBEE))),
+                  const BorderSide(color: AppColors.borderStrong)),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide:
-                  const BorderSide(color: Color(0xFFD0DBEE))),
+                  const BorderSide(color: AppColors.borderStrong)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(
-                  color: Color(0xFF2E6BE6), width: 1.5)),
+                  color: AppColors.primaryHover, width: 1.5)),
         ),
         items: items
             .map((i) => DropdownMenuItem<T>(
@@ -831,7 +836,7 @@ class _DatePicker extends StatelessWidget {
           style: const TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF0D2A5C))),
+              color: AppColors.primaryHeader)),
       const SizedBox(height: 6),
       InkWell(
         onTap: enabled ? onTap : null,
@@ -842,15 +847,15 @@ class _DatePicker extends StatelessWidget {
           padding: const EdgeInsets.symmetric(
               horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
+            color: AppColors.background,
             borderRadius: BorderRadius.circular(8),
             border:
-                Border.all(color: const Color(0xFFD0DBEE)),
+                Border.all(color: AppColors.borderStrong),
           ),
           child: Row(
             children: [
               Icon(Icons.calendar_today_outlined,
-                  size: 16, color: Colors.grey[500]),
+                  size: 16, color: AppColors.textMuted),
               const SizedBox(width: 10),
               Text(
                 date != null
@@ -859,8 +864,8 @@ class _DatePicker extends StatelessWidget {
                 style: TextStyle(
                     fontSize: 13.5,
                     color: date != null
-                        ? const Color(0xFF1A2B4A)
-                        : Colors.grey[400]),
+                        ? AppColors.textPrimary
+                        : AppColors.textMuted),
               ),
             ],
           ),

@@ -6,8 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/models/payment_model.dart';
+import '../../core/models/ledger_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/theme/design_tokens.dart';
+import '../../core/utils/status_colors.dart';
+import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_header.dart';
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -19,104 +24,49 @@ class PaymentsScreen extends StatefulWidget {
 class _PaymentsScreenState extends State<PaymentsScreen> {
   String? _filter;
 
-  static const _blue700   = Color(0xFF1A3D6B);
-  static const _blue600   = Color(0xFF1E52A0);
-  static const _blue200   = Color(0xFFBAD9FD);
-  static const _gray50    = Color(0xFFF8FAFC);
-  static const _gray100   = Color(0xFFEEF2F7);
-  static const _gray200   = Color(0xFFD4DCE8);
-  static const _gray400   = Color(0xFF8A9BB0);
-  static const _gray600   = Color(0xFF4A5A6E);
-  static const _gray800   = Color(0xFF1E2A3A);
-  static const _success   = Color(0xFF16A34A);
-  static const _successBg = Color(0xFFDCFCE7);
-  static const _warning   = Color(0xFFB45309);
-  static const _warningBg = Color(0xFFFEF9C3);
-  static const _danger    = Color(0xFFDC2626);
-  static const _dangerBg  = Color(0xFFFEE2E2);
-
   @override
   Widget build(BuildContext context) {
     final uid  = context.watch<AuthProvider>().user?.uid ?? '';
     final name = context.watch<AuthProvider>().user?.displayName ?? '';
 
     return Scaffold(
-      backgroundColor: _gray50,
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
-          _buildHeader(context, name),
-          Expanded(
-            child: StreamBuilder<List<PaymentModel>>(
-              stream: FirestoreService().paymentsStream(uid),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.hasError) {
-                  return _buildError(snap.error.toString());
-                }
-                return _buildBody(snap.data ?? []);
-              },
-            ),
+          AppHeader(
+            title: 'Payment Records',
+            subtitle: name,
+            onBack: () =>
+                context.canPop() ? context.pop() : context.go('/home'),
+          ),
+          StreamBuilder<LedgerModel?>(
+            stream: FirestoreService().ledgerStream(uid),
+            builder: (context, ledgerSnap) {
+              final balance = ledgerSnap.data?.currentBalance;
+              return Expanded(
+                child: StreamBuilder<List<PaymentModel>>(
+                  stream: FirestoreService().paymentsStream(uid),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snap.hasError) {
+                      return _buildError(snap.error.toString());
+                    }
+                    return _buildBody(snap.data ?? [], balance);
+                  },
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  // ── Header ────────────────────────────────────────────────────────────────
-
-  Widget _buildHeader(BuildContext context, String name) {
-    return Container(
-      width: double.infinity,
-      color: _blue700,
-      // Use SafeArea only on top so the color fills edge to edge
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Back button — left aligned
-              GestureDetector(
-                onTap: () => context.canPop() ? context.pop() : context.go('/home'),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
-                    SizedBox(width: 4),
-                    Text('Back', style: TextStyle(fontSize: 10, color: _blue200)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Title — left aligned
-              const Text(
-                'Payment Records',
-                style: TextStyle(
-                  fontFamily: 'Georgia',
-                  fontSize: 20,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              // Member name — left aligned
-              Text(
-                name,
-                style: const TextStyle(fontSize: 11, color: _blue200),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── Body ──────────────────────────────────────────────────────────────────
 
-  Widget _buildBody(List<PaymentModel> all) {
+  Widget _buildBody(List<PaymentModel> all, double? balance) {
     double paid = 0, unpaid = 0, overdue = 0;
     for (final p in all) {
       // Use effectiveStatus (not the raw Firestore `status`) so an unpaid
@@ -146,6 +96,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return SingleChildScrollView(
       child: Column(
         children: [
+          if (balance != null) _buildBalanceCard(balance),
           _buildSummary(paid, unpaid, overdue),
           _buildFilterRow(),
           filtered.isEmpty ? _buildEmpty() : _buildList(filtered),
@@ -155,32 +106,41 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
+  Widget _buildBalanceCard(double balance) {
+    final fmt = NumberFormat('#,##0.00', 'en_PH');
+    return AppCard(
+      margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Outstanding Balance', style: AppTypography.bodyMedium),
+          Text(
+            '₱${fmt.format(balance)}',
+            style: AppTypography.money.copyWith(
+              fontSize: 18,
+              color: balance > 0 ? AppColors.danger : AppColors.success,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Summary ───────────────────────────────────────────────────────────────
 
   Widget _buildSummary(double paid, double unpaid, double overdue) {
     final fmt = NumberFormat('#,##0.00', 'en_PH');
-    return Container(
+    return AppCard(
       margin: const EdgeInsets.all(14),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _gray100),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1E2A3A).withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
       child: Row(
         children: [
-          _sumItem('₱${fmt.format(paid)}',    'PAID',    _success),
+          _sumItem('₱${fmt.format(paid)}',    'Paid',    AppColors.success),
           _divider(),
-          _sumItem('₱${fmt.format(unpaid)}',  'UNPAID',  _warning),
+          _sumItem('₱${fmt.format(unpaid)}',  'Unpaid',  AppColors.warning),
           _divider(),
-          _sumItem('₱${fmt.format(overdue)}', 'OVERDUE', _danger),
+          _sumItem('₱${fmt.format(overdue)}', 'Overdue', AppColors.danger),
         ],
       ),
     );
@@ -194,23 +154,17 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
+              style: AppTypography.money.copyWith(color: color),
             ),
           ),
           const SizedBox(height: 3),
-          Text(label,
-              style: const TextStyle(fontSize: 9, color: _gray400, letterSpacing: 0.5)),
+          Text(label, style: AppTypography.caption),
         ],
       ),
     );
   }
 
-  Widget _divider() => Container(width: 1, height: 32, color: _gray100);
+  Widget _divider() => Container(width: 1, height: 32, color: AppColors.borderSubtle);
 
   // ── Filters ───────────────────────────────────────────────────────────────
 
@@ -229,16 +183,19 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               margin: const EdgeInsets.only(right: 6, bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
-                color: active ? _blue600 : Colors.white,
+                color: active ? AppColors.primary : AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: active ? _blue600 : _gray200, width: 1.5),
+                border: Border.all(
+                  color: active ? AppColors.primary : AppColors.border,
+                  width: 1.5,
+                ),
               ),
               child: Text(
                 e.key,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: active ? Colors.white : _gray600,
+                  color: active ? AppColors.textInverted : AppColors.textSecondary,
                 ),
               ),
             ),
@@ -254,9 +211,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _gray100),
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardBorderRadius,
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         children: payments.asMap().entries.map((e) {
@@ -270,18 +227,20 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final fmt      = NumberFormat('#,##0.00', 'en_PH');
     final dateFmt  = DateFormat('MMM d, yyyy');
     final statusS  = p.statusLabel.toLowerCase();
+    final status   = StatusColors.forLabel(statusS);
 
-    Color  iconBg, amountColor;
-    String emoji, dateLabel;
+    final IconData icon;
+    final String dateLabel;
 
     if (statusS == 'paid') {
-      iconBg = _successBg; emoji = '💳'; amountColor = _success;
-      dateLabel = p.paidDate != null ? 'Paid on ${dateFmt.format(p.paidDate!)}' : 'Paid';
+      icon = Icons.check_circle_outline;
+      dateLabel =
+          p.paidDate != null ? 'Paid on ${dateFmt.format(p.paidDate!)}' : 'Paid';
     } else if (statusS == 'overdue') {
-      iconBg = _dangerBg; emoji = '⚠️'; amountColor = _danger;
+      icon = Icons.error_outline;
       dateLabel = 'Overdue since ${dateFmt.format(p.dueDate)}';
     } else {
-      iconBg = _warningBg; emoji = '⏳'; amountColor = _warning;
+      icon = Icons.schedule;
       dateLabel = 'Due ${dateFmt.format(p.dueDate)}';
     }
 
@@ -292,16 +251,20 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         decoration: BoxDecoration(
           border: isLast
               ? null
-              : const Border(bottom: BorderSide(color: _gray100)),
+              : const Border(bottom: BorderSide(color: AppColors.borderSubtle)),
         ),
         child: Row(
           children: [
             Container(
               width: 36,
               height: 36,
-              decoration:
-                  BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 16))),
+              decoration: BoxDecoration(
+                color: status.bg,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
+              child: Center(
+                child: Icon(icon, size: 18, color: status.ink),
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -312,23 +275,16 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     p.type == PaymentType.dues
                         ? '${p.typeLabel} — ${DateFormat('MMMM yyyy').format(p.dueDate)}'
                         : p.typeLabel,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600, color: _gray800),
+                    style: AppTypography.bodyMedium,
                   ),
                   const SizedBox(height: 2),
-                  Text(dateLabel,
-                      style: const TextStyle(fontSize: 10, color: _gray400)),
+                  Text(dateLabel, style: AppTypography.caption),
                 ],
               ),
             ),
             Text(
               '₱${fmt.format(p.amount)}',
-              style: TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: amountColor,
-              ),
+              style: AppTypography.money.copyWith(color: status.ink),
             ),
           ],
         ),
@@ -339,18 +295,11 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   // ── Empty / Error ─────────────────────────────────────────────────────────
 
   Widget _buildEmpty() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          const Text('📭', style: TextStyle(fontSize: 36)),
-          const SizedBox(height: 12),
-          Text(
-            _filter == null ? 'No payment records found.' : 'No $_filter payments.',
-            style: const TextStyle(fontSize: 12, color: _gray400),
-          ),
-        ],
-      ),
+    return AppEmptyState(
+      icon: Icons.receipt_long_outlined,
+      message: _filter == null
+          ? 'No payment records found.'
+          : 'No ${_filter!} payments.',
     );
   }
 
@@ -361,11 +310,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 36, color: _danger),
+            const Icon(Icons.error_outline, size: 36, color: AppColors.danger),
             const SizedBox(height: 12),
-            Text(msg,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: _danger)),
+            Text(
+              msg,
+              textAlign: TextAlign.center,
+              style: AppTypography.body.copyWith(color: AppColors.danger),
+            ),
           ],
         ),
       ),

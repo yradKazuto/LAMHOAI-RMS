@@ -3,12 +3,24 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../models/payment_model.dart';
+import '../models/ledger_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db;
 
   FirestoreService({FirebaseFirestore? db})
       : _db = db ?? FirebaseFirestore.instance;
+
+  // ── Ledgers ───────────────────────────────────────────────────────────────
+
+  /// Real-time stream of a member's ledger.
+  Stream<LedgerModel?> ledgerStream(String uid) {
+    return _db
+        .collection('member_ledgers')
+        .doc(uid)
+        .snapshots()
+        .map((snap) => snap.exists ? LedgerModel.fromFirestore(snap) : null);
+  }
 
   // ── Users ─────────────────────────────────────────────────────────────────
 

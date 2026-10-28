@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'firebase_options.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/routing/app_router.dart';
+import 'core/theme/app_theme.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/notification_handler.dart';
 import 'core/services/onesignal_service.dart';
@@ -83,12 +84,7 @@ class _LamhoaiAppState extends State<LamhoaiApp> {
         title:                      'LAMHOAI-RMS',
         debugShowCheckedModeBanner: false,
         routerConfig:               _router,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1E52A0),
-          ),
-          useMaterial3: true,
-        ),
+        theme: AppTheme.lightTheme,
       ),
     );
   }

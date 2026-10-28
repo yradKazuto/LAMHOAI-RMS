@@ -22,6 +22,7 @@ import '../../features/audit/screens/audit_screen.dart';
 import '../../features/preview/screens/member_preview_screen.dart';
 import '../../features/location/screens/location_mapping_screen.dart';
 import '../../features/help/screens/help_screen.dart';
+import '../../core/theme/design_tokens.dart';
 
 class AppRoutes {
   static const login          = '/login';
@@ -247,13 +248,13 @@ class _ErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.error_outline,
-                size: 48, color: Color(0xFF1A3A6B)),
+                size: 48, color: AppColors.primaryHeader),
             const SizedBox(height: 16),
             Text('Page not found',
                 style: Theme.of(context)
@@ -261,7 +262,7 @@ class _ErrorScreen extends StatelessWidget {
                     .titleLarge
                     ?.copyWith(
                         color:
-                            const Color(0xFF1A3A6B))),
+                            AppColors.primaryHeader)),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () =>

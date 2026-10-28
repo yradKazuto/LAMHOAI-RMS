@@ -470,7 +470,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         'Date range uses the paid date for paid payments '
                         'and the due date for everything else.',
                         style: TextStyle(
-                            fontSize: 11.5, color: Colors.grey[500]),
+                            fontSize: 11.5, color: AppColors.textMuted),
                       ),
                     ],
                   ),
@@ -510,11 +510,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
                       return Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.textInverted,
                           borderRadius:
                               BorderRadius.circular(12),
                           border: Border.all(
-                              color: const Color(0xFFE0E8F4)),
+                              color: AppColors.border),
                         ),
                         child: Column(
                           children: [
@@ -558,8 +558,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                         .styleFrom(
                                       foregroundColor: AppColors.textPrimary,
                                       side: const BorderSide(
-                                          color: Color(
-                                              0xFFD0DBEE)),
+                                          color: AppColors.borderStrong),
                                       shape:
                                           RoundedRectangleBorder(
                                               borderRadius:
@@ -604,7 +603,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                         .styleFrom(
                                       backgroundColor: AppColors.textPrimary,
                                       foregroundColor:
-                                          Colors.white,
+                                          AppColors.surface,
                                       shape:
                                           RoundedRectangleBorder(
                                               borderRadius:

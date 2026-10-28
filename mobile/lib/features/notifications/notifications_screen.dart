@@ -7,6 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/providers/auth_provider.dart';
+import '../../core/theme/design_tokens.dart';
+import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_header.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -19,20 +22,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String _filter = 'All';
   final Set<String> _locallyRead = {};
 
-  static const _blue700  = Color(0xFF1A3D6B);
-  static const _blue600  = Color(0xFF1E52A0);
-  static const _blue500  = Color(0xFF2563EB);
-  static const _blue200  = Color(0xFFBAD9FD);
-  static const _blue50   = Color(0xFFEFF6FF);
-  static const _gray50   = Color(0xFFF8FAFC);
-  static const _gray100  = Color(0xFFEEF2F7);
-  static const _gray200  = Color(0xFFD4DCE8);
-  static const _gray400  = Color(0xFF8A9BB0);
-  static const _gray600  = Color(0xFF4A5A6E);
-  static const _gray800  = Color(0xFF1E2A3A);
-  static const _gold     = Color(0xFFC9A84C);
-  static const _danger   = Color(0xFFDC2626);
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -41,7 +30,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     // If uid is empty don't even try to query
     if (uid.isEmpty) {
       return Scaffold(
-        backgroundColor: _gray50,
+        backgroundColor: AppColors.background,
         body: Column(
           children: [
             _buildHeader(context),
@@ -52,7 +41,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     return Scaffold(
-      backgroundColor: _gray50,
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
           _buildHeader(context),
@@ -117,59 +106,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // ── Header ────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: _blue700,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () =>
-                        context.canPop() ? context.pop() : context.go('/home'),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.arrow_back_ios_new, size: 12, color: _blue200),
-                        SizedBox(width: 4),
-                        Text('Back',
-                            style: TextStyle(fontSize: 10, color: _blue200)),
-                      ],
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _markAllAsRead,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('Mark all as read',
-                        style: TextStyle(fontSize: 10, color: Colors.white)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Notifications',
-                style: TextStyle(
-                  fontFamily: 'Georgia',
-                  fontSize: 20,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'HOA announcements and dues reminders',
-                style: TextStyle(fontSize: 10, color: _blue200),
-              ),
-            ],
+    return AppHeader(
+      title: 'Notifications',
+      subtitle: 'HOA announcements and dues reminders',
+      onBack: () => context.canPop() ? context.pop() : context.go('/home'),
+      trailing: TextButton(
+        onPressed: _markAllAsRead,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(
+          'Mark all as read',
+          style: AppTypography.button.copyWith(
+            fontSize: 11,
+            color: AppColors.textInverted,
           ),
         ),
       ),
@@ -222,10 +174,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
-                color: active ? _blue600 : Colors.white,
+                color: active ? AppColors.primary : AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                    color: active ? _blue600 : _gray200, width: 1.5),
+                    color: active ? AppColors.primary : AppColors.border,
+                    width: 1.5),
               ),
               child: Row(
                 children: [
@@ -233,22 +186,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
-                          color: active ? Colors.white : _gray600)),
+                          color: active
+                              ? AppColors.textInverted
+                              : AppColors.textSecondary)),
                   if (f == 'Unread' && unreadCount > 0) ...[
                     const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(
-                        color: active ? Colors.white : _blue500,
+                        color: active
+                            ? AppColors.textInverted
+                            : AppColors.primary,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text('$unreadCount',
                           style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              color:
-                                  active ? _blue600 : Colors.white)),
+                              color: active
+                                  ? AppColors.primary
+                                  : AppColors.textInverted)),
                     ),
                   ],
                 ],
@@ -274,93 +232,85 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final dateFmt  = DateFormat('MMM d, yyyy · h:mm a');
     final dotColor = _dotColor(item.type);
 
-    return GestureDetector(
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      borderColor: item.isRead ? AppColors.border : AppColors.primary,
       onTap: () => _openNotification(item),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: item.isRead ? Colors.white : _blue50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: item.isRead ? _gray100 : _blue200,
-            width: item.isRead ? 1 : 1.5,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: item.isRead ? AppColors.border : dotColor,
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 5),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: item.isRead ? _gray200 : dotColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(item.title,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: item.isRead
-                                    ? FontWeight.w400
-                                    : FontWeight.w600,
-                                color: _gray800)),
-                      ),
-                      if (!item.isRead)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                              color: _blue500,
-                              borderRadius: BorderRadius.circular(8)),
-                          child: const Text('NEW',
-                              style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: AppTypography.bodyMedium.copyWith(
+                          fontWeight: item.isRead
+                              ? FontWeight.w400
+                              : FontWeight.w600,
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(item.body,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 11, color: _gray600, height: 1.5)),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(_typeIcon(item.type), size: 10, color: _gray400),
-                      const SizedBox(width: 4),
-                      Text(
-                        item.createdAt != null
-                            ? dateFmt.format(item.createdAt!)
-                            : '—',
-                        style:
-                            const TextStyle(fontSize: 10, color: _gray400),
                       ),
-                      const Spacer(),
-                      const Text('Tap to read',
-                          style:
-                              TextStyle(fontSize: 9, color: _gray400)),
-                    ],
+                    ),
+                    if (!item.isRead)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text('NEW',
+                            style: TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textInverted)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.body,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.5,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(_typeIcon(item.type), size: 10, color: AppColors.textMuted),
+                    const SizedBox(width: 4),
+                    Text(
+                      item.createdAt != null
+                          ? dateFmt.format(item.createdAt!)
+                          : '—',
+                      style: AppTypography.caption,
+                    ),
+                    const Spacer(),
+                    Text('Tap to read', style: AppTypography.caption),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -381,7 +331,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
           borderRadius:
               BorderRadius.vertical(top: Radius.circular(16))),
@@ -402,7 +352,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                      color: _gray200,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(2)),
                 ),
               ),
@@ -410,43 +360,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _blue50,
+                  color: AppPrimitiveColors.blue50,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _blue200),
+                  border: Border.all(color: AppPrimitiveColors.blue200),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(_typeIcon(item.type), size: 11, color: _blue600),
+                    Icon(_typeIcon(item.type),
+                        size: 11, color: AppColors.primary),
                     const SizedBox(width: 4),
                     Text(_typeLabel(item.type),
                         style: const TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
-                            color: _blue600)),
+                            color: AppColors.primary)),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
-              Text(item.title,
-                  style: const TextStyle(
-                      fontFamily: 'Georgia',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: _gray800)),
+              Text(item.title, style: AppTypography.pageTitle),
               const SizedBox(height: 6),
               Text(
                 item.createdAt != null
                     ? dateFmt.format(item.createdAt!)
                     : '—',
-                style: const TextStyle(fontSize: 10, color: _gray400),
+                style: AppTypography.caption,
               ),
               const SizedBox(height: 16),
-              const Divider(color: _gray100),
+              const Divider(color: AppColors.borderSubtle),
               const SizedBox(height: 16),
-              Text(item.body,
-                  style: const TextStyle(
-                      fontSize: 13, color: _gray600, height: 1.7)),
+              Text(
+                item.body,
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.6,
+                ),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -456,13 +406,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     padding:
                         const EdgeInsets.symmetric(vertical: 13),
                     side: const BorderSide(
-                        color: _gray200, width: 1.5),
+                        color: AppColors.border, width: 1.5),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Close',
-                      style: TextStyle(
-                          fontSize: 13, color: _gray600)),
+                  child: Text('Close',
+                      style: AppTypography.button
+                          .copyWith(color: AppColors.textSecondary)),
                 ),
               ),
             ],
@@ -475,20 +425,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // ── Empty / Error ─────────────────────────────────────────────────────────
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('🔔', style: TextStyle(fontSize: 36)),
-          const SizedBox(height: 12),
-          Text(
-            _filter == 'All'
-                ? 'No notifications yet.'
-                : 'No ${_filter.toLowerCase()} notifications.',
-            style: const TextStyle(fontSize: 12, color: _gray400),
-          ),
-        ],
-      ),
+    return AppEmptyState(
+      icon: Icons.notifications_none_outlined,
+      message: _filter == 'All'
+          ? 'No notifications yet.'
+          : 'No ${_filter.toLowerCase()} notifications.',
     );
   }
 
@@ -499,11 +440,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 36, color: _danger),
+            const Icon(Icons.error_outline, size: 36, color: AppColors.error),
             const SizedBox(height: 12),
             Text(msg,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: _danger)),
+                style: AppTypography.body.copyWith(color: AppColors.error)),
           ],
         ),
       ),
@@ -514,10 +455,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Color _dotColor(String type) {
     switch (type) {
-      case 'dues':         return _blue500;
-      case 'announcement': return _gold;
-      case 'complaint':    return const Color(0xFF16A34A);
-      default:             return _gray400;
+      case 'dues':         return AppColors.primary;
+      case 'announcement': return AppPrimitiveColors.gold;
+      case 'complaint':    return AppColors.success;
+      default:             return AppColors.textMuted;
     }
   }
 
@@ -526,7 +467,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'dues':         return Icons.receipt_long_outlined;
       case 'announcement': return Icons.campaign_outlined;
       case 'complaint':    return Icons.feedback_outlined;
-      default:             return Icons.notifications_outlined;
+      default:             return Icons.notifications_none_outlined;
     }
   }
 

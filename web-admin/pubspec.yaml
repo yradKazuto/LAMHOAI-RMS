@@ -48,6 +48,7 @@ dependencies:
   printing: ^5.13.2
   csv: ^6.0.0
   share_plus: ^12.0.2
+  table_calendar: ^3.3.0
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +60,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  fake_cloud_firestore: ^3.1.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -74,4 +76,19 @@ flutter:
     - assets/images/subdivision_map.png
     - assets/images/background.png
     - assets/images/logo.png
+
+  # Inter — the brand typeface (docs/brand-guidelines.md). Bundled so the
+  # admin panel renders the same face on every platform instead of falling
+  # back to the system default. Licence: OFL, see assets/fonts/LICENSE.txt.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
     

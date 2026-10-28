@@ -88,7 +88,7 @@ class _MembersScreenState extends State<MembersScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 13,
-                            color: Colors.grey[600])),
+                            color: AppColors.textSecondary)),
                   ],
                 );
 
@@ -100,7 +100,7 @@ class _MembersScreenState extends State<MembersScreen> {
                         label: const Text('Add Member'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.textPrimary,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.textInverted,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -147,11 +147,11 @@ class _MembersScreenState extends State<MembersScreen> {
                     hintText: 'Search name, email, lot...',
                     hintStyle: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[400]),
+                        color: AppColors.textMuted),
                     prefixIcon:
                         const Icon(Icons.search, size: 18),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.surface,
                     contentPadding:
                         const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
@@ -188,7 +188,7 @@ class _MembersScreenState extends State<MembersScreen> {
                   icon: const Icon(Icons.clear, size: 15),
                   label: const Text('Clear'),
                   style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey[600]),
+                      foregroundColor: AppColors.textSecondary),
                 );
 
                 void openFilterSheet() {
@@ -218,7 +218,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                   margin:
                                       const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[300],
+                                    color: AppColors.borderStrong,
                                     borderRadius:
                                         BorderRadius.circular(2),
                                   ),
@@ -248,7 +248,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[600])),
+                                      color: AppColors.textSecondary)),
                               const SizedBox(height: 6),
                               SizedBox(
                                 width: double.infinity,
@@ -278,7 +278,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[600])),
+                                      color: AppColors.textSecondary)),
                               const SizedBox(height: 6),
                               SizedBox(
                                 width: double.infinity,
@@ -334,7 +334,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.textPrimary,
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: AppColors.textInverted,
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 14),
                                     shape: RoundedRectangleBorder(
@@ -357,7 +357,7 @@ class _MembersScreenState extends State<MembersScreen> {
                     (_blockFilter != null ? 1 : 0);
 
                 final filterButton = Material(
-                  color: Colors.white,
+                  color: AppColors.textInverted,
                   borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
@@ -380,7 +380,7 @@ class _MembersScreenState extends State<MembersScreen> {
                               size: 18,
                               color: activeFilterCount > 0
                                   ? AppColors.primary
-                                  : Colors.grey[600]),
+                                  : AppColors.textSecondary),
                           const SizedBox(width: 6),
                           Text(
                               activeFilterCount > 0
@@ -516,7 +516,7 @@ class _MembersScreenState extends State<MembersScreen> {
                             child: Text(
                                 'Error: ${snap.error}',
                                 style: const TextStyle(
-                                    color: Colors.red)));
+                                    color: AppColors.error)));
                       }
 
                       final members = _filtered(
@@ -534,7 +534,7 @@ class _MembersScreenState extends State<MembersScreen> {
 
                           return Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: AppColors.textInverted,
                               borderRadius:
                                   BorderRadius.circular(12),
                               border: Border.all(
@@ -557,7 +557,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                           'No members found.',
                                           style: TextStyle(
                                               color:
-                                                  Colors.grey)),
+                                                  AppColors.textMuted)),
                                     ),
                                   )
                                 else
@@ -568,8 +568,7 @@ class _MembersScreenState extends State<MembersScreen> {
                                           (_, __) =>
                                               const Divider(
                                                   height: 1,
-                                                  color: Color(
-                                                      0xFFEEF2F9)),
+                                                  color: AppColors.background),
                                       itemBuilder:
                                           (context, i) {
                                         final member =
@@ -682,7 +681,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                       width: 300,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(12),
                         border:
                             Border.all(color: AppColors.border),
@@ -731,7 +730,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                               onPressed: _close,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.textPrimary,
-                                foregroundColor: Colors.white,
+                                foregroundColor: AppColors.textInverted,
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 10),
                                 shape: RoundedRectangleBorder(
@@ -774,7 +773,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
     return CompositedTransformTarget(
       link: _link,
       child: Material(
-        color: Colors.white,
+        color: AppColors.textInverted,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -796,7 +795,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                     size: 18,
                     color: widget.activeFilterCount > 0
                         ? AppColors.primary
-                        : Colors.grey[600]),
+                        : AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(
                     widget.activeFilterCount > 0
@@ -809,7 +808,7 @@ class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
                             ? AppColors.primary
                             : AppColors.textPrimary)),
                 const SizedBox(width: 4),
-                Icon(Icons.expand_more, size: 16, color: Colors.grey[500]),
+                Icon(Icons.expand_more, size: 16, color: AppColors.textMuted),
               ],
             ),
           ),
@@ -884,7 +883,7 @@ class _PopoverFilterField extends StatelessWidget {
             style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600])),
+                color: AppColors.textSecondary)),
         const SizedBox(height: 5),
         SizedBox(width: double.infinity, child: child),
       ],
@@ -911,7 +910,7 @@ class _DropdownFilter extends StatelessWidget {
     padding:
         const EdgeInsets.symmetric(horizontal: 12),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(8),
       border: Border.all(
           color: AppColors.borderStrong),
@@ -922,7 +921,7 @@ class _DropdownFilter extends StatelessWidget {
         hint: Text(hint,
             style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey[500])),
+                color: AppColors.textMuted)),
         style: const TextStyle(
             fontSize: 13,
             color: AppColors.textPrimary),
@@ -1102,7 +1101,7 @@ class _MemberRow extends StatelessWidget {
                   _statusPill(),
                   const SizedBox(width: 4),
                   Icon(Icons.chevron_right,
-                      size: 18, color: Colors.grey[400]),
+                      size: 18, color: AppColors.textMuted),
                 ],
               ),
               const SizedBox(height: 6),
@@ -1110,7 +1109,7 @@ class _MemberRow extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 42),
                 child: Text(member.email,
                     style: TextStyle(
-                        fontSize: 13, color: Colors.grey[600]),
+                        fontSize: 13, color: AppColors.textSecondary),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ),
@@ -1149,7 +1148,7 @@ class _MemberRow extends StatelessWidget {
               child: Text(member.email,
                   style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey[600]),
+                      color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis),
             ),
             Expanded(
@@ -1170,7 +1169,7 @@ class _MemberRow extends StatelessWidget {
             SizedBox(
               width: 48,
               child: Icon(Icons.chevron_right,
-                  size: 18, color: Colors.grey[400]),
+                  size: 18, color: AppColors.textMuted),
             ),
           ],
         ),
@@ -1309,7 +1308,7 @@ class _AddMemberDialogState
       InputDecoration(
         hintText:  hint,
         hintStyle: TextStyle(
-            fontSize: 13, color: Colors.grey[400]),
+            fontSize: 13, color: AppColors.textMuted),
         filled:    true,
         fillColor: AppColors.background,
         contentPadding: const EdgeInsets.symmetric(
@@ -1368,7 +1367,7 @@ class _AddMemberDialogState
                   'Creates a login account for the mobile app.',
                   style: TextStyle(
                       fontSize: 12.5,
-                      color: Colors.grey[500]),
+                      color: AppColors.textMuted),
                 ),
                 const SizedBox(height: 20),
 
@@ -1385,8 +1384,7 @@ class _AddMemberDialogState
                       borderRadius:
                           BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(
-                                  0xFFCC2200)
+                          color: AppColors.danger
                               .withOpacity(0.3)),
                     ),
                     child: Row(
@@ -1402,8 +1400,7 @@ class _AddMemberDialogState
                               style:
                                   const TextStyle(
                                 fontSize: 12.5,
-                                color: Color(
-                                    0xFFCC2200),
+                                color: AppColors.danger,
                               )),
                         ),
                       ],
@@ -1477,7 +1474,7 @@ class _AddMemberDialogState
                             : Icons
                                 .visibility_off_outlined,
                         size: 18,
-                        color: Colors.grey[500],
+                        color: AppColors.textMuted,
                       ),
                       onPressed: () => setState(
                           () =>
@@ -1585,8 +1582,7 @@ class _AddMemberDialogState
                           'The member will use this email and password to log in on the mobile app. Lot Number and Block entered here are provisional — they will not appear in the Homeowner Records table until this member is assigned a lot from Location Mapping.',
                           style: TextStyle(
                               fontSize: 12.5,
-                              color: Color(
-                                  0xFF1A4A9C)),
+                              color: AppColors.dataInk),
                         ),
                       ),
                     ],
@@ -1604,7 +1600,7 @@ class _AddMemberDialogState
                           Navigator.pop(context),
                       child: const Text('Cancel',
                           style: TextStyle(
-                              color: Colors.grey)),
+                              color: AppColors.textMuted)),
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
@@ -1614,7 +1610,7 @@ class _AddMemberDialogState
                           ElevatedButton.styleFrom(
                         backgroundColor: AppColors.textPrimary,
                         foregroundColor:
-                            Colors.white,
+                            AppColors.surface,
                         shape:
                             RoundedRectangleBorder(
                                 borderRadius:

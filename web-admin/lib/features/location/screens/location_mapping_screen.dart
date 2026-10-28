@@ -64,6 +64,65 @@ class _LocationMappingScreenState
   // other value must match a PhaseMapModel.name from Firestore.
   String _selectedPhase = kPhaseOnePolygonMap;
 
+  // Lot (by document id) we were asked to jump to — e.g. when the user
+  // taps an owned lot in Member Detail. Held here until the lots stream
+  // has loaded so we can look up which phase it belongs to; cleared as
+  // soon as it has been applied (or found not to exist) so it only ever
+  // takes effect once per navigation.
+  String? _pendingTargetLotId;
+
+  // The lot to zoom to and highlight on the map. Unlike
+  // _pendingTargetLotId this is NOT cleared after the phase switch —
+  // the map view needs it to keep the highlight drawn.
+  String? _highlightLotId;
+
+  @override
+  void initState() {
+    super.initState();
+    _pendingTargetLotId = widget.targetLotId;
+    _highlightLotId = widget.targetLotId;
+  }
+
+  @override
+  void didUpdateWidget(covariant LocationMappingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The router can reuse this same screen instance with a new target
+    // (e.g. tapping a different lot from Member Detail), in which case
+    // initState does not run again.
+    if (widget.targetLotId != oldWidget.targetLotId) {
+      _pendingTargetLotId = widget.targetLotId;
+      _highlightLotId = widget.targetLotId;
+    }
+  }
+
+  /// Switches to the target lot's phase (in Map View) once the lots have
+  /// loaded. Runs after the frame so it never calls setState mid-build.
+  void _applyPendingTarget(List<LotModel> lots) {
+    final targetId = _pendingTargetLotId;
+    if (targetId == null) return;
+
+    LotModel? target;
+    for (final l in lots) {
+      if (l.id == targetId) {
+        target = l;
+        break;
+      }
+    }
+
+    // Clear immediately so repeated stream emissions can't re-trigger it.
+    _pendingTargetLotId = null;
+    if (target == null) return;
+
+    final phase = target.phase.trim();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _showMapView = true;
+        if (phase.isNotEmpty) _selectedPhase = phase;
+      });
+    });
+  }
+
   Color _colorFor(LotStatus s) {
     switch (s) {
       case LotStatus.occupied:
@@ -179,7 +238,7 @@ class _LocationMappingScreenState
                     top: 10,
                     right: 10,
                     child: Material(
-                      color: Colors.white,
+                      color: AppColors.textInverted,
                       shape: const CircleBorder(),
                       elevation: 3,
                       child: IconButton(
@@ -276,13 +335,13 @@ class _LocationMappingScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogCtx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -343,7 +402,7 @@ class _LocationMappingScreenState
               decoration: InputDecoration(
                 labelText: 'Phase name',
                 hintText: 'e.g. Phase 2',
-                hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                hintStyle: TextStyle(fontSize: 13, color: AppColors.textMuted),
                 filled: true,
                 fillColor: AppColors.background,
                 contentPadding:
@@ -361,7 +420,7 @@ class _LocationMappingScreenState
               decoration: InputDecoration(
                 labelText: 'Number of blocks',
                 hintText: 'e.g. 5',
-                hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                hintStyle: TextStyle(fontSize: 13, color: AppColors.textMuted),
                 filled: true,
                 fillColor: AppColors.background,
                 contentPadding:
@@ -375,14 +434,14 @@ class _LocationMappingScreenState
             Text(
               'Creates Block 1 through Block N. You can add more blocks '
               'later from the Blocks panel.',
-              style: TextStyle(fontSize: 11.5, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -397,7 +456,7 @@ class _LocationMappingScreenState
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.textPrimary,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -451,7 +510,7 @@ class _LocationMappingScreenState
         auth.userModel?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
 
       body: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -524,7 +583,7 @@ class _LocationMappingScreenState
                       style: TextStyle(
                         fontSize: 12,
                         color:
-                            Colors.grey[600],
+                            AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -595,7 +654,7 @@ class _LocationMappingScreenState
                           size: 18,
                           color: selected
                               ? AppColors.textPrimary
-                              : Colors.grey[500],
+                              : AppColors.textMuted,
                         ),
                       ),
                     );
@@ -676,8 +735,12 @@ class _LocationMappingScreenState
                           selected: _selectedPhase,
                           customPhases: customPhases,
                           canEdit: canEdit,
-                          onSelected: (p) =>
-                              setState(() => _selectedPhase = p),
+                          onSelected: (p) => setState(() {
+                            _selectedPhase = p;
+                            // Picking a phase tab manually cancels
+                            // any zoom/highlight from a lot jump.
+                            _highlightLotId = null;
+                          }),
                           onAddPhase: () =>
                               _showAddPhaseDialog(currentUserId),
                           onRemovePhase: role == UserRole.admin
@@ -706,7 +769,7 @@ class _LocationMappingScreenState
                                   'Error: ${snapshot.error}',
                                   style:
                                       const TextStyle(
-                                    color: Colors.red,
+                                    color: AppColors.error,
                                   ),
                                 ),
                               );
@@ -714,6 +777,11 @@ class _LocationMappingScreenState
 
                             final lots =
                                 snapshot.data ?? [];
+
+                            // If we arrived here from a specific lot
+                            // (e.g. Member Detail → Owned Lots), jump
+                            // to that lot's phase now that lots exist.
+                            _applyPendingTarget(lots);
 
                             // ==================================================
                             // MAP VIEW
@@ -747,6 +815,7 @@ class _LocationMappingScreenState
                               return SimplePhaseMapView(
                                 phaseMap: match,
                                 lots: phaseLots,
+                                highlightLotId: _highlightLotId,
                                 canEdit: canEdit,
                                 canAssignMembers: canAssignMembers,
                                 currentUserId: currentUserId,
@@ -942,8 +1011,7 @@ class _LocationMappingScreenState
                                                   fontSize:
                                                       10,
                                                   color:
-                                                      Colors.grey[
-                                                          600],
+                                                      AppColors.textSecondary,
                                                 ),
                                               ),
                                             ],
@@ -1040,9 +1108,9 @@ class _PhaseSelectorRow extends StatelessWidget {
                   labelStyle: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
-                    color: isSelected ? Colors.white : Colors.grey[700],
+                    color: isSelected ? AppColors.surface : AppColors.textSecondary,
                   ),
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppColors.surface,
                   side: BorderSide(
                     color: isSelected ? AppColors.textPrimary : AppColors.borderStrong,
                   ),
@@ -1113,7 +1181,7 @@ class _PhaseSection
 
       decoration:
           BoxDecoration(
-        color: Colors.white,
+        color: AppColors.textInverted,
 
         borderRadius:
             BorderRadius.circular(12),

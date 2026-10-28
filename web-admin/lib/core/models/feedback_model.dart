@@ -30,7 +30,7 @@ class FeedbackModel {
   final String uid;                    // member who submitted
   final String memberName;
   final String email;
-  final String? title;
+  final String title;                  // '' when the member left it blank
   final String message;
   final String category;
   final int? rating;

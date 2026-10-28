@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/providers/auth_provider.dart';
+import '../../core/theme/design_tokens.dart';
+import '../../core/widgets/app_card.dart';
+import '../../core/widgets/app_header.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -17,21 +20,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey   = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   String _state    = 'idle'; // idle | loading | sent
-
-  static const _blue800   = Color(0xFF0F2547);
-  static const _blue700   = Color(0xFF1A3D6B);
-  static const _blue600   = Color(0xFF1E52A0);
-  static const _blue200   = Color(0xFFBAD9FD);
-  static const _blue50    = Color(0xFFEFF6FF);
-  static const _gray50    = Color(0xFFF8FAFC);
-  static const _gray200   = Color(0xFFD4DCE8);
-  static const _gray400   = Color(0xFF8A9BB0);
-  static const _gray600   = Color(0xFF4A5A6E);
-  static const _gray800   = Color(0xFF1E2A3A);
-  static const _danger    = Color(0xFFDC2626);
-  static const _dangerBg  = Color(0xFFFEE2E2);
-  static const _success   = Color(0xFF16A34A);
-  static const _successBg = Color(0xFFDCFCE7);
 
   @override
   void dispose() {
@@ -58,88 +46,33 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
-          _buildHeader(context),
+          AppHeader(
+            title: 'Reset Password',
+            subtitle: 'MEMBER PORTAL',
+            onBack: () =>
+                context.canPop() ? context.pop() : context.go('/login'),
+            trailing: Container(
+              width: 40,
+              height: 40,
+              decoration: AppComponents.iconBoxDecoration(AppColors.primary),
+              child: const Icon(Icons.lock_reset_outlined,
+                  size: 20, color: AppColors.textInverted),
+            ),
+          ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-              child: _state == 'sent'
-                  ? _buildSentState(context)
-                  : _buildForm(context),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: AppCard(
+                child: _state == 'sent'
+                    ? _buildSentState(context)
+                    : _buildForm(context),
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Header ────────────────────────────────────────────────────────────────
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_blue800, _blue700],
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GestureDetector(
-                onTap: () =>
-                    context.canPop() ? context.pop() : context.go('/login'),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.arrow_back_ios_new,
-                        size: 12, color: _blue200),
-                    SizedBox(width: 4),
-                    Text('Back to Sign In',
-                        style: TextStyle(fontSize: 10, color: _blue200)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: Colors.white.withOpacity(0.2)),
-                ),
-                child: const Center(
-                  child: Icon(Icons.lock_reset_outlined,
-                      size: 22, color: Colors.white),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Reset Password',
-                style: TextStyle(
-                  fontFamily: 'Georgia',
-                  fontSize: 20,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text('MEMBER PORTAL',
-                  style: TextStyle(
-                      fontSize: 10, color: _blue200, letterSpacing: 1)),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -156,26 +89,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: _blue50,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _blue200),
+            color: AppPrimitiveColors.blue50,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppPrimitiveColors.blue200),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
-              Icon(Icons.info_outline, size: 16, color: _blue600),
+              Icon(Icons.info_outline, size: 16, color: AppColors.primary),
               SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Enter your email address linked to your HOA account. We\'ll send you a reset link.',
                   style: TextStyle(
-                      fontSize: 11, color: _gray600, height: 1.5),
+                    fontSize: 11.5,
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
         if (auth.status == AuthStatus.error && auth.errorMessage != null)
           Container(
@@ -183,34 +119,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: _dangerBg,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _danger.withOpacity(0.3)),
+              color: AppColors.errorBg,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline, size: 16, color: _danger),
+                const Icon(Icons.error_outline, size: 16, color: AppColors.error),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(auth.errorMessage!,
-                      style:
-                          const TextStyle(fontSize: 11, color: _danger)),
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.error)),
                 ),
                 GestureDetector(
                   onTap: auth.clearError,
-                  child: const Icon(Icons.close, size: 14, color: _danger),
+                  child: const Icon(Icons.close, size: 14, color: AppColors.error),
                 ),
               ],
             ),
           ),
 
-        const Text('EMAIL ADDRESS',
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: _gray600,
-                letterSpacing: 0.5)),
-        const SizedBox(height: 6),
+        const AppFieldLabel('Email address'),
 
         Form(
           key: _formKey,
@@ -219,62 +149,35 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => _submit(),
-            style: const TextStyle(fontSize: 13, color: _gray800),
-            decoration: InputDecoration(
-              hintText: 'your@email.com',
-              hintStyle:
-                  const TextStyle(fontSize: 13, color: _gray400),
+            style: AppTypography.body.copyWith(color: AppColors.textPrimary),
+            decoration: AppFieldDecoration(hint: 'your@email.com').copyWith(
               prefixIcon: const Icon(Icons.email_outlined,
-                  size: 18, color: _gray400),
-              filled: true,
-              fillColor: _gray50,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide:
-                      const BorderSide(color: _gray200, width: 1.5)),
-              enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide:
-                      const BorderSide(color: _gray200, width: 1.5)),
-              focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide:
-                      const BorderSide(color: _blue600, width: 1.5)),
-              errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide:
-                      const BorderSide(color: _danger, width: 1.5)),
-              focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide:
-                      const BorderSide(color: _danger, width: 1.5)),
-              errorStyle:
-                  const TextStyle(fontSize: 10, color: _danger),
+                  size: 18, color: AppColors.textMuted),
             ),
             validator: (v) {
-              if (v == null || v.trim().isEmpty)
+              if (v == null || v.trim().isEmpty) {
                 return 'Email is required';
-              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim()))
+              }
+              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim())) {
                 return 'Enter a valid email address';
+              }
               return null;
             },
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: isLoading ? null : _submit,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _blue600,
-              disabledBackgroundColor: _blue600.withOpacity(0.6),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.primary,
+              disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
+              foregroundColor: AppColors.textInverted,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(AppRadius.lg)),
               elevation: 0,
             ),
             child: isLoading
@@ -282,15 +185,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : const Text('SEND RESET LINK',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5)),
+                        color: AppColors.textInverted, strokeWidth: 2))
+                : const Text('SEND RESET LINK', style: AppTypography.button),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Center(
           child: TextButton(
             onPressed: () =>
@@ -298,7 +197,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: const Text('Back to Sign In',
                 style: TextStyle(
                     fontSize: 12,
-                    color: _blue600,
+                    color: AppColors.primary,
                     fontWeight: FontWeight.w500)),
           ),
         ),
@@ -316,33 +215,30 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           width: 72,
           height: 72,
           decoration:
-              const BoxDecoration(color: _successBg, shape: BoxShape.circle),
+              const BoxDecoration(color: AppColors.successBg, shape: BoxShape.circle),
           child: const Center(
             child: Icon(Icons.mark_email_read_outlined,
-                size: 32, color: _success),
+                size: 32, color: AppColors.success),
           ),
         ),
         const SizedBox(height: 20),
-        const Text('Check Your Email',
-            style: TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 20,
-                color: _gray800,
-                fontWeight: FontWeight.w600)),
+        const Text('Check Your Email', style: AppTypography.pageTitle),
         const SizedBox(height: 8),
         Text(
           'We sent a reset link to\n${_emailCtrl.text.trim()}',
           textAlign: TextAlign.center,
-          style: const TextStyle(
-              fontSize: 12, color: _gray600, height: 1.6),
+          style: AppTypography.body.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.6,
+          ),
         ),
         const SizedBox(height: 24),
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: _gray50,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _gray200),
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.border),
           ),
           child: const Column(
             children: [
@@ -361,33 +257,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: () => context.go('/login'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _blue600,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.textInverted,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(AppRadius.lg)),
               elevation: 0,
             ),
-            child: const Text('BACK TO SIGN IN',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5)),
+            child: const Text('BACK TO SIGN IN', style: AppTypography.button),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         TextButton(
           onPressed: () => setState(() => _state = 'idle'),
           child: const Text('Resend email',
               style: TextStyle(
                   fontSize: 12,
-                  color: _blue600,
+                  color: AppColors.primary,
                   fontWeight: FontWeight.w500)),
         ),
       ],
@@ -405,14 +297,12 @@ class _TipRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 14, color: const Color(0xFF8A9BB0)),
+        Icon(icon, size: 14, color: AppColors.textMuted),
         const SizedBox(width: 8),
         Expanded(
           child: Text(text,
-              style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF4A5A6E),
-                  height: 1.4)),
+              style: AppTypography.caption.copyWith(
+                  color: AppColors.textSecondary, height: 1.4)),
         ),
       ],
     );

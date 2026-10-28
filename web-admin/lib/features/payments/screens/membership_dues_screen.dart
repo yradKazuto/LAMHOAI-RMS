@@ -1,13 +1,23 @@
 // features/payments/screens/membership_dues_screen.dart
 //
 // Dues management — handles BOTH the annual association membership fee
-// and per-lot monthly dues, switched via the mode toggle at the top.
+// and the monthly membership fee, switched via the mode toggle at the top.
 //
-// IMPORTANT (listener-churn fix): the members stream and both payments
-// streams are created ONCE and cached as fields, only recreated when
-// _year/_month actually change — never on every rebuild. Both the
-// annual and monthly bodies stay permanently mounted in an IndexedStack;
-// toggling _mode only changes which one is visible, it never
+// UPDATED — Monthly mode now reads type `monthlyMembership` (the same type
+// the generator creates) and shows ONE ROW PER MEMBER, like annual mode.
+// Before, it read type `dues` and built one row per lot, so generated
+// monthly membership records never appeared here.
+//
+// UPDATED — Annual mode now shows the REMAINING amount owed (the ledger
+// balance) while the annual record is still open. Monthly payments reduce
+// the ledger but not the annual record's stored amount, so before this the
+// Amount column said 2000 while the Balance column said 1850.
+//
+// IMPORTANT (listener-churn fix): the members stream, the lots stream, the
+// ledger stream and both payments streams are created ONCE and cached as
+// fields, only recreated when _year/_month actually change — never on every
+// rebuild. Both the annual and monthly bodies stay permanently mounted in an
+// IndexedStack; toggling _mode only changes which one is visible, it never
 // subscribes/unsubscribes a Firestore listener. Building streams inline
 // in `build()` (recreating them on every setState, e.g. the unpaid-only
 // checkbox) or tearing a StreamBuilder down when swapping modes both
@@ -16,6 +26,17 @@
 // Unexpected state", IDs ca9/b815 — firebase/firebase-js-sdk#9985).
 // Keep this pattern (cached streams + IndexedStack) for any future
 // screens with a similar mode toggle.
+//
+// IMPORTANT (dialog context fix): inside showDialog builders, always pop
+// with the DIALOG's own context (dialogContext), never the screen's
+// `context`. showDialog pushes onto the root navigator; popping with the
+// screen's context can hit a nested navigator and pop this whole screen
+// instead of closing the dialog.
+//
+// IMPORTANT (duplicate-record fix): if a member has more than one
+// payment record for the same period (e.g. a generated unpaid record plus a
+// separately recorded paid one), the PAID record wins when building rows.
+// See _indexPayments.
 //
 // Lets an admin/accountant:
 //   1. Generate one unpaid dues record per active member for a chosen
@@ -29,6 +50,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'member_selection_dialog.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
 import '../../../core/models/lot_model.dart';
@@ -43,6 +65,25 @@ import '../../../core/theme/design_tokens.dart';
 
 
 enum _DuesMode { annual, monthly }
+
+/// Indexes [list] by [keyOf]. When several records share a key, a PAID record
+/// always wins over a non-paid one; otherwise the first one seen is kept.
+Map<String, PaymentModel> _indexPayments(
+  Iterable<PaymentModel> list,
+  String Function(PaymentModel) keyOf,
+) {
+  final map = <String, PaymentModel>{};
+  for (final p in list) {
+    final k = keyOf(p);
+    final existing = map[k];
+    if (existing == null ||
+        (existing.status != PaymentStatus.paid &&
+            p.status == PaymentStatus.paid)) {
+      map[k] = p;
+    }
+  }
+  return map;
+}
 
 class MembershipDuesScreen extends StatefulWidget {
   const MembershipDuesScreen({super.key});
@@ -67,14 +108,11 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
 
   // ── Cached streams — created once, only replaced when _year/_month ────
   // actually change (see class-level comment above for why this matters).
-  late Stream<List<MemberModel>>  _membersStream;
-  late Stream<List<LotModel>>     _lotsStream;
-  late Stream<List<PaymentModel>> _annualStream;
-  late Stream<List<PaymentModel>> _monthlyStream;
-
-  
-  
-  
+  late Stream<List<MemberModel>>           _membersStream;
+  late Stream<List<LotModel>>              _lotsStream;
+  late Stream<List<Map<String, dynamic>>>  _ledgerStream;
+  late Stream<List<PaymentModel>>          _annualStream;
+  late Stream<List<PaymentModel>>          _monthlyStream;
 
   static const _monthNames = [
     'January','February','March','April','May','June',
@@ -87,8 +125,13 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
     _membersStream  = _fs.streamMembers();
     // Cached once like the others; broadcast so both mode bodies can share it.
     _lotsStream     = _lotService.streamLots().asBroadcastStream();
+    _ledgerStream   = _fs.streamMemberLedgers().asBroadcastStream();
     _annualStream   = _fs.streamMembershipFeesForYear(_year);
-    _monthlyStream  = _fs.streamMonthlyDuesForMonth(_year, _month);
+    // Monthly membership fees (type: monthlyMembership) — the same type
+    // that _generateDues creates in monthly mode. Keep this identical to
+    // _setYear/_setMonth below so first load and dropdown changes always
+    // query the same payment type.
+    _monthlyStream  = _fs.streamMonthlyFeesForMonth(_year, _month);
   }
 
   List<int> get _yearOptions {
@@ -104,7 +147,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
     setState(() {
       _year          = y;
       _annualStream  = _fs.streamMembershipFeesForYear(_year);
-      _monthlyStream = _fs.streamMonthlyDuesForMonth(_year, _month);
+      _monthlyStream = _fs.streamMonthlyFeesForMonth(_year, _month);
     });
   }
 
@@ -112,15 +155,21 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
     if (m == _month) return;
     setState(() {
       _month         = m;
-      _monthlyStream = _fs.streamMonthlyDuesForMonth(_year, _month);
+      _monthlyStream = _fs.streamMonthlyFeesForMonth(_year, _month);
     });
   }
 
   Future<void> _generateDues() async {
     double amount;
     if (_mode == _DuesMode.annual) {
-      final settings = await _settings.getSettings();
-      amount = settings.dues.annual;
+      // Annual = sum of the year's 12 monthly rates (150 x 12 = 1800; a rate
+      // change mid-year raises only the later months). Falls back to the
+      // Settings annual fee until a monthly rate exists.
+      amount = await _rateSvc.getAnnualForYear(_year);
+      if (amount <= 0) {
+        final settings = await _settings.getSettings();
+        amount = settings.dues.annual;
+      }
       if (amount <= 0) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -137,7 +186,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('No monthly rate is set for $_periodLabel yet. '
+            content: Text('No monthly membership rate is set for $_periodLabel yet. '
                 'Add one in Settings → Dues Configuration first.'),
           ),
         );
@@ -146,40 +195,54 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
     }
 
     if (!mounted) return;
+
+    // Show member selection dialog
+    final allMembers = await _fs.streamMembers().first;
+    if (!mounted) return;
+    final filtered = allMembers
+        .where((m) => m.status != MemberStatus.inactive)
+        .toList();
+
+    final selectionResult = await showDialog<List<MemberModel>>(
+      context: context,
+      builder: (_) => MemberSelectionDialog(allMembers: filtered),
+    );
+    if (selectionResult == null || selectionResult.isEmpty) return;
+
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      // Use the dialog's OWN context for popping. Using the screen's
+      // context here pops MembershipDuesScreen (back to Payments) and
+      // leaves the dialog's future unresolved.
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Text(
             _mode == _DuesMode.annual
                 ? 'Generate Membership Dues'
-                : 'Generate Monthly Dues',
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                : 'Generate Monthly Membership Fees'),
         content: Text(
           _mode == _DuesMode.annual
               ? 'Create an unpaid ₱${amount.toStringAsFixed(2)} membership '
-                'fee record for $_periodLabel for every active or '
-                'delinquent member who doesn\'t already have one. Members '
-                'with an existing record for this period are skipped — '
-                'this is safe to run more than once.'
-              : 'Create an unpaid ₱${amount.toStringAsFixed(2)} monthly dues '
-                'record for $_periodLabel for every LOT owned by an active '
-                'or delinquent member (a member with two lots gets two '
-                'records). Lots that already have a record for this month '
-                'are skipped — this is safe to run more than once.',
+                'fee record for $_periodLabel for every selected active or '
+                'delinquent member who doesn\'t already have one.'
+              : 'Create unpaid monthly records for $_periodLabel for every '
+                'selected active or delinquent member. Records that already '
+                'exist for this month are skipped — this is safe to run more '
+                'than once. '
+                'Tip: uncheck members here before generating.',
           style: const TextStyle(fontSize: 13.5),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.textPrimary,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.textInverted,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -200,14 +263,14 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
               year:       _year,
               amount:     amount,
               recordedBy: auth.userModel?.uid ?? '',
+              targetUids: selectionResult.map((m) => m.uid).toList(),
             )
-          : await _fs.generateMonthlyDues(
+          : await _fs.generateMonthlyMemberships(
               year:       _year,
               month:      _month,
               amount:     amount,
               recordedBy: auth.userModel?.uid ?? '',
-              // Lots collection is the source of truth for who owns what.
-              lots:       await _lotService.streamLots().first,
+              targetUids: selectionResult.map((m) => m.uid).toList(),
             );
 
       await _settings.logAction(
@@ -220,11 +283,10 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
             : 'dues-$_year-$_month',
         description:
             'Generated $_periodLabel '
-            '${_mode == _DuesMode.annual ? 'membership dues' : 'monthly dues'} '
+            '${_mode == _DuesMode.annual ? 'membership dues' : 'monthly fees'} '
             'at ₱${amount.toStringAsFixed(2)}: ${result.created} created, '
             '${result.skipped} already existed '
-            '(${result.total} '
-            '${_mode == _DuesMode.annual ? 'members' : 'lots'} billable'
+            '(${result.total} members billable'
             '${result.withoutLot > 0 ? ', ${result.withoutLot} member(s) with no lot skipped' : ''}).',
       );
 
@@ -233,21 +295,19 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
           SnackBar(
             content: Text(
               (result.created == 0
-                  ? 'Nothing to generate — every '
-                    '${_mode == _DuesMode.annual ? 'member' : 'lot'} already '
+                  ? 'Nothing to generate — every member already '
                     'has a record for $_periodLabel.'
                   : 'Created ${result.created} dues record'
                     '${result.created == 1 ? '' : 's'} for $_periodLabel. '
                     '${result.skipped} '
-                    '${_mode == _DuesMode.annual ? 'member' : 'lot'}'
-                    '${result.skipped == 1 ? '' : 's'} already had one.') +
+                    'member${result.skipped == 1 ? '' : 's'} already had one.') +
               (result.withoutLot > 0
                   ? ' ${result.withoutLot} member'
                     '${result.withoutLot == 1 ? ' has' : 's have'} no lot '
                     'assigned and could not be billed.'
                   : ''),
             ),
-            backgroundColor: const Color(0xFF1A7A4A),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -296,8 +356,8 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                         children: [
                           Text(
                               _mode == _DuesMode.annual
-                                  ? 'Membership Dues'
-                                  : 'Monthly Dues',
+                                  ? 'Annual Dues & Membership'
+                                  : 'Monthly Dues & Fees',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -307,12 +367,12 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                           const SizedBox(height: 2),
                           Text(
                               _mode == _DuesMode.annual
-                                  ? 'Annual association membership fee, by member'
-                                  : 'Per-lot monthly dues, by member',
+                                  ? 'Annual membership fees'
+                                  : 'Monthly membership fees',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 13, color: Colors.grey[600])),
+                                  fontSize: 13, color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
@@ -326,7 +386,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                             ? const SizedBox(
                                 width: 16, height: 16,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
+                                    strokeWidth: 2, color: AppColors.textInverted),
                               )
                             : const Icon(Icons.playlist_add_check,
                                 size: 18),
@@ -335,7 +395,7 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                             : 'Generate Dues'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.textPrimary,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.textInverted,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -377,21 +437,21 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
               children: [
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.textInverted,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFD0DBEE)),
+                    border: Border.all(color: AppColors.borderStrong),
                   ),
                   child: Row(
                     children: [
                       _ModeButton(
-                        label: 'Annual',
+                        label: 'Annual Membership',
                         selected: _mode == _DuesMode.annual,
                         // Only flips which IndexedStack child is visible —
                         // both streams stay subscribed the whole time.
                         onTap: () => setState(() => _mode = _DuesMode.annual),
                       ),
                       _ModeButton(
-                        label: 'Monthly',
+                        label: 'Monthly Membership',
                         selected: _mode == _DuesMode.monthly,
                         onTap: () => setState(() => _mode = _DuesMode.monthly),
                       ),
@@ -403,15 +463,15 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                     height: 42,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.textInverted,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFD0DBEE)),
+                      border: Border.all(color: AppColors.borderStrong),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: _month,
                         style: const TextStyle(
-                            fontSize: 13, color: Color(0xFF1A2B4A)),
+                            fontSize: 13, color: AppColors.textPrimary),
                         icon: const Icon(Icons.expand_more, size: 18),
                         items: List.generate(12, (i) => i + 1)
                             .map((m) => DropdownMenuItem(
@@ -427,15 +487,15 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                   height: 42,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.textInverted,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFD0DBEE)),
+                    border: Border.all(color: AppColors.borderStrong),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<int>(
                       value: _year,
                       style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF1A2B4A)),
+                          fontSize: 13, color: AppColors.textPrimary),
                       icon: const Icon(Icons.expand_more, size: 18),
                       items: _yearOptions
                           .map((y) => DropdownMenuItem(
@@ -463,7 +523,9 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                   _DuesBody(
                     membersStream:  _membersStream,
                     lotsStream:     _lotsStream,
+                    ledgerStream:   _ledgerStream,
                     perLot:         false, // annual fee: one per member
+                    useLedgerAmount: true, // show remaining balance as amount
                     paymentsStream: _annualStream,
                     periodLabel:    '$_year',
                     unpaidOnly:     _unpaidOnly,
@@ -476,7 +538,9 @@ class _MembershipDuesScreenState extends State<MembershipDuesScreen> {
                   _DuesBody(
                     membersStream:  _membersStream,
                     lotsStream:     _lotsStream,
-                    perLot:         true,  // monthly dues: one per lot
+                    ledgerStream:   _ledgerStream,
+                    perLot:         false, // monthly membership: one per member
+                    useLedgerAmount: false, // monthly: stored amount is right
                     paymentsStream: _monthlyStream,
                     periodLabel:    '${_monthNames[_month - 1]} $_year',
                     unpaidOnly:     _unpaidOnly,
@@ -501,8 +565,6 @@ class _ModeButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  
-
   const _ModeButton({
     required this.label, required this.selected, required this.onTap});
 
@@ -522,7 +584,7 @@ class _ModeButton extends StatelessWidget {
           style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : Colors.grey[600])),
+              color: selected ? AppColors.surface : AppColors.textSecondary)),
     ),
   );
 }
@@ -534,13 +596,21 @@ class _ModeButton extends StatelessWidget {
 // (see MembershipDuesScreen.build) so switching modes never disposes a
 // StreamBuilder / cancels a Firestore listener.
 class _DuesBody extends StatelessWidget {
-  final Stream<List<MemberModel>>  membersStream;
-  final Stream<List<LotModel>>     lotsStream;
-  final Stream<List<PaymentModel>> paymentsStream;
+  final Stream<List<MemberModel>>          membersStream;
+  final Stream<List<LotModel>>             lotsStream;
+  final Stream<List<Map<String, dynamic>>> ledgerStream;
+  final Stream<List<PaymentModel>>         paymentsStream;
 
-  /// true → monthly dues: one row per (member, lot).
-  /// false → annual fee: one row per member.
+  /// true → one row per (member, lot) — only for per-lot records (`dues`).
+  /// false → one row per member (annual fee AND monthly membership).
   final bool   perLot;
+
+  /// true → while a record is still open (unpaid/overdue), the Amount shown
+  /// is the member's remaining ledger balance instead of the record's stored
+  /// amount. Used by the annual body, because monthly payments reduce the
+  /// ledger but never change the annual record itself.
+  final bool   useLedgerAmount;
+
   final String periodLabel;
   final bool   unpaidOnly;
   final ValueChanged<bool?> onUnpaidOnlyChanged;
@@ -551,7 +621,9 @@ class _DuesBody extends StatelessWidget {
   const _DuesBody({
     required this.membersStream,
     required this.lotsStream,
+    required this.ledgerStream,
     required this.perLot,
+    required this.useLedgerAmount,
     required this.paymentsStream,
     required this.periodLabel,
     required this.unpaidOnly,
@@ -589,25 +661,38 @@ class _DuesBody extends StatelessWidget {
         String lotLabelOf(LotModel l) => buildLotLabel(
             phase: l.phase, block: l.block, lotNumber: l.lotNumber);
 
-        return StreamBuilder<List<PaymentModel>>(
-          stream: paymentsStream,
-          builder: (context, paySnap) {
-            final payments = paySnap.data ?? [];
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: ledgerStream, // cached in the parent — never built inline
+          builder: (context, ledgerSnap) {
+            final balances = <String, double>{};
+            for (final l in ledgerSnap.data ?? []) {
+              final uid = l['uid'] as String? ?? '';
+              if (uid.isNotEmpty) {
+                balances[uid] = (l['currentBalance'] as num?)?.toDouble() ?? 0.0;
+              }
+            }
+
+            return StreamBuilder<List<PaymentModel>>(
+              stream: paymentsStream,
+              builder: (context, paySnap) {
+                final payments = paySnap.data ?? [];
 
             final rows = <_DuesRow>[];
             var noLotCount = 0;
             if (perLot) {
-              final byLot = {
-                for (final p in payments)
-                  if (p.lotId.isNotEmpty) '${p.uid}|${p.lotId}': p
-              };
+              // If a member/lot has several records for this month, the
+              // PAID one wins (see _indexPayments).
+              final byLot = _indexPayments(
+                payments.where((p) => p.lotId.isNotEmpty),
+                (p) => '${p.uid}|${p.lotId}',
+              );
               // Records made before per-lot billing have no lotId; they
               // belong to the member's first lot (same rule as the
               // generator and Add Payment).
-              final legacy = {
-                for (final p in payments)
-                  if (p.lotId.isEmpty) p.uid: p
-              };
+              final legacy = _indexPayments(
+                payments.where((p) => p.lotId.isEmpty),
+                (p) => p.uid,
+              );
               for (final m in members) {
                 final owned = lotsByUid[m.uid] ?? const <LotModel>[];
                 if (owned.isEmpty) {
@@ -616,24 +701,42 @@ class _DuesBody extends StatelessWidget {
                 }
                 for (var i = 0; i < owned.length; i++) {
                   final lot = owned[i];
+                  final pay = byLot['${m.uid}|${lot.id}'] ??
+                      (i == 0 ? legacy[m.uid] : null);
                   rows.add(_DuesRow(
                     member: m,
-                    payment: byLot['${m.uid}|${lot.id}'] ??
-                        (i == 0 ? legacy[m.uid] : null),
+                    payment: pay,
                     lotText: lotLabelOf(lot),
+                    currentBalance: balances[m.uid],
+                    amount: pay?.amount,
                   ));
                 }
               }
             } else {
-              final byUid = {for (final p in payments) p.uid: p};
+              final byUid = _indexPayments(payments, (p) => p.uid);
               for (final m in members) {
                 final owned = lotsByUid[m.uid] ?? const <LotModel>[];
+                final pay = byUid[m.uid];
+                final bal = balances[m.uid];
+
+                // Annual fee still open → the real amount owed is the
+                // ledger balance (monthly payments already reduced it).
+                // Paid / waived records keep their stored amount.
+                final open = pay != null &&
+                    (pay.status == PaymentStatus.unpaid ||
+                        pay.status == PaymentStatus.overdue);
+                final shownAmount = (useLedgerAmount && open && bal != null)
+                    ? (bal < 0 ? 0.0 : bal)
+                    : pay?.amount;
+
                 rows.add(_DuesRow(
                   member: m,
-                  payment: byUid[m.uid],
+                  payment: pay,
                   lotText: owned.isEmpty
                       ? '—'
                       : owned.map(lotLabelOf).join(', '),
+                  currentBalance: bal,
+                  amount: shownAmount,
                 ));
               }
             }
@@ -649,10 +752,10 @@ class _DuesBody extends StatelessWidget {
             final unpaidCount = rows.where((r) => !isSettled(r)).length;
             final totalCollected = rows
                 .where((r) => r.payment?.status == PaymentStatus.paid)
-                .fold<double>(0, (sum, r) => sum + (r.payment?.amount ?? 0));
+                .fold<double>(0, (sum, r) => sum + (r.amount ?? 0));
             final totalPending = rows
                 .where((r) => !isSettled(r))
-                .fold<double>(0, (sum, r) => sum + (r.payment?.amount ?? 0));
+                .fold<double>(0, (sum, r) => sum + (r.amount ?? 0));
 
             final visibleRows =
                 unpaidOnly ? rows.where((r) => !isSettled(r)).toList() : rows;
@@ -673,28 +776,28 @@ class _DuesBody extends StatelessWidget {
                         label: 'Paid ($periodLabel)',
                         value: '$paidCount',
                         icon: Icons.check_circle_outline,
-                        color: const Color(0xFF1A7A4A),
+                        color: AppColors.success,
                         compact: compact,
                       ),
                       _SummaryCard(
-                        label: 'Unpaid / Not Generated',
+                        label: 'Unpaid / Outstanding',
                         value: '$unpaidCount',
                         icon: Icons.schedule_outlined,
-                        color: const Color(0xFF7A6A1A),
+                        color: AppColors.warning,
                         compact: compact,
                       ),
                       _SummaryCard(
                         label: 'Total Collected',
                         value: '₱${totalCollected.toStringAsFixed(2)}',
                         icon: Icons.payments_outlined,
-                        color: const Color(0xFF1A7A4A),
+                        color: AppColors.success,
                         compact: compact,
                       ),
                       _SummaryCard(
                         label: 'Total Pending',
                         value: '₱${totalPending.toStringAsFixed(2)}',
                         icon: Icons.hourglass_bottom,
-                        color: const Color(0xFFCC2200),
+                        color: AppColors.danger,
                         compact: compact,
                       ),
                     ];
@@ -742,7 +845,7 @@ class _DuesBody extends StatelessWidget {
                     ),
                     const Text('Show unpaid / not yet generated only',
                         style: TextStyle(
-                            fontSize: 13, color: Color(0xFF1A2B4A))),
+                            fontSize: 13, color: AppColors.textPrimary)),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -753,16 +856,16 @@ class _DuesBody extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF8E0),
+                      color: AppColors.warningBg,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFEBDDA0)),
+                      border: Border.all(color: AppColors.warningBg),
                     ),
                     child: Text(
                       '$noLotCount member${noLotCount == 1 ? ' has' : 's have'} '
                       'no lot assigned, so no monthly dues can be billed to '
                       'them. Assign a lot from Location Mapping.',
                       style: const TextStyle(
-                          fontSize: 12.5, color: Color(0xFF7A6A1A)),
+                          fontSize: 12.5, color: AppColors.warning),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -783,9 +886,9 @@ class _DuesBody extends StatelessWidget {
 
                     return Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.textInverted,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE0E8F4)),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: loading
                           ? const Padding(
@@ -802,7 +905,7 @@ class _DuesBody extends StatelessWidget {
                                     decoration: const BoxDecoration(
                                       border: Border(
                                           bottom: BorderSide(
-                                              color: Color(0xFFE0E8F4))),
+                                              color: AppColors.border)),
                                     ),
                                     child: const Row(
                                       children: [
@@ -815,6 +918,9 @@ class _DuesBody extends StatelessWidget {
                                         Expanded(
                                             flex: 2,
                                             child: _TH('AMOUNT')),
+                                        Expanded(
+                                            flex: 2,
+                                            child: _TH('BALANCE')),
                                         Expanded(
                                             flex: 2,
                                             child: _TH('PAID DATE')),
@@ -836,7 +942,7 @@ class _DuesBody extends StatelessWidget {
                                                 : 'No members match this filter.',
                                             style: TextStyle(
                                                 fontSize: 13,
-                                                color: Colors.grey[500]),
+                                                color: AppColors.textMuted),
                                           ),
                                         ),
                                       )
@@ -848,7 +954,7 @@ class _DuesBody extends StatelessWidget {
                                         separatorBuilder: (_, __) =>
                                             const Divider(
                                                 height: 1,
-                                                color: Color(0xFFF0F4FB)),
+                                                color: AppColors.background),
                                         itemBuilder: (context, i) =>
                                             _DuesTableRow(
                                                 row: visibleRows[i],
@@ -865,27 +971,35 @@ class _DuesBody extends StatelessWidget {
             );
           },
         );
-          },
-        );
       },
     );
-  }
+  },
+);
+},
+);
+}
 }
 
-// A member joined with (possibly null) dues payment for the selected
-// period (year, or month+year). Null payment means "not generated yet" —
-// distinct from an existing record with status unpaid.
 class _DuesRow {
   final MemberModel member;
   final PaymentModel? payment;
 
-  /// Monthly mode: the one lot this row is for ("Block 3 · Lot 12").
-  /// Annual mode: all of the member's lots, comma-separated.
+  /// Per-lot rows: the one lot this row is for ("Block 3 · Lot 12").
+  /// Per-member rows: all of the member's lots, comma-separated.
   final String lotText;
+  final double? currentBalance;
+
+  /// The amount to DISPLAY and total for this row. For an open annual fee
+  /// this is the remaining ledger balance; otherwise it is the record's
+  /// stored amount. Null when no record has been generated.
+  final double? amount;
+
   const _DuesRow({
     required this.member,
     required this.payment,
     required this.lotText,
+    this.currentBalance,
+    this.amount,
   });
 }
 
@@ -911,9 +1025,9 @@ class _SummaryCard extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.textInverted,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE0E8F4)),
+          border: Border.all(color: AppColors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -931,7 +1045,7 @@ class _SummaryCard extends StatelessWidget {
             Text(label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10.5, color: Colors.grey[600])),
+                style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
             const SizedBox(height: 2),
             Text(value,
                 maxLines: 1,
@@ -948,9 +1062,9 @@ class _SummaryCard extends StatelessWidget {
     return Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.textInverted,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE0E8F4)),
+      border: Border.all(color: AppColors.border),
     ),
     child: Row(
       children: [
@@ -968,7 +1082,7 @@ class _SummaryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis),
               const SizedBox(height: 3),
               Text(value,
@@ -991,7 +1105,7 @@ class _TH extends StatelessWidget {
   Widget build(BuildContext context) => Text(text,
       style: const TextStyle(
           fontSize: 12, fontWeight: FontWeight.w600,
-          color: Color(0xFF5A7099), letterSpacing: 0.4));
+          color: AppColors.textSecondary, letterSpacing: 0.4));
 }
 
 class _DuesTableRow extends StatefulWidget {
@@ -1017,21 +1131,21 @@ class _DuesTableRowState extends State<_DuesTableRow> {
 
   Color _fg(PaymentStatus? s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFF1A7A4A);
-      case PaymentStatus.overdue: return const Color(0xFFCC2200);
-      case PaymentStatus.waived:  return const Color(0xFF5A7099);
+      case PaymentStatus.paid:    return AppColors.success;
+      case PaymentStatus.overdue: return AppColors.danger;
+      case PaymentStatus.waived:  return AppColors.textSecondary;
       case PaymentStatus.unpaid:
-      case null:                  return const Color(0xFF7A6A1A);
+      case null:                  return AppColors.warning;
     }
   }
 
   Color _bgColor(PaymentStatus? s) {
     switch (s) {
-      case PaymentStatus.paid:    return const Color(0xFFEAF7F0);
-      case PaymentStatus.overdue: return const Color(0xFFFFF0EE);
-      case PaymentStatus.waived:  return const Color(0xFFF0F4FB);
+      case PaymentStatus.paid:    return AppColors.successBg;
+      case PaymentStatus.overdue: return AppColors.dangerBg;
+      case PaymentStatus.waived:  return AppColors.background;
       case PaymentStatus.unpaid:
-      case null:                  return const Color(0xFFFFF8E0);
+      case null:                  return AppColors.warningBg;
     }
   }
 
@@ -1041,9 +1155,16 @@ class _DuesTableRowState extends State<_DuesTableRow> {
       : '${d.day.toString().padLeft(2,'0')}/'
         '${d.month.toString().padLeft(2,'0')}/${d.year}';
 
+  String get _amountText => widget.row.amount == null
+      ? '—'
+      : '₱${widget.row.amount!.toStringAsFixed(2)}';
+
   Future<void> _markPaid() async {
     final payment = widget.row.payment;
     if (payment == null) return; // nothing to mark paid — not generated yet
+
+    // What is actually being paid now (remaining balance for annual fees).
+    final paidAmount = widget.row.amount ?? payment.amount;
 
     setState(() => _marking = true);
     try {
@@ -1052,7 +1173,7 @@ class _DuesTableRowState extends State<_DuesTableRow> {
       final result = await _notif.sendToMember(
         uid: payment.uid,
         title: 'Payment Confirmed',
-        body: 'Hi ${payment.memberName}, your ₱${payment.amount.toStringAsFixed(2)} '
+        body: 'Hi ${payment.memberName}, your ₱${paidAmount.toStringAsFixed(2)} '
             '${payment.type.label}'
             '${payment.lotLabel.isEmpty ? '' : ' (${payment.lotLabel})'} '
             'payment has been received and confirmed.',
@@ -1067,8 +1188,8 @@ class _DuesTableRowState extends State<_DuesTableRow> {
                 ? 'Dues marked paid. Member notified.'
                 : 'Marked paid, but notification failed: ${result.message}'),
             backgroundColor: result.success
-                ? const Color(0xFF1A7A4A)
-                : const Color(0xFF7A6A1A),
+                ? AppColors.success
+                : AppColors.warning,
           ),
         );
       }
@@ -1122,7 +1243,7 @@ class _DuesTableRowState extends State<_DuesTableRow> {
                       style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0D2A5C)),
+                          color: AppColors.primaryHeader),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
@@ -1137,21 +1258,31 @@ class _DuesTableRowState extends State<_DuesTableRow> {
                   child: Text(widget.row.lotText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  p == null ? '—' : '₱${p.amount.toStringAsFixed(2)}',
+                  _amountText,
                   style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A2B4A)),
+                      color: AppColors.textPrimary),
                 ),
+                if (widget.row.currentBalance != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    'Bal: ₱${widget.row.currentBalance!.toStringAsFixed(2)}',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.danger),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 4),
             Text('Paid ${_fmt(p?.paidDate)}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
             if (_canMarkPaid(p)) ...[
               const SizedBox(height: 6),
               Align(
@@ -1159,7 +1290,7 @@ class _DuesTableRowState extends State<_DuesTableRow> {
                 child: TextButton(
                   onPressed: _marking ? null : _markPaid,
                   style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF1A7A4A),
+                      foregroundColor: AppColors.success,
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap),
@@ -1184,19 +1315,32 @@ class _DuesTableRowState extends State<_DuesTableRow> {
           Expanded(flex: 3, child: Text(widget.row.member.name,
               style: const TextStyle(
                   fontSize: 13.5, fontWeight: FontWeight.w500,
-                  color: Color(0xFF0D2A5C)),
+                  color: AppColors.primaryHeader),
               overflow: TextOverflow.ellipsis)),
           Expanded(flex: 3, child: Text(widget.row.lotText,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, color: Colors.grey[700]))),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary))),
           Expanded(flex: 2, child: Text(
-              p == null ? '—' : '₱${p.amount.toStringAsFixed(2)}',
+              _amountText,
               style: const TextStyle(
                   fontSize: 13.5, fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A2B4A)))),
+                  color: AppColors.textPrimary))),
+          if (widget.row.currentBalance != null)
+            Expanded(
+              flex: 2,
+              child: Text(
+                '₱${widget.row.currentBalance!.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.danger),
+              ),
+            )
+          else
+            const Expanded(flex: 2, child: Text('—')),
           Expanded(flex: 2, child: Text(_fmt(p?.paidDate),
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary))),
           Expanded(
             flex: 2,
             child: _statusPill(effective),
@@ -1207,7 +1351,7 @@ class _DuesTableRowState extends State<_DuesTableRow> {
                 ? TextButton(
                     onPressed: _marking ? null : _markPaid,
                     style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF1A7A4A),
+                        foregroundColor: AppColors.success,
                         padding: EdgeInsets.zero),
                     child: _marking
                         ? const SizedBox(
