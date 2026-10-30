@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/lot_model.dart';
 import '../../../core/services/lot_service.dart';
+import '../../../core/services/rate_service.dart';
+import '../../../core/services/sale_service.dart';
+import '../../../core/models/lot_sale_model.dart';
 import '../../../core/theme/design_tokens.dart';
 
 
@@ -561,6 +564,7 @@ class _VacantLotDialogState
     extends State<VacantLotDialog> {
   final LotService _service =
       LotService();
+  final RateService _rateService = RateService();
 
   final _formKey =
       GlobalKey<FormState>();
@@ -575,15 +579,23 @@ class _VacantLotDialogState
       _areaController;
 
   late final TextEditingController
-      _priceController;
-
-  late final TextEditingController
       _contactController;
 
   late final TextEditingController
       _notesController;
 
-  bool _saving = false;
+  late final TextEditingController
+      _priceControllerOverride;
+
+  /// Manual price override. Defaults to null (derive from rate).
+  /// Only shown in the dialog when no default rate has been configured
+  /// yet — once one exists, admin can skip the field and let pricing
+  /// flow automatically.
+  String? _manualPriceText;
+  bool _manualPriceSet = false;
+  double? _currentRate;
+  bool _loading = true;
+  bool  _saving = false;
 
   @override
   void initState() {
@@ -610,14 +622,6 @@ class _VacantLotDialogState
             ),
     );
 
-    _priceController =
-        TextEditingController(
-      text: widget.lot.price == null
-          ? ''
-          : widget.lot.price!
-              .toStringAsFixed(2),
-    );
-
     _contactController =
         TextEditingController(
       text:
@@ -628,6 +632,21 @@ class _VacantLotDialogState
         TextEditingController(
       text: widget.lot.notes ?? '',
     );
+
+    _priceControllerOverride =
+        TextEditingController();
+
+    _loadRate();
+  }
+
+  Future<void> _loadRate() async {
+    final rate = await _rateService.getSalesRate();
+    if (mounted) {
+      setState(() {
+        _currentRate = rate?.ratePerSqm;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -635,9 +654,9 @@ class _VacantLotDialogState
     _blockController.dispose();
     _lotController.dispose();
     _areaController.dispose();
-    _priceController.dispose();
     _contactController.dispose();
     _notesController.dispose();
+    _priceControllerOverride.dispose();
 
     super.dispose();
   }
@@ -850,23 +869,67 @@ class _VacantLotDialogState
 
                 const SizedBox(height: 10),
 
-                _textField(
-                  controller:
-                      _priceController,
-                  label: 'Price',
-                  hint: 'Optional',
-                  icon:
-                      Icons.payments_outlined,
-                  enabled:
-                      widget.canEdit,
-                  keyboardType:
-                      const TextInputType
-                          .numberWithOptions(
-                    decimal: true,
+                // Derived price preview — always shown when a default
+                // rate exists so admins see where the number comes from.
+                if (_currentRate != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      '₱${_currentRate!.toStringAsFixed(2)} × ${widget.lot.areaSqm ?? 0} sqm = ₱${(_currentRate! * (widget.lot.areaSqm ?? 0)).toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 12),
+                ],
+                // Manual override only when no default rate has been
+                // configured yet — once one exists, admins can skip the
+                // field entirely and pricing flows automatically.
+                if (_manualPriceText == null && _currentRate == null) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextFormField(
+                      controller: _priceControllerOverride,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Manual Price (override)',
+                        hintText: 'Price per sqm or total — use default rate if available',
+                        prefixIcon: const Icon(Icons.sell_outlined, size: 19),
+                        filled: true,
+                        fillColor: AppColors.surface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: _blue.withOpacity(0.2)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: _blue.withOpacity(0.2)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: _blue, width: 1.5),
+                        ),
+                      ),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v.trim());
+                        if (parsed != null && parsed >= 0) {
+                          setState(() => _manualPriceSet = true);
+                        } else {
+                          setState(() => _manualPriceSet = false);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+                if (_manualPriceSet) ...[
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      '$_manualPriceText',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    ),
+                  ),
+                ],
 
                 _textField(
                   controller:
@@ -989,17 +1052,16 @@ class _VacantLotDialogState
 
     double? price;
 
-    final priceText =
-        _priceController.text.trim();
-
-    if (priceText.isNotEmpty) {
-      price = double.tryParse(priceText);
-
-      if (price == null || price < 0) {
-        _showError(
-          'Please enter a valid price.',
-        );
-        return;
+    if (_currentRate != null) {
+      price = _currentRate! * (area ?? 0);
+    } else {
+      final priceText = _priceControllerOverride.text.trim();
+      if (priceText.isNotEmpty) {
+        price = double.tryParse(priceText);
+        if (price == null || price < 0) {
+          _showError('Please enter a valid price.');
+          return;
+        }
       }
     }
 
@@ -1259,25 +1321,11 @@ class _VacantLotDialogState
   // ================================================================
 
   Future<void> _markForSale() async {
-    double price = 0;
+    final area = double.tryParse(_areaController.text.trim()) ?? widget.lot.areaSqm ?? 0;
 
-    final priceText =
-        _priceController.text.trim();
-
-    if (priceText.isNotEmpty) {
-      final parsed =
-          double.tryParse(priceText);
-
-      if (parsed == null ||
-          parsed < 0) {
-        _showError(
-          'Please enter a valid price.',
-        );
-        return;
-      }
-
-      price = parsed;
-    }
+    final price = _currentRate != null
+        ? (_currentRate! * area)
+        : (double.tryParse(_priceControllerOverride.text.trim()) ?? 0.0);
 
     setState(() {
       _saving = true;
@@ -1355,6 +1403,7 @@ class _ForSaleLotDialogState
     extends State<ForSaleLotDialog> {
   final LotService _service =
       LotService();
+  final SaleService _saleService = SaleService();
 
   late final TextEditingController
       _priceController;
@@ -1364,6 +1413,14 @@ class _ForSaleLotDialogState
 
   late final TextEditingController
       _notesController;
+
+  bool _showRecordSaleForm = false;
+  SaleType _recordSaleMode = SaleType.cash;
+
+  late final TextEditingController _buyerController;
+  late final TextEditingController _downPaymentController;
+  late final TextEditingController _termMonthsController;
+  late final TextEditingController _annualInterestRateController;
 
   bool _saving = false;
 
@@ -1389,6 +1446,11 @@ class _ForSaleLotDialogState
         TextEditingController(
       text: widget.lot.notes ?? '',
     );
+
+    _buyerController = TextEditingController();
+    _downPaymentController = TextEditingController(text: '0.00');
+    _termMonthsController = TextEditingController(text: '12');
+    _annualInterestRateController = TextEditingController(text: '12.0');
   }
 
   @override
@@ -1396,6 +1458,10 @@ class _ForSaleLotDialogState
     _priceController.dispose();
     _contactController.dispose();
     _notesController.dispose();
+    _buyerController.dispose();
+    _downPaymentController.dispose();
+    _termMonthsController.dispose();
+    _annualInterestRateController.dispose();
 
     super.dispose();
   }
@@ -1605,6 +1671,29 @@ class _ForSaleLotDialogState
                     widget.canEdit,
                 maxLines: 4,
               ),
+
+              const SizedBox(height: 18),
+
+              _sectionTitle(
+                'Record Sale',
+              ),
+
+              const SizedBox(height: 10),
+
+              if (!_showRecordSaleForm)
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => setState(
+                        () => _showRecordSaleForm = true),
+                    icon: const Icon(Icons.sell),
+                    label: const Text('Record New Sale'),
+                  ),
+                )
+              else
+                _buildRecordSaleForm(),
+
+              const SizedBox(height: 18),
             ],
           ),
         ),
@@ -1656,6 +1745,129 @@ class _ForSaleLotDialogState
           ),
       ],
     );
+  }
+
+  Widget _buildRecordSaleForm() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: RadioListTile<SaleType>(
+                title: const Text('Cash'),
+                value: SaleType.cash,
+                groupValue: _recordSaleMode,
+                onChanged: (val) => setState(() => _recordSaleMode = val!),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            Expanded(
+              child: RadioListTile<SaleType>(
+                title: const Text('Installment'),
+                value: SaleType.installment,
+                groupValue: _recordSaleMode,
+                onChanged: (val) => setState(() => _recordSaleMode = val!),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+        _textField(
+          controller: _buyerController,
+          label: 'Buyer Name',
+          hint: 'Enter buyer name',
+          icon: Icons.person,
+        ),
+        if (_recordSaleMode == SaleType.installment) ...[
+          const SizedBox(height: 12),
+          _textField(
+            controller: _downPaymentController,
+            label: 'Down Payment',
+            hint: '0.00',
+            icon: Icons.payments,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          _textField(
+            controller: _termMonthsController,
+            label: 'Term (Months)',
+            hint: '12',
+            icon: Icons.calendar_month,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          _textField(
+            controller: _annualInterestRateController,
+            label: 'Annual Interest Rate (%)',
+            hint: '12.0',
+            icon: Icons.percent,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+          ),
+        ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _recordSale,
+            child: const Text('Confirm Sale'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _recordSale() async {
+    final buyer = _buyerController.text.trim();
+    if (buyer.isEmpty) {
+      _showError('Please enter a buyer name.');
+      return;
+    }
+
+    final double downPayment;
+    final int term;
+    final double rate;
+
+    if (_recordSaleMode == SaleType.installment) {
+      downPayment =
+          double.tryParse(_downPaymentController.text.trim()) ?? 0.0;
+      term = int.tryParse(_termMonthsController.text.trim()) ?? 12;
+      rate = double.tryParse(_annualInterestRateController.text.trim()) ?? 12.0;
+    } else {
+      downPayment = 0.0;
+      term = 0;
+      rate = 0.0;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      await _saleService.recordSale(
+        lot: widget.lot,
+        buyerUid: 'TODO-BUYER-UID', // FIXME: Need to handle buyer selection properly
+        buyerName: buyer,
+        downPayment: downPayment,
+        termMonths: term,
+        annualInterestRate: rate,
+        soldDate: DateTime.now(),
+        recordedBy: widget.currentUserId,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _saving = false;
+      });
+
+      _showError('Failed to record sale.\n$e');
+    }
   }
 
   Future<void> _save() async {
