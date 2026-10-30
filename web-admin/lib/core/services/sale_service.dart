@@ -186,6 +186,33 @@ class SaleService {
     }
   }
 
+  Future<void> closeoutSale({
+    required String saleId,
+    required double refundAmount,
+    required String closedBy,
+  }) async {
+    final snap = await _payments
+        .where('saleId', isEqualTo: saleId)
+        .get();
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      final p = LotPaymentModel.fromMap(doc.data());
+      if (p.status == LotPaymentStatus.scheduled) {
+        batch.update(doc.reference, {'status': LotPaymentStatus.void_.name});
+      }
+    }
+
+    batch.update(_sales.doc(saleId), {
+      'status': LotSaleStatus.cancelled.name,
+      'refundAmount': refundAmount,
+      'closedBy': closedBy,
+      'closedAt': Timestamp.now(),
+    });
+
+    await batch.commit();
+  }
+
   /// Streams all sales for a given lot.
   Stream<List<LotSaleModel>> streamSalesForLot(String lotId) {
     return _sales

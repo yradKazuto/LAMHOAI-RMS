@@ -37,6 +37,6 @@ Source of truth: `docs/plan-coding.md` (8 phases), `docs/plan-payment-overhaul.m
 - Phase 3: Flow 03–04 sales + schedule (Core) — COMPLETED.
 - Phase 4: Flow 05–06 payments + overdue (Core) — COMPLETED.
 - Phase 5: Flow 09 paid off → deed (Core) — COMPLETED.
-- Phase 6: Optional 07 / 08 / 10 / 11 / 12b
+- Phase 6: Optional 07 / 08 / 10 / 11 / 12b (build to present, removable) — IN PROGRESS.
 - Phase 7: Reports + mobile views
 - Phase 8: Acceptance tests + interview
