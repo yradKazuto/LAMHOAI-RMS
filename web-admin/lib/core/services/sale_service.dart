@@ -161,10 +161,29 @@ class SaleService {
           'paymentMethod': method.name,
           'verifiedAt': method == PaymentMethod.cash ? Timestamp.now() : null,
         });
+        await _checkIfPaidOff(saleId);
         return;
       }
     }
     throw Exception('No unpaid periods for this sale.');
+  }
+
+  Future<void> _checkIfPaidOff(String saleId) async {
+    final snap = await _payments.where('saleId', isEqualTo: saleId).get();
+    bool allPaid = true;
+    for (final doc in snap.docs) {
+      final p = LotPaymentModel.fromMap(doc.data());
+      if (p.status != LotPaymentStatus.paid) {
+        allPaid = false;
+        break;
+      }
+    }
+    if (allPaid) {
+      await _sales.doc(saleId).update({
+        'status': LotSaleStatus.paidOff.name,
+        'paidOffAt': Timestamp.now(),
+      });
+    }
   }
 
   /// Streams all sales for a given lot.

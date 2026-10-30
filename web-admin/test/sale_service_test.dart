@@ -168,6 +168,28 @@ void main() {
       expect(payments[0].paymentMethod, PaymentMethod.cash);
       // Period 2 should still be scheduled
       expect(payments[1].status, LotPaymentStatus.scheduled);
+
+      // Verify Sale status is still active (not all paid yet)
+      final saleSnap = await fakeDb.collection('lot_sales').doc(saleId).get();
+      expect(LotSaleModel.fromMap(saleSnap.data()!, saleId).status, LotSaleStatus.active);
+
+      // Pay remaining
+      await saleService.recordPayment(
+        saleId: saleId,
+        payer: 'PayerBuyer',
+        paidBy: 'Officer',
+        method: PaymentMethod.cash,
+      );
+      await saleService.recordPayment(
+        saleId: saleId,
+        payer: 'PayerBuyer',
+        paidBy: 'Officer',
+        method: PaymentMethod.cash,
+      );
+
+      // Verify all paid, Sale status should be paidOff
+      final saleSnapFinal = await fakeDb.collection('lot_sales').doc(saleId).get();
+      expect(LotSaleModel.fromMap(saleSnapFinal.data()!, saleId).status, LotSaleStatus.paidOff);
     });
   });
 }
