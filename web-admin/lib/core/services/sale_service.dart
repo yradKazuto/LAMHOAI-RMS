@@ -213,6 +213,57 @@ class SaleService {
     await batch.commit();
   }
 
+  Future<void> transferLot({
+    required String saleId,
+    required String newBuyerUid,
+    required String newBuyerName,
+    required String updatedBy,
+  }) async {
+    final saleDoc = await _sales.doc(saleId).get();
+    if (!saleDoc.exists) throw Exception('Sale not found.');
+
+    final sale = LotSaleModel.fromMap(saleDoc.data()!, saleDoc.id);
+
+    // Update lot ownership
+    await _db.collection('lots').doc(sale.lotId).update({
+      'uid': newBuyerUid,
+      'ownerName': newBuyerName,
+      'updatedBy': updatedBy,
+      'updatedAt': Timestamp.now(),
+    });
+
+    // Update sale record
+    await _sales.doc(saleId).update({
+      'buyerUid': newBuyerUid,
+      'buyerName': newBuyerName,
+      'updatedBy': updatedBy,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getPaymentsReportDataset() async {
+    final paymentsSnap = await _payments.get();
+    final salesSnap = await _sales.get();
+
+    final sales = {
+      for (final doc in salesSnap.docs)
+        doc.id: LotSaleModel.fromMap(doc.data(), doc.id)
+    };
+
+    return paymentsSnap.docs.map((doc) {
+      final p = LotPaymentModel.fromMap(doc.data());
+      final s = sales[p.saleId];
+      return {
+        'period': p.period,
+        'amount': p.amount,
+        'status': p.status.name,
+        'buyerName': s?.buyerName ?? 'Unknown',
+        'lotNumber': s?.lotNumber ?? 'Unknown',
+        'soldDate': s?.soldDate,
+      };
+    }).toList();
+  }
+
   /// Streams all sales for a given lot.
   Stream<List<LotSaleModel>> streamSalesForLot(String lotId) {
     return _sales
