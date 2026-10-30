@@ -115,5 +115,59 @@ void main() {
       expect(sale.saleType, SaleType.installment);
       expect(sale.termMonths, 12);
     });
+
+    test('recordPayment pays the first unpaid period', () async {
+      final lot = LotModel(
+        id: 'lot-3',
+        phase: 'Phase 3',
+        block: 'Block 3',
+        lotNumber: 'Lot 1',
+        status: LotStatus.forSale,
+        price: 30000.0,
+        areaSqm: 100,
+        mapX: 0,
+        mapY: 0,
+        updatedBy: 'admin',
+        updatedAt: Timestamp.now(),
+      );
+
+      await saleService.recordSale(
+        lot: lot,
+        buyerUid: 'uid-3',
+        buyerName: 'PayerBuyer',
+        downPayment: 0,
+        termMonths: 3,
+        annualInterestRate: 0,
+        soldDate: DateTime(2026, 10, 30),
+        recordedBy: 'admin',
+      );
+
+      final salesSnap = await fakeDb.collection('lot_sales').get();
+      final saleId = salesSnap.docs.first.id;
+
+      await saleService.recordPayment(
+        saleId: saleId,
+        payer: 'PayerBuyer',
+        paidBy: 'Officer',
+        method: PaymentMethod.cash,
+      );
+
+      final paymentsSnap = await fakeDb.collection('lot_payments')
+          .where('saleId', isEqualTo: saleId)
+          .get();
+
+      final docs = paymentsSnap.docs.toList();
+      docs.sort((a, b) => (a.data()['period'] as num).compareTo(b.data()['period'] as num));
+      final payments = docs.map((d) => LotPaymentModel.fromMap(d.data())).toList();
+
+      // Period 1 (first period, as period 0 was not created) should now be paid
+      expect(payments[0].period, 1);
+      expect(payments[0].status, LotPaymentStatus.paid);
+      expect(payments[0].paidBy, 'Officer');
+      expect(payments[0].payer, 'PayerBuyer');
+      expect(payments[0].paymentMethod, PaymentMethod.cash);
+      // Period 2 should still be scheduled
+      expect(payments[1].status, LotPaymentStatus.scheduled);
+    });
   });
 }

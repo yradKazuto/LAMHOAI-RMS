@@ -132,6 +132,41 @@ class SaleService {
     return max + 1;
   }
 
+  /// Records a payment for the first unpaid period of a sale.
+  Future<void> recordPayment({
+    required String saleId,
+    required String payer,
+    required String paidBy,
+    required PaymentMethod method,
+  }) async {
+    final snap = await _payments
+        .where('saleId', isEqualTo: saleId)
+        .get();
+
+    final docs = snap.docs.toList();
+    docs.sort((a, b) {
+      final pa = (a.data()['period'] as num?)?.toInt() ?? 0;
+      final pb = (b.data()['period'] as num?)?.toInt() ?? 0;
+      return pa.compareTo(pb);
+    });
+
+    for (final doc in docs) {
+      final p = LotPaymentModel.fromMap(doc.data());
+      if (p.status != LotPaymentStatus.paid) {
+        await _payments.doc(doc.id).update({
+          'status': LotPaymentStatus.paid.name,
+          'paidAt': Timestamp.now(),
+          'paidBy': paidBy,
+          'payer': payer,
+          'paymentMethod': method.name,
+          'verifiedAt': method == PaymentMethod.cash ? Timestamp.now() : null,
+        });
+        return;
+      }
+    }
+    throw Exception('No unpaid periods for this sale.');
+  }
+
   /// Streams all sales for a given lot.
   Stream<List<LotSaleModel>> streamSalesForLot(String lotId) {
     return _sales
