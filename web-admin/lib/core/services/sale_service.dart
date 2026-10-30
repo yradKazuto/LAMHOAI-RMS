@@ -159,4 +159,19 @@ class SaleService {
     if (!doc.exists) return null;
     return LotSaleModel.fromMap(doc.data()!, doc.id);
   }
+
+  /// Streams all sales.
+  Stream<List<LotSaleModel>> streamAllSales() {
+    return _sales.snapshots().map((snap) => snap.docs
+        .map((d) => LotSaleModel.fromMap(d.data(), d.id))
+        .toList());
+  }
+
+  /// Reads all sales for a given lot.
+  Future<List<LotSaleModel>> getAllSalesForLot(String lotId) async {
+    final snap = await _sales.where('lotId', isEqualTo: lotId).get();
+    return snap.docs
+        .map((d) => LotSaleModel.fromMap(d.data(), d.id))
+        .toList();
+  }
 }
