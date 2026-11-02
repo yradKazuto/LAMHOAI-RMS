@@ -22,6 +22,8 @@ import '../../features/audit/screens/audit_screen.dart';
 import '../../features/preview/screens/member_preview_screen.dart';
 import '../../features/location/screens/location_mapping_screen.dart';
 import '../../features/help/screens/help_screen.dart';
+import '../../features/payments/screens/statement_preview_screen.dart';
+import '../../features/location/screens/bulk_lot_update_screen.dart';
 import '../../core/theme/design_tokens.dart';
 
 class AppRoutes {
@@ -41,6 +43,8 @@ class AppRoutes {
   static const preview        = '/preview';
   static const location       = '/location';
   static const help           = '/help';
+  static const statement      = '/statement';
+  static const bulkUpdate     = '/bulk-update';
 }
 
 GoRouter createRouter(AuthProvider authProvider) {
@@ -79,7 +83,8 @@ GoRouter createRouter(AuthProvider authProvider) {
       }
 
       // Finance — Admin + Accountant
-      if (path.startsWith(AppRoutes.payments) &&
+      if ((path.startsWith(AppRoutes.payments) ||
+              path.startsWith(AppRoutes.statement)) &&
           role != UserRole.admin &&
           role != UserRole.accountant) {
         return AppRoutes.dashboard;
@@ -220,6 +225,18 @@ GoRouter createRouter(AuthProvider authProvider) {
             path: AppRoutes.help,
             name: 'help',
             builder: (_, __) => const HelpScreen(),
+          ),
+          GoRoute(
+            path: '${AppRoutes.statement}/:memberId',
+            name: 'statement',
+            builder: (_, state) => StatementPreviewScreen(
+              memberId: state.pathParameters['memberId']!,
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.bulkUpdate,
+            name: 'bulk-update',
+            builder: (_, __) => const BulkLotUpdateScreen(),
           ),
         ],
       ),

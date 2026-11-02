@@ -15,6 +15,7 @@ import 'package:cloud_firestore/cloud_firestore.dart'
 import '../models/lot_model.dart';
 import '../models/lot_sale_model.dart';
 import '../models/lot_payment_model.dart';
+import '../models/rate_schedule_model.dart';
 import 'amortization_service.dart';
 
 class SaleService {
@@ -264,7 +265,6 @@ class SaleService {
     }).toList();
   }
 
-  /// Streams all sales for a given lot.
   Stream<List<LotSaleModel>> streamSalesForLot(String lotId) {
     return _sales
         .where('lotId', isEqualTo: lotId)
@@ -274,7 +274,6 @@ class SaleService {
             .toList());
   }
 
-  /// Streams all payment records for a given sale.
   Stream<List<LotPaymentModel>> streamPaymentsForSale(String saleId) {
     return _payments
         .where('saleId', isEqualTo: saleId)
@@ -285,25 +284,78 @@ class SaleService {
             .toList());
   }
 
-  /// Reads a single sale by id.
   Future<LotSaleModel?> getSale(String saleId) async {
     final doc = await _sales.doc(saleId).get();
     if (!doc.exists) return null;
     return LotSaleModel.fromMap(doc.data()!, doc.id);
   }
 
-  /// Streams all sales.
   Stream<List<LotSaleModel>> streamAllSales() {
     return _sales.snapshots().map((snap) => snap.docs
         .map((d) => LotSaleModel.fromMap(d.data(), d.id))
         .toList());
   }
 
-  /// Reads all sales for a given lot.
   Future<List<LotSaleModel>> getAllSalesForLot(String lotId) async {
     final snap = await _sales.where('lotId', isEqualTo: lotId).get();
     return snap.docs
         .map((d) => LotSaleModel.fromMap(d.data(), d.id))
         .toList();
+  }
+
+  Future<void> recalculateActiveSales(RateScheduleModel schedule, {required double saleArea}) async {
+    final activeSalesSnap = await _sales.where('status', isEqualTo: 'active').get();
+    final batch = _db.batch();
+
+    for (final doc in activeSalesSnap.docs) {
+      final sale = LotSaleModel.fromMap(doc.data(), doc.id);
+
+      final sortedTiers = List<RateTier>.from(schedule.tiers)
+        ..sort((a, b) => b.threshold.compareTo(a.threshold));
+
+      final tier = sortedTiers.firstWhere(
+        (t) => saleArea >= t.threshold,
+        orElse: () => sortedTiers.last,
+      );
+
+      final newTotalPrice = saleArea * tier.rate;
+      final newFinancedAmount = newTotalPrice - sale.downPayment;
+
+      final newMonthlyPayment = AmortizationService.monthlyPayment(
+        newFinancedAmount,
+        sale.annualInterestRate,
+        sale.termMonths
+      );
+
+      batch.update(doc.reference, {
+        'totalPrice': newTotalPrice,
+        'financedAmount': newFinancedAmount,
+        'monthlyPayment': newMonthlyPayment,
+        'updatedAt': Timestamp.now(),
+      });
+
+      final paymentsSnap = await _payments
+          .where('saleId', isEqualTo: sale.id)
+          .where('status', isEqualTo: 'scheduled')
+          .get();
+      for (final pDoc in paymentsSnap.docs) {
+        batch.delete(pDoc.reference);
+      }
+
+      final newSchedule = AmortizationService.buildSchedule(
+        sale: sale.copyWith(
+          totalPrice: newTotalPrice,
+          financedAmount: newFinancedAmount,
+          monthlyPayment: newMonthlyPayment
+        ),
+        firstDueDate: sale.soldDate,
+        createdBy: 'admin',
+      );
+
+      for (final p in newSchedule) {
+        batch.set(_payments.doc(), p.toMap());
+      }
+    }
+    await batch.commit();
   }
 }

@@ -45,9 +45,12 @@ class SimplePhaseMapView extends StatefulWidget {
       loadAssignableMembers;
   final Future<void> Function(LotModel lot)? onViewMember;
 
+  /// Optional callback to override lot interaction.
+  final void Function(LotModel lot)? onLotTap;
+
   /// Lot (by document id) to zoom into and outline when the map opens —
   /// e.g. arriving from Member Detail → Owned Lots.
-  final String? highlightLotId;
+  final List<String> highlightLotIds;
 
   const SimplePhaseMapView({
     super.key,
@@ -58,7 +61,8 @@ class SimplePhaseMapView extends StatefulWidget {
     required this.currentUserId,
     required this.loadAssignableMembers,
     this.onViewMember,
-    this.highlightLotId,
+    this.onLotTap,
+    this.highlightLotIds = const [],
   });
 
   @override
@@ -99,9 +103,9 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   static const double _minScale = 0.3;
   static const double _maxScale = 8.0;
 
-  // The highlightLotId we have already zoomed to, so the zoom runs
+  // The highlightLotIds we have already zoomed to, so the zoom runs
   // once per target instead of on every rebuild.
-  String? _zoomedLotId;
+  List<String>? _zoomedLotIds;
 
   // ── Native digitize mode ────────────────────────────────────────────
   bool _digitizing = false;
@@ -141,8 +145,8 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
       _naturalHeight = null;
       _resolveImageSize(widget.phaseMap.imageUrl);
     }
-    if (widget.highlightLotId != oldWidget.highlightLotId) {
-      _zoomedLotId = null;
+    if (widget.highlightLotIds != oldWidget.highlightLotIds) {
+      _zoomedLotIds = null;
     }
     _scheduleHighlightZoom();
   }
@@ -356,39 +360,33 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   // because the zoom can only run once the lots have loaded, the
   // image size is known, and the content has been laid out.
   void _scheduleHighlightZoom() {
-    final id = widget.highlightLotId;
-    if (id == null || id == _zoomedLotId) return;
+    final ids = widget.highlightLotIds;
+    if (ids.isEmpty || ids == _zoomedLotIds) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _aspectRatio == null) return; // retried when image resolves
-      if (widget.highlightLotId != id || _zoomedLotId == id) return;
+      if (!mounted || _aspectRatio == null) return;
+      if (widget.highlightLotIds != ids || _zoomedLotIds == ids) return;
 
-      LotModel? found;
-      for (final l in widget.lots) {
-        if (l.id == id) {
-          found = l;
-          break;
-        }
-      }
+      // Find all highlighted lots
+      final lotsToZoom = widget.lots.where((l) => ids.contains(l.id)).toList();
+
       // Not in this phase's lots yet (phase switch still pending) —
       // didUpdateWidget will call us again once it is.
-      if (found == null) return;
-      final lot = found;
+      if (lotsToZoom.isEmpty) return;
 
-      if (_zoomToLot(lot)) {
+      // Zoom to the first one (or center of all)
+      if (_zoomToLots(lotsToZoom)) {
         setState(() {
-          _zoomedLotId = id;
-          _selectedBlock = lot.block; // also spotlights its block
+          _zoomedLotIds = ids;
+          // Also spotlight the block of the first highlighted lot
+          _selectedBlock = lotsToZoom.first.block;
         });
       }
     });
   }
 
-  /// Frames a single lot in the viewport. Same math as [_zoomToBlock]
-  /// (letterbox margin + translate = viewportCenter - scale * target),
-  /// but for one lot's own bounding box, with a looser padding so the
-  /// neighbouring lots stay visible for context.
-  bool _zoomToLot(LotModel lot) {
+  /// Frames multiple lots in the viewport.
+  bool _zoomToLots(List<LotModel> lots) {
     final contentBox =
         _contentKey.currentContext?.findRenderObject() as RenderBox?;
     final viewportBox =
@@ -405,30 +403,30 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
     final letterboxX = (viewportSize.width - contentSize.width) / 2;
     final letterboxY = (viewportSize.height - contentSize.height) / 2;
 
-    double minX, maxX, minY, maxY;
+    double minX = double.infinity, maxX = double.negativeInfinity;
+    double minY = double.infinity, maxY = double.negativeInfinity;
 
-    if (lot.hasPolygon) {
-      final pts = lot.polygonPoints!;
-      minX = maxX = pts.first.x * contentSize.width;
-      minY = maxY = pts.first.y * contentSize.height;
-      for (final p in pts) {
-        final x = p.x * contentSize.width;
-        final y = p.y * contentSize.height;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
+    for (final lot in lots) {
+      if (lot.hasPolygon) {
+        for (final p in lot.polygonPoints!) {
+          final x = p.x * contentSize.width;
+          final y = p.y * contentSize.height;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      } else if (lot.mapX != null && lot.mapY != null) {
+        final cx = lot.mapX! * contentSize.width;
+        final cy = lot.mapY! * contentSize.height;
+        if (cx < minX) minX = cx;
+        if (cx > maxX) maxX = cx;
+        if (cy < minY) minY = cy;
+        if (cy > maxY) maxY = cy;
       }
-    } else if (lot.mapX != null && lot.mapY != null) {
-      final cx = lot.mapX! * contentSize.width;
-      final cy = lot.mapY! * contentSize.height;
-      minX = cx - 40;
-      maxX = cx + 40;
-      minY = cy - 40;
-      maxY = cy + 40;
-    } else {
-      return false;
     }
+
+    if (minX == double.infinity) return false;
 
     final boxW = (maxX - minX).clamp(40.0, double.infinity);
     final boxH = (maxY - minY).clamp(40.0, double.infinity);
@@ -438,7 +436,7 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
       letterboxY + (minY + maxY) / 2,
     );
 
-    const paddingFactor = 4.0;
+    const paddingFactor = 2.0;
     final scaleW = (viewportSize.width / (boxW * paddingFactor))
         .clamp(_minScale, _maxScale)
         .toDouble();
@@ -1069,6 +1067,11 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
   }
 
   void _openLotDialog(LotModel lot) {
+    if (widget.onLotTap != null) {
+      widget.onLotTap!(lot);
+      return;
+    }
+
     if (lot.status == LotStatus.occupied) {
       showDialog(
         context: context,
@@ -1151,14 +1154,9 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
             final pinLots =
                 widget.lots.where((l) => !l.hasPolygon).toList();
 
-            // The lot to outline (only polygon lots have a shape to draw).
-            LotModel? highlightedLot;
-            for (final l in widget.lots) {
-              if (l.id == widget.highlightLotId && l.hasPolygon) {
-                highlightedLot = l;
-                break;
-              }
-            }
+            // The lots to outline (only polygon lots have a shape to draw).
+            final highlightedLots = widget.lots.where((l) =>
+                widget.highlightLotIds.contains(l.id) && l.hasPolygon);
 
             return InteractiveViewer(
               transformationController: _transformController,
@@ -1272,29 +1270,28 @@ class _SimplePhaseMapViewState extends State<SimplePhaseMapView>
                           ),
                         ),
 
-                      // Targeted lot (from Member Detail → Owned Lots) —
+                      // Targeted lots (from Member Detail → Owned Lots) —
                       // amber outline + fill on top of the normal
                       // polygon so it stands out from its neighbours.
-                      if (highlightedLot != null)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: AnimatedBuilder(
-                              animation: _transformController,
-                              builder: (context, _) {
-                                final scale = _transformController.value
-                                    .getMaxScaleOnAxis();
-                                return CustomPaint(
-                                  painter: _LotHighlightPainter(
-                                    points: highlightedLot!.polygonPoints!,
-                                    contentSize: contentSize,
-                                    strokeWidth:
-                                        (3.5 / scale).clamp(0.8, 6.0),
-                                  ),
-                                );
-                              },
-                            ),
+                      ...highlightedLots.map((lot) => Positioned.fill(
+                        child: IgnorePointer(
+                          child: AnimatedBuilder(
+                            animation: _transformController,
+                            builder: (context, _) {
+                              final scale = _transformController.value
+                                  .getMaxScaleOnAxis();
+                              return CustomPaint(
+                                painter: _LotHighlightPainter(
+                                  points: lot.polygonPoints!,
+                                  contentSize: contentSize,
+                                  strokeWidth:
+                                      (3.5 / scale).clamp(0.8, 6.0),
+                                ),
+                              );
+                            },
                           ),
                         ),
+                      )),
 
                       // Simple pin lots — no digitized boundary yet.
                       // Their own GestureDetector normally handles taps

@@ -815,7 +815,7 @@ class _LocationMappingScreenState
                               return SimplePhaseMapView(
                                 phaseMap: match,
                                 lots: phaseLots,
-                                highlightLotId: _highlightLotId,
+                                highlightLotIds: _highlightLotId != null ? [_highlightLotId!] : [],
                                 canEdit: canEdit,
                                 canAssignMembers: canAssignMembers,
                                 currentUserId: currentUserId,

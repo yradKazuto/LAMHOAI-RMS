@@ -17,6 +17,7 @@ import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/lot_service.dart';
 import '../../payments/screens/add_payment_screen.dart';
+import '../../payments/screens/statement_preview_dialog.dart';
 import '../../documents/widgets/document_upload_flow.dart';
 import '../../../core/theme/design_tokens.dart';
 
@@ -1134,11 +1135,27 @@ class _PaymentsTab extends StatelessWidget {
                   )
                 : null;
 
+            final previewBtn = ElevatedButton.icon(
+              onPressed: () => StatementPreviewDialog.show(context, memberId),
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+              label: const Text('Preview Statement'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.surfaceAlt,
+                foregroundColor: AppColors.textPrimary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+              ),
+            );
+
             if (c.maxWidth < 420 && addBtn != null) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   title,
+                  const SizedBox(height: 10),
+                  previewBtn,
                   const SizedBox(height: 10),
                   SizedBox(
                       width: double.infinity, child: addBtn),
@@ -1150,6 +1167,8 @@ class _PaymentsTab extends StatelessWidget {
               children: [
                 title,
                 const Spacer(),
+                previewBtn,
+                const SizedBox(width: 10),
                 if (addBtn != null) addBtn,
               ],
             );

@@ -10,10 +10,13 @@ import 'package:firebase_core/firebase_core.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/lot_model.dart';
+import '../../../core/models/phase_map_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/lot_service.dart';
+import '../../../core/services/phase_map_service.dart';
 import 'member_detail_screen.dart';
+import 'member_registration_wizard.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/widgets/app_filter_controls.dart';
 
@@ -616,8 +619,7 @@ class _MembersScreenState extends State<MembersScreen> {
   void _showAddMemberDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) =>
-          _AddMemberDialog(fsService: _fs),
+      builder: (_) => const MemberRegistrationWizard(),
     );
   }
 }
@@ -1228,6 +1230,64 @@ class _AddMemberDialogState
     }
   }
 
+  // ── Show map picker dialog ───────────────────────
+  Future<void> _openMapPicker() async {
+    final lotService = LotService();
+    final phaseMapService = PhaseMapService();
+
+    final lots = await lotService.streamLots().first;
+    final vacantLots = lots.where((l) => l.status == LotStatus.vacant).toList();
+    final phaseMaps = await phaseMapService.streamPhaseMaps().first;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Select Vacant Lot'),
+        content: SizedBox(
+          width: 800,
+          height: 600,
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  itemCount: phaseMaps.length,
+                  itemBuilder: (context, index) {
+                    final phase = phaseMaps[index];
+                    final phaseLots = vacantLots
+                        .where((l) => l.phase == phase.name)
+                        .toList();
+                    if (phaseLots.isEmpty) return const SizedBox();
+
+                    return ExpansionTile(
+                      title: Text(phase.name),
+                      children: phaseLots.map((lot) => ListTile(
+                        title: Text('Lot ${lot.lotNumber}, Blk ${lot.block}'),
+                        onTap: () {
+                          setState(() {
+                            _lot.text = lot.lotNumber;
+                            _block = lot.block;
+                          });
+                          Navigator.pop(context);
+                        },
+                      )).toList(),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
@@ -1486,58 +1546,39 @@ class _AddMemberDialogState
                 const SizedBox(height: 14),
 
                 // ── Lot + Phase ───────────────────────
-                LayoutBuilder(builder: (context, c) {
-                  final lotField = _Field(
-                    ctrl:  _lot,
-                    label: 'Lot Number',
-                    hint:  'Lot 12 Blk 3',
-                    dec:   _dec,
-                    validator: (v) =>
-                        v!.isEmpty ? 'Required' : null,
-                  );
-                  final blockField = Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      const _FieldLabel('Block'),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: _block,
-                        items: [
-                          'Block 1',
-                          'Block 2',
-                          'Block 3',
-                          'Block 4',
-                          'Block 5',
-                          'Block 6',
-                          'Block 7',
-                          'Block 8',
-                          'Block 9',
-                        ]
-                            .map((p) => DropdownMenuItem(
-                                  value: p,
-                                  child: Text(p),
-                                ))
-                            .toList(),
-                        onChanged: (v) =>
-                            setState(() => _block = v!),
-                        decoration: _dec('Select block'),
-                      ),
-                    ],
-                  );
-                  if (c.maxWidth < 420) {
-                    return Column(children: [
-                      lotField,
-                      const SizedBox(height: 14),
-                      blockField,
-                    ]);
-                  }
-                  return Row(children: [
-                    Expanded(child: lotField),
-                    const SizedBox(width: 14),
-                    Expanded(child: blockField),
-                  ]);
-                }),
+                const _FieldLabel('Lot Selection'),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: _openMapPicker,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.borderStrong),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.map, size: 16, color: AppColors.textMuted),
+                        const SizedBox(width: 8),
+                        Text(
+                          _lot.text.isEmpty
+                              ? 'Select lot on map'
+                              : 'Lot: ${_lot.text}, Block: $_block',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _lot.text.isEmpty
+                                ? AppColors.textMuted
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(Icons.chevron_right,
+                            size: 16, color: AppColors.textMuted),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 14),
 
                 // ── Contact ───────────────────────────

@@ -1,0 +1,166 @@
+- generic [ref=f20e1]:
+  - link "Skip to main content" [ref=f20e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=f20e4]:
+    - generic [ref=f20e93]:
+      - generic [ref=f20e95]:
+        - generic [ref=f20e98]:
+          - generic [ref=f20e99]:
+            - navigation [ref=f20e101]:
+              - button "Home" [ref=f20e102] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e103]: home
+              - generic [ref=f20e105]:
+                - heading "Oct 28 - 10:50" [level=1] [ref=f20e106]
+                - textbox "Editable text" [ref=f20e109]:
+                  - /placeholder: ""
+                  - text: Oct 28 - 10:50
+            - button "More options for the project" [ref=f20e110] [cursor=pointer]:
+              - img [aria-hidden] [ref=f20e111]: more_vert
+          - generic [ref=f20e115]:
+            - generic [ref=f20e116]:
+              - button "Search" [ref=f20e117] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e118]: search
+              - textbox "Search" [ref=f20e120]
+            - button "Filtering and sorting options" [ref=f20e121] [cursor=pointer]:
+              - img [aria-hidden] [ref=f20e122]: filter_list
+          - generic [ref=f20e124]:
+            - generic [ref=f20e126]:
+              - button "Add media menu" [ref=f20e127] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e128]: add
+              - button "Product help" [ref=f20e130] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e131]: help
+              - button "Settings" [ref=f20e133] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e134]: settings_2
+              - button "More options" [ref=f20e137] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e138]: more_vert
+            - button "Account details" [ref=f20e141] [cursor=pointer]:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - 'button "Google Account: AAA3 (kaoruchan.630@gmail.com)"'
+        - generic [ref=f20e143]:
+          - navigation "Project navigation" [ref=f20e148]:
+            - generic [ref=f20e149]:
+              - button "All media" [ref=f20e150] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e151]: dashboard
+              - button "Images" [ref=f20e280] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e281]: image
+              - button "Characters" [ref=f20e153] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e154]: accessibility_new
+              - button "Scenes" [ref=f20e156] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e157]: movie
+              - separator [ref=f20e159]
+              - link [ref=f20e160] [cursor=pointer]:
+                - /url: /project/b1231830-a267-49a2-9edc-970e6fd6c127
+                - img [aria-hidden] [ref=f20e161]: folder
+                - generic [ref=f20e162]: Library
+                - button "Create collection" [ref=f20e164]:
+                  - img [aria-hidden] [ref=f20e165]: add
+              - separator [ref=f20e167]
+              - link "Tools" [ref=f20e168] [cursor=pointer]:
+                - /url: /project/b1231830-a267-49a2-9edc-970e6fd6c127/tools
+                - img [aria-hidden] [ref=f20e169]: apps_spark_2
+              - link "Create tool" [ref=f20e171] [cursor=pointer]:
+                - /url: /project/b1231830-a267-49a2-9edc-970e6fd6c127/create-tool
+                - img [aria-hidden] [ref=f20e172]: add
+            - generic [ref=f20e174]:
+              - link "Bin" [ref=f20e175] [cursor=pointer]:
+                - /url: /project/b1231830-a267-49a2-9edc-970e6fd6c127/trash
+                - img [aria-hidden] [ref=f20e176]: delete
+              - button "Collapse" [ref=f20e179] [cursor=pointer]:
+                - img [aria-hidden] [ref=f20e180]: left_panel_close
+          - generic [ref=f20e183]:
+            - generic [ref=f20e283]:
+              - generic [ref=f20e284]:
+                - group "Stickman looking up at task bloc…":
+                  - img "Tile displaying a user's image" [ref=f20e288] [cursor=pointer]
+              - generic [ref=f20e289]:
+                - group "Stickman looking at giant block":
+                  - img "Tile displaying a user's image" [ref=f20e293] [cursor=pointer]
+            - generic [ref=f20e194]:
+              - generic [ref=f20e195]:
+                - generic [ref=f20e196]:
+                  - button "Back" [ref=f20e334] [cursor=pointer]:
+                    - img [aria-hidden] [ref=f20e335]: arrow_back
+                  - heading "Agent settings" [level=2] [ref=f20e337]
+                - button "Close" [ref=f20e205] [cursor=pointer]:
+                  - img [aria-hidden] [ref=f20e206]: close
+              - generic [ref=f20e339]:
+                - generic [ref=f20e340]:
+                  - paragraph [ref=f20e341]: Settings for the agent within this project.
+                  - generic [ref=f20e342]:
+                    - generic [ref=f20e343]: Confirm before generating
+                    - radiogroup "Confirm before generating" [ref=f20e344]:
+                      - generic [ref=f20e346] [cursor=pointer]:
+                        - radio "Always Agent will ask for confirmation before generating media." [checked] [ref=f20e349]
+                        - generic [ref=f20e354]:
+                          - generic [ref=f20e355]: Always
+                          - generic [ref=f20e356]: Agent will ask for confirmation before generating media.
+                      - generic [ref=f20e358] [cursor=pointer]:
+                        - radio "Never Agent will generate media and spend credits automatically." [ref=f20e361]
+                        - generic [ref=f20e365]:
+                          - generic [ref=f20e366]: Never
+                          - generic [ref=f20e367]: Agent will generate media and spend credits automatically.
+                  - generic [ref=f20e368]:
+                    - generic [ref=f20e369]: Image generation default
+                    - generic [ref=f20e370]:
+                      - generic "Image generation default aspect ratio" [ref=f20e371]:
+                        - radiogroup [ref=f20e372]:
+                          - radio "16:9" [ref=f20e373] [cursor=pointer]:
+                            - generic [ref=f20e375]:
+                              - img [aria-hidden] [ref=f20e376]: crop_16_9
+                              - generic [ref=f20e377]: 16:9
+                          - radio "4:3" [ref=f20e378] [cursor=pointer]:
+                            - generic [ref=f20e380]:
+                              - img [aria-hidden] [ref=f20e381]: crop_landscape
+                              - generic [ref=f20e382]: 4:3
+                          - radio "1:1" [ref=f20e383] [cursor=pointer]:
+                            - generic [ref=f20e385]:
+                              - img [aria-hidden] [ref=f20e386]: crop_square
+                              - generic [ref=f20e387]: 1:1
+                          - radio "3:4" [ref=f20e388] [cursor=pointer]:
+                            - generic [ref=f20e390]:
+                              - img [aria-hidden] [ref=f20e391]: crop_portrait
+                              - generic [ref=f20e392]: 3:4
+                          - radio "9:16" [checked] [ref=f20e393] [cursor=pointer]:
+                            - generic [ref=f20e395]:
+                              - img [aria-hidden] [ref=f20e396]: crop_9_16
+                              - generic [ref=f20e397]: 9:16
+                      - generic "Image generation default output count" [ref=f20e398]:
+                        - radiogroup [ref=f20e399]:
+                          - radio "x1" [checked] [active] [ref=f20e400] [cursor=pointer]
+                          - radio "x2" [ref=f20e404] [cursor=pointer]
+                          - radio "x3" [ref=f20e408] [cursor=pointer]
+                          - radio "x4" [ref=f20e412] [cursor=pointer]
+                      - button "Image generation default model" [ref=f20e416]:
+                        - generic [ref=f20e417]: 🍌 Nano Banana 2.1
+                        - img [aria-hidden] [ref=f20e418]: arrow_drop_down
+                  - generic [ref=f20e420]:
+                    - generic [ref=f20e421]: Video generation default
+                    - generic [ref=f20e422]:
+                      - generic "Video generation default aspect ratio" [ref=f20e423]:
+                        - radiogroup [ref=f20e424]:
+                          - radio "16:9" [checked] [ref=f20e425] [cursor=pointer]:
+                            - generic [ref=f20e427]:
+                              - img [aria-hidden] [ref=f20e428]: crop_16_9
+                              - generic [ref=f20e429]: 16:9
+                          - radio "9:16" [ref=f20e430] [cursor=pointer]:
+                            - generic [ref=f20e432]:
+                              - img [aria-hidden] [ref=f20e433]: crop_9_16
+                              - generic [ref=f20e434]: 9:16
+                      - generic "Video generation default output count" [ref=f20e435]:
+                        - radiogroup [ref=f20e436]:
+                          - radio "x1" [checked] [ref=f20e437] [cursor=pointer]
+                          - radio "x2" [ref=f20e441] [cursor=pointer]
+                          - radio "x3" [ref=f20e445] [cursor=pointer]
+                          - radio "x4" [ref=f20e449] [cursor=pointer]
+                      - button "Video generation default model" [ref=f20e453]:
+                        - generic [ref=f20e454]: Veo 3.1 - Lite
+                        - img [aria-hidden] [ref=f20e455]: arrow_drop_down
+                - button "Save" [ref=f20e458]
+      - generic:
+        - paragraph: Google Flow can make mistakes, so double-check it

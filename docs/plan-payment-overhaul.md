@@ -30,55 +30,31 @@ Below is the end-to-end flow of how the whole payment scheme works, both as a fl
 
 ```mermaid
 flowchart TD
-    A["Settings →<br/><b>Set flat rate per sqm</b><br/>(e.g. ₱2,000/sqm)]" --> B["Lot on map<br/>(has areaSqm)"]
-    B --> C["<b>Mark Lot For Sale</b><br/>price = areaSqm × rate<br/>(auto-computed)"]
-
+    A["Settings:<br/>set flat per-sqm rate"] --> B["Lot on map<br/>(areaSqm recorded)"]
+    B --> C["Mark Lot For Sale<br/>price = area × rate"]
     C --> D{"Member wants<br/>to buy?"}
     D -->|No| C
-    D -->|Yes| E["<b>Record Sale</b><br/>pick buyer,<br/>down payment, term,<br/>interest, term"<br/>(or full cash)"]
-
-    E --> F["Create<br/><b>lot_sales</b> record"]
-
-    F --> G["Generate<br/><b>Promissory Note</b><br/>(generated + signed)"]
-
-    G --> H["<b>Automatically generate<br/>N installment periods</b><br/>each with its own<br/>transaction ID +<br/>principal &amp; interest<br/>+ remaining balance"]
-
-    H --> I["<b>Monthly payment</b><br/>member pays<br/>(per schedule)"]
-
-    I --> J{"Did member<br/>pay?"}
-
-    J -->|Yes| K["Mark payment<br/>→ assigned to<br/>next unpaid period<br/>→ balance reduces"]
-
-    J -->|No| L["Past grace period?<br/>(e.g. 5 days)"]
-
-    L --> T{"Payment received?"}
-
-    T -->|Yes| K
-    T -->|No| M["<b>Overdue</b><br/>penalty applies<br/>(R.A. 6552 aware)"]
-
-    M --> N{"How many installments<br/>already paid?"}
-
-    N -->|2+ years worth| R["HOA process:<br/>demand letter<br/>→ 60-day notice<br/>→ refund equity<br/>(R.A. 6552)"]
-
-    N -->|Under 2 years| S["HOA process:<br/>cancellation<br/>→ retain 10%<br/>→ refund balance"]
-
-    R --> U["Lot relisted for sale"]
-    S --> U["Lot relisted for sale"]
-    U --> C
-
+    D -->|Yes| E["Record sale:<br/>buyer, down payment,<br/>term, interest<br/>(or full cash)"]
+    E --> F["Create lot_sales<br/>record"]
+    F --> G["Generate Promissory Note<br/>and get it signed"]
+    G --> H["Auto-generate N installments<br/>(transaction IDs, principal/<br/>interest, remaining balance)"]
+    H --> I["Member pays"]
+    I --> J{"Paid?"}
+    J -->|Yes| KX["Accept payment"]
+    J -->|No| L{"Within<br/>grace period?"}
+    L -->|Yes| KX["Accept payment<br/>(late but ok)"]
+    L -->|No| M["Mark overdue +<br/>apply penalty"]
+    KX --> K["Post to next unpaid period,<br/>reduce remaining balance"]
     K --> P{"All periods<br/>paid?"}
-
     P -->|No| I
-    P -->|Yes| Q["<b>Paid Off</b><br/>balance = 0"]
-
-    Q --> O["Issue Deed of Absolute Sale<br/>lot unassigned →<br/>member becomes owner"]
-
-    style A fill:#dbeafe,stroke:#1d4ed8
-    style C fill:#fff7ed,stroke:#ea580c
-    style E fill:#fce7f3,stroke:#db2777
-    style H fill:#d1fae5,stroke:#059669
-    style K fill:#d1fae5,stroke:#059669
-    style P fill:#fef3c7,stroke:#d97706</style>
+    P -->|Yes| Q["Paid off — balance = 0"]
+    Q --> O["Issue Deed of Absolute Sale;<br/>member owns the lot"]
+    M --> N{"Defaulting<br/>for 2+ years?"}
+    N -->|Yes| R["60-day notice →<br/>refund equity<br/>(R.A. 6552)"]
+    N -->|No| S["Cancellation →<br/>retain 10%, refund<br/>the rest"]
+    R --> U["Relist lot for sale"]
+    S --> U["Relist lot for sale"]
+    U --> C
 ```
 
 ### The flow step-by-step: each scenario
@@ -115,14 +91,15 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    T1["Member wants to<br/>transfer/resell<br/>mid-term"] --> T2{"HOA policy?"}
-    T2 -->|Option A| T3["New buyer assumes<br/>remaining schedule as-is"]
-    T2 -->|Option B| T4["Cancel old sale →<br/>new sale on<br/>remaining balance"]
-    T2 -->|Option C| T5["Update buyer name only,<br/>contract/schedule continues"]
-    T3 --> T6["Record transfer fee<br/>(if HOA requires)"]
-    T4 --> T6
-    T5 --> T6
-    T6 --> T7["New buyer active<br/>on schedule + ledger"]
+    T1["Member wants to<br/>transfer / resell<br/>mid-term"] --> T2{"Assume remaining<br/>schedule as-is?"}
+    T2 -->|Yes| T3["New buyer assumes<br/>remaining schedule"]
+    T2 -->|No| T4{"Restructure into<br/>a new sale?"}
+    T4 -->|Yes| T5["Cancel old sale →<br/>new sale on the<br/>remaining balance"]
+    T4 -->|No| T6["Informal:<br/>update buyer name only,<br/>contract continues"]
+    T3 --> T7["Record transfer fee<br/>(if the HOA requires)"]
+    T5 --> T7
+    T6 --> T7
+    T7 --> T8["New buyer active<br/>on schedule + ledger"]
 ```
 
 **Scenario 6 — Reports (the admin)**
@@ -515,6 +492,20 @@ Use this guide when you interview the HOA's decision-maker (the person authorize
 
 **Q30.** Should the HOA have an **audit log** for every sale recorded, every payment posted, and every transfer — who changed what, and when?
 
+### Theme J — Registration / onboarding (Section 13)
+
+**Q31.** Should new members be able to **self-register** on the app, or stay admin-created only?
+
+**Q32.** Must an account be **admin-approved** before activation, or is email verification enough?
+
+**Q33.** What **proof of ownership** does the HOA accept for lot claim (lot no. + block, deed, ID photo)?
+
+**Q34.** Can a member register **without purchasing a lot yet** (e.g. renter, or interested buyer)? What role/status then?
+
+**Q35.** Do **delinquent / inactive** accounts lose app access, or only payments access?
+
+**Q36.** Should registration automatically link to any **for-sale lot** they're buying (cross-link with Section 12)?
+
 ---
 
 ### After the interview
@@ -537,3 +528,120 @@ Once you've completed the interview, come back to this plan and:
 5. Payment recording (pay-a-period, auto-distribute, transaction IDs).
 6. Reports preview + per-sale statement/summary (CSV/PDF reuse).
 7. Mobile statement view.
+
+---
+
+## 12. Link "it" together — Location Mapping as the single entry point
+
+Today the lot map, the member list, and the payment records are **three separate worlds**:
+- A member's lot is only linked by free-text `lotNumber`/`phase` on the member record (default `"Block 1"`) — the map doesn't know about it.
+- A lot's status on the map (`forSale`) and the actual sale/payment records are disconnected.
+- To know anything about a lot you must go to three different screens.
+
+**The goal:** the map pin is the entry point for *everything* about that lot — its status, owner/buyer, sale terms, installment progress, remaining balance, and documents — and every path through the system clicks through from there.
+
+### 12.1 The links we create (one-time, at build time of each record)
+
+| From | To | How |
+|---|---|---|
+| Sale record → lot | `lot_sales.lotId` = `lots.id` | Lot chosen from the map when "Record Sale" runs |
+| Sale record → buyer | `lot_sales.buyerUid` = member `uid` | Buyer picked from the member list |
+| Lot → owner | `lots.uid` = member `uid` | Set/updated automatically on sale or transfer |
+| Installment → sale | `lot_payments.saleId` = `lot_sales.id` | Generated when the sale is recorded |
+| Member → lot(s) | member `uid` ↔ `lots.uid` | Derivable both directions |
+
+### 12.2 What the user sees (behavior changes)
+
+**On the location map:**
+- Each pin is color-coded by *sale* state, not just occupancy: `For Sale` · `Sold — paying installments` (shows remaining balance in the tooltip/badge) · `Paid off` · `Vacant` · `Reserved`.
+- Clicking a lot pin opens a **Lot Dashboard** that already binds together:
+  - Lot info (phase · block · lot, area, price per sqm, total price)
+  - Owner / buyer with a "View Member" jump
+  - Sale terms (down payment, term, interest, monthly payment)
+  - **Installment progress bar** (paid periods vs total) + **remaining balance**
+  - Payment history list (transaction IDs, principal/interest per period)
+  - Documents (Promissory Note, Deed of Sale) — view/download/upload
+
+**On the member's profile / payments:**
+- A member's lots link to their map pins (tap → jump to the map, lot highlighted).
+- The member's payment list filters to their lots, each row referencing the lot and its transaction ID.
+
+**During flows (no more free-text):**
+- "Record Sale" and "Assign member" pick lots and members from the live map/member lists — never by typing `lotNumber`/`phase`.
+- Registering a member can attach them to a lot chosen on the map (Phase 1 of Section 13).
+
+### 12.3 What changes in code
+
+- `LotModel` gets a read-only sale `status`/`balance` surfacing (from `lot_sales`) so the map badge doesn't stale-drift.
+- `simple_phase_map_view.dart` and the lot dialogs get a "Record Sale" / "View Lot Dashboard" entry; pin tooltip shows remaining balance.
+- Member screens (`member_detail_screen.dart`) list the member's lots + active sale.
+- The admin "Add Member" dialog (Section 13) picks the lot from the map instead of free text.
+
+This linkage is what makes the earlier sections work — **one lot, one record of truth, clickable from anywhere.**
+
+---
+
+## 13. Register user / onboarding improvements
+
+### 13.1 Current state (found in the code)
+
+- **No self-registration.** The mobile app has only `login` + `forgot password` — there is no "register" screen. Members are **created by admins** in web-admin (Members → Add Member).
+- The **Add Member** dialog captures: full name, email, temporary password, lot number (free text), block (defaults to **"Block 1"**), contact number, address. It creates the Firebase Auth account, sends an **email verification**, and creates the Firestore member doc with `role: 'member'`, `status: active`.
+- The success message even warns: *"Assign them to a lot from Location Mapping to show their Lot No. and Block"* — i.e. the lot link is manual and often missed.
+
+### 13.2 Gaps (what's weak today)
+
+| Gap | Problem |
+|---|---|
+| No self-registration | Every new homeowner must call the office so an admin creates their account |
+| Free-text `lot` / `block` | "Block 1" default → wrong phase/block for members in other phases; lot link to map is manual |
+| `status: active` immediately | A member is immediately `active` in the system the moment the admin saves — no verification of ownership/residency |
+| Email verification is sent but **not enforced** | Nothing stops a not-yet-verified email from acting as a full member |
+| No photo, no proof of ownership upload | Admins can't visually confirm who the person is |
+| Manual lot assignment | The map isn't used during registration at all (see Section 12) |
+
+### 13.3 The improved flow (three phases — decide in the interview, Theme J questions below)
+
+**Phase 1 — Fix admin "Add Member" (quick, build first):**
+1. **Pick lot from the map** (searchable list of available lots) instead of free text — phase/block/area auto-fill from the chosen lot.
+2. Better validation: email format, 8+ char password, required contact, duplicate-lot check (only one active owner).
+3. **Status choices** (`active` / `pending` — pending can't log in until verified).
+4. Step 2 optional: **photo** upload.
+
+**Phase 2 — Self-registration on mobile (the "register user" improvement):**
+A member opens the app → taps **"Create an account"** → a short 3-step wizard (best practice: keep it to one screen if possible):
+1. **Account**: name, email, password (+ confirm), contact number
+2. **Residency**: they select their phase · block · lot from the **map/list of lots** (links to Section 12)
+3. **Verify**: agree to community rules → submit
+
+The account is created in **`pending`** status, `role: member`, and:
+- Email verification link is sent (must be clicked before the account activates),
+- The HOA admin sees a **verification queue** (like the transfer-request workflow) and clicks **Approve** after confirming ownership (call / ID / lot inspection).
+
+**Phase 3 — Verification & security (optional, later):**
+- Email-verified **required** before first login
+- Admin approval gate for new self-registrations (prevents random people joining)
+- Rate-limit / captcha on register
+- One-time code or OTP alternative to email (for members without smartphones)
+- Allow updating a home **photo + ownership proof** on the profile
+
+### 13.4 New data model bits
+
+`MemberModel` (existing fields stay) gains:
+- `photoUrl` (already exists, unused on register — use it)
+- `status` values extended: keep `active / inactive / delinquent` **and add `pending`** (created but not yet verified/approved)
+- `verifiedAt`: Timestamp? — when the member activated
+- `claimedLotIds`: List<String>? — lots they own (alongside `lotNumber`/`phase` for display)
+
+`members` already holds `lotNumber`/`phase` — those stay as display snapshots; the **link of truth is `lots.uid` ⇄ `member.uid`** (Section 12).
+
+### 13.5 What to ask in the interview (Section 10, new Theme J)
+
+- **Q31.** Should new members be able to **self-register** on the app, or stay admin-created only?
+- **Q32.** Must an account be **admin-approved** before activation, or is email verification enough?
+- **Q33.** What **proof of ownership** does the HOA accept for lot claim (lot no. + block, deed, ID photo)?
+- **Q34.** Can a member register **without purchasing a lot yet** (e.g. renter, or interested buyer)? What role/status then?
+- **Q35.** Do **delinquent / inactive** accounts lose app access, or only payments access?
+- **Q36.** Should registration automatically link to any **for-sale lot** they're buying (cross-link with Section 12)?
+
+> Add these to the interview guide when confirmed by the HOA. Until then, all values stay open.
