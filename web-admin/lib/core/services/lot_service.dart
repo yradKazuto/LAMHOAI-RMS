@@ -471,25 +471,40 @@ class LotService {
     return count;
   }
 
+  /// Normalizes block / lot values so "Block 1", "block 1", "1" and "01"
+  /// all become "1".
+  String _normKey(dynamic v) {
+    var s = (v ?? '').toString().trim().toLowerCase();
+    s = s.replaceAll(RegExp(r'^(block|blk|lot)\s*\.?\s*'), '');
+    s = s.replaceAll(RegExp(r'^0+(?=\d)'), '');
+    return s;
+  }
+
   Future<int> bulkUpdateLotAreas(
     String phase,
     List<Map<String, dynamic>> rows,
     String updatedBy,
   ) async {
     final normalizedPhase = phase.trim().toLowerCase();
-    final snapshot = await _lots.where('phase', isEqualTo: normalizedPhase).get();
-    final lotMap = {
-      for (var doc in snapshot.docs)
-        '${(doc.data() as Map)['block']}|${(doc.data() as Map)['lotNumber']}': doc.reference
-    };
+    final snapshot = await _lots.get();
+    final lotMap = <String, DocumentReference>{};
+    for (var doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final docPhase = (data['phase'] as String? ?? '').trim().toLowerCase();
+      if (normalizedPhase.isNotEmpty && docPhase != normalizedPhase) continue;
+      lotMap['${_normKey(data['block'])}|${_normKey(data['lotNumber'])}'] =
+          doc.reference;
+    }
+
     final batch = _db.batch();
     int count = 0;
     for (var row in rows) {
-      final key = '${row['block']}|${row['lotNumber']}';
+      final key = '${_normKey(row['block'])}|${_normKey(row['lotNumber'])}';
       final ref = lotMap[key];
-      if (ref != null) {
+      final area = num.tryParse(row['areaSqm'].toString().trim());
+      if (ref != null && area != null) {
         batch.update(ref, {
-          'areaSqm': row['areaSqm'],
+          'areaSqm': area,
           'updatedAt': Timestamp.now(),
           'updatedBy': updatedBy,
         });

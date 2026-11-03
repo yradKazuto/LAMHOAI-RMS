@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:lamhoai_admin/core/services/sale_service.dart';
+import 'package:lamhoai_admin/core/utils/lot_pricing.dart';
 import 'package:lamhoai_admin/core/models/lot_model.dart';
 import 'package:lamhoai_admin/core/models/lot_sale_model.dart';
 import 'package:lamhoai_admin/core/models/lot_payment_model.dart';
@@ -54,15 +55,20 @@ void main() {
       final sale = LotSaleModel.fromMap(salesSnap.docs.first.data(), salesSnap.docs.first.id);
       expect(sale.status, LotSaleStatus.paidOff);
       expect(sale.saleType, SaleType.cash);
-      expect(sale.totalPrice, 40000.0);
+      // Area-based pricing wins over the saved lot price:
+      // 100 sqm -> ₱590/month small-lot rate x 300 months.
+      expect(sale.totalPrice, LotPricing.totalInstallment(100));
 
       // Verify exactly one payment doc, status paid
       final paymentsSnap = await fakeDb.collection('lot_payments').get();
       expect(paymentsSnap.docs.length, 1);
       final payment = LotPaymentModel.fromMap(paymentsSnap.docs.first.data());
       expect(payment.status, LotPaymentStatus.paid);
-      expect(payment.amount, 40000.0);
+      expect(payment.amount, LotPricing.totalInstallment(100));
       expect(payment.period, 0);
+      // First sale of 2026, period 0 — transaction ID follows
+      // LP-{year}-{saleSeq}-{period}.
+      expect(payment.transactionId, 'LP-2026-001-000');
     });
 
     test('installment sale creates N scheduled payments', () async {

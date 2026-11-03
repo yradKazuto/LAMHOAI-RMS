@@ -83,6 +83,14 @@ class PaymentModel {
   final String lotId;
   final String lotLabel;
 
+  // Human-readable transaction reference, e.g. MF-2026-0001 — prefix per
+  // type (see TransactionIdService). Empty on records created before IDs
+  // existed. txnYear + txnSeq back the per-(type, year) sequence counter:
+  // the next ID is max txnSeq among same type+year docs + 1.
+  final String transactionId;
+  final int txnYear;
+  final int txnSeq;
+
   const PaymentModel({
     required this.id,
     required this.uid,         // fixed: was memberId
@@ -97,6 +105,9 @@ class PaymentModel {
     required this.createdAt,
     this.lotId = '',
     this.lotLabel = '',
+    this.transactionId = '',
+    this.txnYear = 0,
+    this.txnSeq = 0,
   });
 
   factory PaymentModel.fromMap(Map<String, dynamic> map, String id) {
@@ -114,6 +125,9 @@ class PaymentModel {
       createdAt:  (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lotId:      map['lotId']?.toString() ?? '',
       lotLabel:   map['lotLabel']?.toString() ?? '',
+      transactionId: map['transactionId']?.toString() ?? '',
+      txnYear:    (map['txnYear'] as num?)?.toInt() ?? 0,
+      txnSeq:     (map['txnSeq'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -130,6 +144,9 @@ class PaymentModel {
     'createdAt':  Timestamp.fromDate(createdAt),
     'lotId':      lotId,
     'lotLabel':   lotLabel,
+    'transactionId': transactionId,
+    'txnYear':    txnYear,
+    'txnSeq':     txnSeq,
   };
 
   PaymentModel copyWith({
@@ -137,6 +154,7 @@ class PaymentModel {
     PaymentType? type, double? amount, PaymentStatus? status,
     DateTime? dueDate, DateTime? paidDate, String? recordedBy,
     String? notes, DateTime? createdAt, String? lotId, String? lotLabel,
+    String? transactionId, int? txnYear, int? txnSeq,
   }) => PaymentModel(
     id:         id         ?? this.id,
     uid:        uid        ?? this.uid,
@@ -151,6 +169,9 @@ class PaymentModel {
     createdAt:  createdAt  ?? this.createdAt,
     lotId:      lotId      ?? this.lotId,
     lotLabel:   lotLabel   ?? this.lotLabel,
+    transactionId: transactionId ?? this.transactionId,
+    txnYear:    txnYear    ?? this.txnYear,
+    txnSeq:     txnSeq     ?? this.txnSeq,
   );
 }
 

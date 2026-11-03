@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/services/firestore_service.dart';
@@ -34,7 +33,11 @@ class _InstallmentReportScreenState extends State<InstallmentReportScreen> {
     );
     if (picked != null) {
       setState(() {
-        if (isStart) _startDate = picked; else _endDate = picked;
+        if (isStart) {
+          _startDate = picked;
+        } else {
+          _endDate = picked;
+        }
       });
     }
   }
@@ -44,20 +47,21 @@ class _InstallmentReportScreenState extends State<InstallmentReportScreen> {
     if (filteredData.isEmpty) return;
 
     final rows = <List<dynamic>>[
-      ['Buyer', 'Lot Number', 'Period', 'Amount', 'Status'],
+      ['Buyer', 'Lot Number', 'Period', 'Amount', 'Status', 'Due Date'],
       ...filteredData.map((row) => [
             row['buyerName'] ?? '',
             row['lotNumber'] ?? '',
             row['period'] ?? '',
             row['amount']?.toStringAsFixed(2) ?? '0.00',
             row['status'] ?? '',
+            row['dueDate']?.toString() ?? '',
           ]),
     ];
 
     final csvData = const ListToCsvConverter().convert(rows);
     final bytes = Uint8List.fromList(utf8.encode(csvData));
     Share.shareXFiles(
-      [XFile.fromData(bytes, name: 'report.csv', mimeType: 'text/csv')],
+      [XFile.fromData(bytes, name: 'installment_report.csv', mimeType: 'text/csv')],
       text: 'Installment Payments Report',
     );
   }
@@ -118,9 +122,9 @@ class _InstallmentReportScreenState extends State<InstallmentReportScreen> {
                 final data = snapshot.data ?? [];
 
                 _currentFilteredData = data.where((row) {
-                  final soldDate = row['soldDate'];
-                  if (soldDate is DateTime) {
-                    final d = soldDate;
+                  final dueDate = row['dueDate'];
+                  if (dueDate is DateTime) {
+                    final d = dueDate;
                     if (_startDate != null && d.isBefore(_startDate!)) return false;
                     if (_endDate != null && d.isAfter(_endDate!)) return false;
                   }
@@ -136,10 +140,11 @@ class _InstallmentReportScreenState extends State<InstallmentReportScreen> {
                   itemCount: _currentFilteredData.length,
                   itemBuilder: (context, index) {
                     final row = _currentFilteredData[index];
+                    final dueDate = row['dueDate'] is DateTime ? (row['dueDate'] as DateTime).toLocal().toString().split(' ')[0] : 'N/A';
                     return Card(
                       child: ListTile(
                         title: Text('${row['buyerName']} - Lot ${row['lotNumber']}'),
-                        subtitle: Text('Period: ${row['period']} | Status: ${row['status']}'),
+                        subtitle: Text('Period: ${row['period']} | Due: $dueDate | Status: ${row['status']}'),
                         trailing: Text('₱${(row['amount'] as double).toStringAsFixed(2)}'),
                       ),
                     );

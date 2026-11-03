@@ -17,7 +17,14 @@ class StatementPreviewScreen extends StatelessWidget {
       body: StreamBuilder<List<LotSaleModel>>(
         stream: _saleService.streamAllSales(),
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          // Show stream errors instead of spinning forever — a missing
+          // permission or index used to look exactly like "still loading".
+          if (snap.hasError) {
+            return _errorView('Could not load sales: ${snap.error}');
+          }
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
           final sales = snap.data!.where((s) => s.buyerUid == memberId).toList();
 
@@ -30,9 +37,17 @@ class StatementPreviewScreen extends StatelessWidget {
           return StreamBuilder<List<LotPaymentModel>>(
             stream: _saleService.streamPaymentsForSale(sale.id),
             builder: (context, snap) {
-              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+              if (snap.hasError) {
+                return _errorView('Could not load payments: ${snap.error}');
+              }
+              if (!snap.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
               final payments = snap.data!;
+              if (payments.isEmpty) {
+                return const Center(child: Text('No payments scheduled for this sale'));
+              }
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: payments.length,
@@ -41,7 +56,10 @@ class StatementPreviewScreen extends StatelessWidget {
                   return Card(
                     child: ListTile(
                       title: Text('Period ${p.period} — Due: ${_fmt(p.dueDate)}'),
-                      subtitle: Text('Status: ${p.status.name}'),
+                      subtitle: Text(
+                        'Status: ${p.status.label}'
+                        '${p.transactionId.isEmpty ? '' : ' · ${p.transactionId}'}',
+                      ),
                       trailing: Text('₱${p.amount.toStringAsFixed(2)}'),
                     ),
                   );
@@ -53,6 +71,17 @@ class StatementPreviewScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _errorView(String message) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.danger),
+          ),
+        ),
+      );
 
   String _fmt(DateTime d) => '${d.day}/${d.month}/${d.year}';
 }

@@ -63,6 +63,23 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── lot_sales (lot purchase records — cash / installment) ────────────────
+    // Written together with lot_payments + lots by SaleService.recordSale
+    // (member registration wizard, lot assignment). Money records, so writes
+    // stay with finance (admin + accountant); staff can read.
+    match /lot_sales/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isFinance();
+      allow delete: if isAdmin();
+    }
+
+    // ── lot_payments (amortization schedule — one doc per period) ────────────
+    match /lot_payments/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isFinance();
+      allow delete: if isAdmin();
+    }
+
     // ── member_ledgers (running balance per member) ───────────────────────────
     // Used by the dues screen (streamMemberLedgers) and updated whenever dues
     // are generated or payments are recorded, so admin AND accountant need
@@ -146,6 +163,18 @@ service cloud.firestore {
     match /settings/{docId} {
       allow read: if isAnyUser();
       allow write: if isAdmin();
+    }
+
+    // ── rate_schedules ────────────────────────────────────────────────────────
+    match /rate_schedules/{docId} {
+      allow read: if isStaff();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── sales_rate ────────────────────────────────────────────────────────────
+    match /sales_rate/{docId} {
+      allow read: if isStaff();
+      allow update: if isAdmin(); // config doc
     }
 
     // ── monthly_dues_rates (per-lot monthly rate history) ────────────────────

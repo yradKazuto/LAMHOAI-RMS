@@ -1182,6 +1182,12 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
               '${payment.paidDate != null ? '  ·  Paid ${_fmt(payment.paidDate)}' : ''}',
               style: AppTypography.caption,
             ),
+            if (payment.transactionId.isNotEmpty)
+              Text(payment.transactionId,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption.copyWith(
+                      color: AppColors.textMuted)),
             if (_canMarkPaid) ...[
               const SizedBox(height: AppSpacing.space1_5),
               Align(
@@ -1246,6 +1252,12 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.caption),
+              if (payment.transactionId.isNotEmpty)
+                Text(payment.transactionId,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                        color: AppColors.textMuted)),
             ],
           )),
           Expanded(flex: 2, child: Text(

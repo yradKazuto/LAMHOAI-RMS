@@ -15,8 +15,9 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/lot_service.dart';
 import '../../../core/services/phase_map_service.dart';
 import '../../../core/services/sale_service.dart';
-import '../../../core/services/amortization_service.dart';
+import '../../../core/services/settings_service.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/utils/lot_pricing.dart';
 import '../../location/widgets/simple_phase_map_view.dart';
 
 const String kPhaseOnePolygonMap = 'Phase 1';
@@ -39,8 +40,8 @@ class _LotSetup {
   final String lotId;
   SaleType saleType = SaleType.cash;
   double downPayment = 0.0;
-  int termMonths = 12;
-  double annualInterestRate = 12.0;
+  int termMonths = LotPricing.totalMonths; // 300 months (25 years)
+  double annualInterestRate = 0.0;
   DateTime firstDueDate = DateTime.now();
 
   _LotSetup(this.lotId);
@@ -291,30 +292,54 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
     );
   }
 
+  /// Lot popup: shows only the lot details (status + area).
+  /// Pricing / installment details live in the Payment Preview (Step 3).
   void _showLotSelectionDialog(LotModel lot) {
     final alreadySelected = _selectedLots.containsKey(lot.id);
+    final area = (lot.areaSqm ?? 0).toDouble();
+    final hasArea = area > 0;
+
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: Text('Lot ${lot.lotNumber}, Block ${lot.block}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Status: ${lot.status.name}', style: AppTypography.body),
-            Text('Price: ₱${(lot.price ?? 0).toStringAsFixed(2)}',
-                style: AppTypography.body),
-            if (lot.areaSqm != null && lot.areaSqm! > 0)
-              Text('Area: ${lot.areaSqm!.toStringAsFixed(2)} sqm',
-                  style: AppTypography.body),
-            const SizedBox(height: 12),
-            Text(
-              alreadySelected
-                  ? 'Already selected.'
-                  : 'Select this lot for registration.',
-              style: AppTypography.caption,
-            ),
-          ],
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  lot.status.name[0].toUpperCase() +
+                      lot.status.name.substring(1),
+                  style: const TextStyle(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _previewRow(
+                'Lot Area',
+                hasArea ? '${area.toStringAsFixed(0)} sqm' : 'Not set',
+              ),
+              const SizedBox(height: 12),
+              Text(
+                alreadySelected
+                    ? 'Already selected.'
+                    : 'Select this lot for registration.',
+                style: AppTypography.caption,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -343,6 +368,7 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
       ),
     );
   }
+
   Widget _buildStep3() {
     if (_selectedLots.isEmpty) {
       return const Center(child: Text('Please select lots in Step 2.', style: AppTypography.body));
@@ -352,15 +378,21 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
       children: _selectedLots.values.map((lot) {
         final setup = _lotSetups[lot.id]!;
-        final totalPrice = lot.price ?? 0.0;
-        final financedAmount = totalPrice - setup.downPayment;
-        final monthly = setup.saleType == SaleType.installment
-            ? AmortizationService.monthlyPayment(
+        final area = (lot.areaSqm ?? 0).toDouble();
+        final totalPrice = LotPricing.priceFor(lot);
+        final isInstallment = setup.saleType == SaleType.installment;
+        final downPayment = isInstallment ? setup.downPayment : 0.0;
+        final financedAmount = totalPrice - downPayment;
+        final monthly = isInstallment
+            ? LotPricing.monthlyFor(
                 financedAmount, setup.annualInterestRate, setup.termMonths)
             : 0.0;
-        final totalPayable = setup.saleType == SaleType.cash
-            ? totalPrice
-            : setup.downPayment + (monthly * setup.termMonths);
+        final totalPayable = isInstallment
+            ? downPayment + (monthly * setup.termMonths)
+            : totalPrice;
+        final durationLabel = setup.termMonths % 12 == 0
+            ? '${setup.termMonths ~/ 12} years'
+            : '${setup.termMonths} months';
 
         return Container(
           margin: const EdgeInsets.only(bottom: AppSpacing.sectionGap),
@@ -390,7 +422,7 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
                     )).toList(),
                 onChanged: (v) => setState(() => setup.saleType = v!),
               ),
-              if (setup.saleType == SaleType.installment) ...[
+              if (isInstallment) ...[
                 const SizedBox(height: AppSpacing.cardGap),
                 TextField(
                   decoration: const InputDecoration(
@@ -400,21 +432,26 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
                       setup.downPayment = double.tryParse(v) ?? 0.0),
                 ),
                 const SizedBox(height: AppSpacing.cardGap),
-                TextField(
+                TextFormField(
+                  key: ValueKey('term_${lot.id}'),
+                  initialValue: '${setup.termMonths}',
                   decoration: const InputDecoration(
                       labelText: 'Term (Months)', border: OutlineInputBorder()),
                   keyboardType: TextInputType.number,
                   onChanged: (v) => setState(() =>
-                      setup.termMonths = int.tryParse(v) ?? 12),
+                      setup.termMonths =
+                          int.tryParse(v) ?? LotPricing.totalMonths),
                 ),
                 const SizedBox(height: AppSpacing.cardGap),
-                TextField(
+                TextFormField(
+                  key: ValueKey('rate_${lot.id}'),
+                  initialValue: setup.annualInterestRate.toString(),
                   decoration: const InputDecoration(
                       labelText: 'Annual Interest Rate (%)',
                       border: OutlineInputBorder()),
                   keyboardType: TextInputType.number,
                   onChanged: (v) => setState(() =>
-                      setup.annualInterestRate = double.tryParse(v) ?? 12.0),
+                      setup.annualInterestRate = double.tryParse(v) ?? 0.0),
                 ),
               ],
               const SizedBox(height: AppSpacing.cardGap),
@@ -430,22 +467,32 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
                   children: [
                     Text('Payment Preview', style: AppTypography.cardTitle),
                     const SizedBox(height: AppSpacing.cardGap),
-                    _previewRow('Total Price',
-                        '₱${totalPrice.toStringAsFixed(2)}'),
-                    _previewRow('Down Payment',
-                        '₱${setup.downPayment.toStringAsFixed(2)}'),
-                    _previewRow('Financed Amount',
-                        '₱${financedAmount.toStringAsFixed(2)}'),
-                    if (setup.saleType == SaleType.installment) ...[
-                      _previewRow('Term', '${setup.termMonths} months'),
-                      _previewRow('Interest p.a.',
-                          '${setup.annualInterestRate.toStringAsFixed(1)}%'),
-                      _previewRow('Monthly Payment',
-                          '₱${monthly.toStringAsFixed(2)}'),
+                    _previewRow(
+                      'Lot Area',
+                      area > 0 ? '${area.toStringAsFixed(0)} sqm' : 'Not set',
+                    ),
+                    if (!isInstallment) ...[
+                      _previewRow('Total Price', LotPricing.peso(totalPrice)),
+                      const Divider(),
+                      _previewRow(
+                          'Total Payable', LotPricing.peso(totalPayable),
+                          bold: true),
+                    ] else ...[
+                      _previewRow(
+                          'Monthly Installment', LotPricing.peso(monthly)),
+                      _previewRow('Payment Duration', durationLabel),
+                      _previewRow('Total Months', '${setup.termMonths}'),
+                      if (downPayment > 0)
+                        _previewRow(
+                            'Down Payment', LotPricing.peso(downPayment)),
+                      if (setup.annualInterestRate > 0)
+                        _previewRow('Interest p.a.',
+                            '${setup.annualInterestRate.toStringAsFixed(1)}%'),
+                      const Divider(),
+                      _previewRow(
+                          'Total Installment', LotPricing.peso(totalPayable),
+                          bold: true),
                     ],
-                    _previewRow('Total Payable',
-                        '₱${totalPayable.toStringAsFixed(2)}',
-                        bold: true),
                   ],
                 ),
               ),
@@ -475,6 +522,7 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
           ],
         ),
       );
+
   Widget _buildStep4() {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -483,6 +531,7 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
         const SizedBox(height: AppSpacing.sectionGap),
         ..._selectedLots.values.map((lot) {
           final setup = _lotSetups[lot.id]!;
+          final totalPrice = LotPricing.priceFor(lot);
           return Container(
             margin: const EdgeInsets.only(bottom: AppSpacing.sectionGap),
             padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -505,20 +554,20 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
                     Text('Sale Type: ${setup.saleType.label}', style: AppTypography.body),
                   ],
                 ),
-                if (setup.saleType == SaleType.installment) ...[
-                  const SizedBox(height: 4),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Down Payment: ₱${setup.downPayment.toStringAsFixed(2)}', style: AppTypography.body),
+                Padding(
+                  padding: const EdgeInsets.only(left: 28, top: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total Price: ${LotPricing.peso(totalPrice)}', style: AppTypography.body),
+                      if (setup.saleType == SaleType.installment) ...[
+                        Text('Down Payment: ${LotPricing.peso(setup.downPayment)}', style: AppTypography.body),
                         Text('Term: ${setup.termMonths} months', style: AppTypography.body),
                         Text('Annual Interest: ${setup.annualInterestRate}%', style: AppTypography.body),
                       ],
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
           );
@@ -575,54 +624,117 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
       );
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
 
-      // 1. Create member Auth account in secondary app
-      final cred = await secondaryAuth
-          .createUserWithEmailAndPassword(
-        email: _memberDetails.email.trim(),
-        password: 'ChangeMe123!',
-      );
-      final memberUid = cred.user!.uid;
+      var failedAt = 'creating the login account';
+      try {
+        // 1. Create member Auth account in secondary app. If an earlier
+        //    attempt already created the login (partly failed registration),
+        //    reuse that account instead of dead-ending on
+        //    email-already-in-use.
+        String memberUid;
+        try {
+          final cred = await secondaryAuth
+              .createUserWithEmailAndPassword(
+            email: _memberDetails.email.trim(),
+            password: 'ChangeMe123!',
+          );
+          memberUid = cred.user!.uid;
+        } on FirebaseAuthException catch (e) {
+          if (e.code != 'email-already-in-use') rethrow;
+          final existing = await FirestoreService()
+              .findMemberByEmail(_memberDetails.email.trim());
+          if (existing == null) {
+            throw Exception(
+                'This email already has a login account but no member record. '
+                'Delete the account in Firebase Console → Authentication, or '
+                'register with a different email.');
+          }
+          memberUid = existing.uid;
+        }
 
-      // 2. Send email verification to the new member
-      // await cred.user!.sendEmailVerification(); // PONTYAIL: deferred, OTP/email-verification not yet required.
+        // 2. Send email verification to the new member
+        // await cred.user!.sendEmailVerification(); // PONTYAIL: deferred, OTP/email-verification not yet required.
 
-      // 3. Save Firestore document — admin session untouched
-      final member = MemberModel(
-        uid: memberUid,
-        name: _memberDetails.name,
-        email: _memberDetails.email,
-        role: 'member',
-        lotNumber: _selectedLots.values.map((l) => l.lotNumber).join(', '),
-        phase: _selectedLots.values.map((l) => l.phase).join(', '),
-        status: MemberStatus.active,
-        contactNumber: _memberDetails.contact,
-        address: _memberDetails.address,
-        createdAt: DateTime.now(),
-      );
-      await FirestoreService().addMember(member);
+        // 3. Save Firestore document — admin session untouched
+        failedAt = 'saving the member record';
+        final member = MemberModel(
+          uid: memberUid,
+          name: _memberDetails.name,
+          email: _memberDetails.email,
+          role: 'member',
+          lotNumber: _selectedLots.values.map((l) => l.lotNumber).join(', '),
+          phase: _selectedLots.values.map((l) => l.phase).join(', '),
+          status: MemberStatus.active,
+          contactNumber: _memberDetails.contact,
+          address: _memberDetails.address,
+          createdAt: DateTime.now(),
+        );
+        await FirestoreService().addMember(member);
 
-      // 4. One sale record per selected lot (registerSale → lot_payments + lots merge)
-      for (final lot in _selectedLots.values) {
-        final setup = _lotSetups[lot.id]!;
-        await SaleService().registerSale(
-          lot: lot,
-          buyerUid: memberUid,
-          buyerName: _memberDetails.name,
-          saleType: setup.saleType,
-          downPayment: setup.downPayment,
-          termMonths: setup.termMonths,
-          annualInterestRate: setup.annualInterestRate,
-          soldDate: DateTime.now(),
+        // 4. Auto-charge the annual membership fee (amount from Settings) so
+        //    Finance has a record and a ledger for the member right away.
+        failedAt = 'generating the membership fee';
+        final settings = await SettingsService().getSettings();
+        final fee = await FirestoreService().createInitialMembershipFee(
+          uid: memberUid,
+          memberName: _memberDetails.name,
+          amount: settings.dues.annual,
           recordedBy: FirebaseAuth.instance.currentUser!.uid,
         );
+
+        // 5. One sale record per selected lot
+        //    (registerSale → lot_sales + lot_payments + lots in one batch)
+        failedAt = 'assigning the lots and creating the sale records';
+        for (final lot in _selectedLots.values) {
+          final setup = _lotSetups[lot.id]!;
+          // Retry safety: a partly-completed earlier attempt may already
+          // have registered this sale — never create it twice.
+          final existingSales = await SaleService().getAllSalesForLot(lot.id);
+          final alreadySold = existingSales.any((s) =>
+              s.buyerUid == memberUid &&
+              s.status != LotSaleStatus.cancelled);
+          if (alreadySold) continue;
+          await SaleService().registerSale(
+            lot: lot,
+            buyerUid: memberUid,
+            buyerName: _memberDetails.name,
+            saleType: setup.saleType,
+            downPayment: setup.downPayment,
+            termMonths: setup.termMonths,
+            annualInterestRate: setup.annualInterestRate,
+            soldDate: DateTime.now(),
+            recordedBy: FirebaseAuth.instance.currentUser!.uid,
+          );
+        }
+
+        await secondaryAuth.signOut();
+        await secondaryApp.delete();
+
+        if (mounted) {
+          final messenger = ScaffoldMessenger.of(context);
+          Navigator.of(context).pop();
+          messenger.showSnackBar(SnackBar(
+            content: Text(fee != null
+                ? 'Member registered. Membership fee '
+                    '${fee.transactionId} recorded.'
+                : 'Member registered.'),
+            backgroundColor: AppColors.success,
+          ));
+        }
+      } catch (e) {
+        // Surface WHICH step failed — a permission error on lot sales must
+        // not read like a failed member creation (the member doc may already
+        // exist by then).
+        throw Exception('Failed while $failedAt: $e');
       }
-
-      await secondaryAuth.signOut();
-      await secondaryApp.delete();
-
-      if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Registration failed: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Registration failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

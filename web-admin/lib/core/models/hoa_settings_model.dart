@@ -96,6 +96,23 @@ class HoaSettingsModel {
     'updatedAt':     Timestamp.fromDate(DateTime.now()),
   };
 
+  HoaSettingsModel copyWith({
+    String? name,
+    String? address,
+    String? contactNumber,
+    String? email,
+    String? president,
+    DuesConfig? dues,
+  }) =>
+      HoaSettingsModel(
+        name: name ?? this.name,
+        address: address ?? this.address,
+        contactNumber: contactNumber ?? this.contactNumber,
+        email: email ?? this.email,
+        president: president ?? this.president,
+        dues: dues ?? this.dues,
+      );
+
   static HoaSettingsModel get defaults => HoaSettingsModel(
     name:          'La Milagrosa Homeowners Association',
     address:       '',

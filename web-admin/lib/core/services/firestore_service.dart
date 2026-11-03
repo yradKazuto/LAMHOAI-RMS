@@ -11,6 +11,7 @@ import '../models/announcement_model.dart';
 import '../models/complaint_model.dart';
 import '../models/feedback_model.dart';
 import '../models/user_model.dart';
+import 'transaction_id_service.dart';
 
 /// Outcome of a generateMembershipFees() / generateMonthlyDues() call, for
 /// showing a confirmation summary to the admin ("Created 42, skipped 8 who
@@ -194,6 +195,19 @@ class FirestoreService {
     await _users.doc(member.uid).set(member.toMap());
   }
 
+  /// Looks up a member by email (used when a registration retry hits
+  /// email-already-in-use: the login account exists from the first, partly
+  /// failed attempt — reuse its uid instead of dead-ending).
+  Future<MemberModel?> findMemberByEmail(String email) async {
+    final snap = await _users
+        .where('email', isEqualTo: email.trim())
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return MemberModel.fromMap(
+        snap.docs.first.data() as Map<String, dynamic>, snap.docs.first.id);
+  }
+
   Future<void> updateMember(MemberModel member) async {
     await _users.doc(member.uid).update(member.toMap());
   }
@@ -245,6 +259,29 @@ class FirestoreService {
   // PAYMENTS
   // ════════════════════════════════════════════════════════════════════════════
 
+  // ── Transaction IDs ────────────────────────────────────────────────────────
+  // Every payments-collection record gets a human-readable reference
+  // ({prefix}-{year}-{seq}, see TransactionIdService). The sequence is per
+  // (type, year): max txnSeq among that year's docs + 1, allocated
+  // client-side — same eventual-consistency trade-off as
+  // SaleService._nextSaleSeq (two simultaneous creators could pick the same
+  // seq; acceptable at association scale).
+  //
+  // Queries by txnYear (single-field index — automatic) and filters the type
+  // client-side, so records created before IDs existed are simply not
+  // matched and never break the query.
+  Future<int> _nextPaymentSeq(PaymentType type, int year) async {
+    final snap = await _payments.where('txnYear', isEqualTo: year).get();
+    var max = 0;
+    for (final d in snap.docs) {
+      final data = d.data();
+      if (PaymentTypeExt.fromString(data['type'] as String?) != type) continue;
+      final seq = (data['txnSeq'] as num?)?.toInt() ?? 0;
+      if (seq > max) max = seq;
+    }
+    return max + 1;
+  }
+
   Stream<List<PaymentModel>> streamPayments() {
     return _payments
         .orderBy('dueDate', descending: true)
@@ -268,26 +305,44 @@ class FirestoreService {
   }
 
   Future<void> addPayment(PaymentModel payment) async {
-    await _payments.doc(payment.id).set(payment.toMap());
+    // Auto-assign the transaction reference when the caller didn't set one
+    // (manual entries from the Add Payment screen).
+    final withId = payment.transactionId.isEmpty
+        ? await _withTransactionId(payment)
+        : payment;
+    await _payments.doc(withId.id).set(withId.toMap());
     // Adjust outstanding balance for membership-type payments
-    if (payment.type == PaymentType.membershipFee ||
-        payment.type == PaymentType.monthlyMembership) {
-      final delta = (payment.type == PaymentType.monthlyMembership)
-          ? payment.amount
-          : (payment.status == PaymentStatus.paid ? -payment.amount : 0.0);
+    if (withId.type == PaymentType.membershipFee ||
+        withId.type == PaymentType.monthlyMembership) {
+      final delta = (withId.type == PaymentType.monthlyMembership)
+          ? withId.amount
+          : (withId.status == PaymentStatus.paid ? -withId.amount : 0.0);
 
       if (delta != 0.0) {
         await _db.runTransaction((transaction) async {
-          final doc = await transaction.get(_ledgers.doc(payment.uid));
+          final doc = await transaction.get(_ledgers.doc(withId.uid));
           if (!doc.exists) return; // Lazy init will handle it
           final current = (doc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
-          transaction.update(_ledgers.doc(payment.uid), {
+          transaction.update(_ledgers.doc(withId.uid), {
             'currentBalance': current + delta,
             'updatedAt': Timestamp.now(),
           });
         });
       }
     }
+  }
+
+  /// Fills in transactionId / txnYear / txnSeq on [payment], keying the
+  /// sequence year to the due date (the same year the generators key on).
+  Future<PaymentModel> _withTransactionId(PaymentModel payment) async {
+    final year = payment.dueDate.year;
+    final seq  = await _nextPaymentSeq(payment.type, year);
+    return payment.copyWith(
+      transactionId:
+          TransactionIdService.paymentTransactionId(payment.type, year, seq),
+      txnYear: year,
+      txnSeq:  seq,
+    );
   }
 
   Future<void> updatePayment(PaymentModel payment) async {
@@ -564,6 +619,10 @@ class FirestoreService {
     final pushedDueDate =
         graceDueDate.isAfter(lastDayOfYear) ? lastDayOfYear : graceDueDate;
     final dueDate = intendedDueDate.isAfter(now) ? intendedDueDate : pushedDueDate;
+
+    // One running sequence for the whole run (same type + year), so every
+    // record in this batch gets a distinct transaction ID.
+    var seq = await _nextPaymentSeq(PaymentType.membershipFee, year);
     await _commitInChunks(toCreate.length, (batch, i) {
       final member = toCreate[i];
       final ref = _payments.doc();
@@ -578,7 +637,12 @@ class FirestoreService {
         recordedBy: recordedBy,
         notes:      'Auto-generated annual membership fee for $year',
         createdAt:  DateTime.now(),
+        transactionId: TransactionIdService.paymentTransactionId(
+            PaymentType.membershipFee, year, seq),
+        txnYear:    year,
+        txnSeq:     seq,
       );
+      seq++;
       batch.set(ref, payment.toMap());
       // Initialize ledger for new annual fee
       batch.set(_ledgers.doc(member.uid), {
@@ -596,6 +660,81 @@ class FirestoreService {
       skipped: members.length - toCreate.length,
       total: members.length,
     );
+  }
+
+  // ── Initial membership fee (single member — registration wizard) ──────────
+
+  /// Creates the current year's membership-fee record + ledger for ONE
+  /// newly-registered member, so Finance has a record the moment the member
+  /// exists. Due date / ledger rules match generateMembershipFees.
+  ///
+  /// Idempotent: returns null without writing when a [year] fee already
+  /// exists for [uid] (safe against a partially-retried registration) or
+  /// when [amount] is zero or less (nothing configured to charge).
+  Future<PaymentModel?> createInitialMembershipFee({
+    required String uid,
+    required String memberName,
+    required double amount,
+    required String recordedBy,
+    int? year,
+  }) async {
+    if (amount <= 0) return null;
+
+    final y = year ?? DateTime.now().year;
+    final start = DateTime(y, 1, 1);
+    final end   = DateTime(y + 1, 1, 1);
+    final existingSnap = await _payments
+        .where('type', isEqualTo: PaymentType.membershipFee.name)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('dueDate', isLessThan: Timestamp.fromDate(end))
+        .get();
+    final hasOne = existingSnap.docs.any(
+        (d) => (d.data() as Map<String, dynamic>)['uid'] == uid);
+    if (hasOne) return null;
+
+    final now = DateTime.now();
+    final intendedDueDate = DateTime(y, 1, 31);
+    final graceDueDate    = now.add(const Duration(days: 30));
+    final lastDayOfYear   = DateTime(y, 12, 31);
+    final pushedDueDate =
+        graceDueDate.isAfter(lastDayOfYear) ? lastDayOfYear : graceDueDate;
+    final dueDate = intendedDueDate.isAfter(now) ? intendedDueDate : pushedDueDate;
+
+    final seq = await _nextPaymentSeq(PaymentType.membershipFee, y);
+    final ref = _payments.doc();
+    final payment = PaymentModel(
+      id:         ref.id,
+      uid:        uid,
+      memberName: memberName,
+      type:       PaymentType.membershipFee,
+      amount:     amount,
+      status:     PaymentStatus.unpaid,
+      dueDate:    dueDate,
+      recordedBy: recordedBy,
+      notes:      'Auto-generated annual membership fee for $y (registration)',
+      createdAt:  DateTime.now(),
+      transactionId: TransactionIdService.paymentTransactionId(
+          PaymentType.membershipFee, y, seq),
+      txnYear:    y,
+      txnSeq:     seq,
+    );
+
+    final batch = _db.batch();
+    batch.set(ref, payment.toMap());
+    // Initialize the ledger the same way generateMembershipFees does, so
+    // markPaymentPaid / dues screens work immediately. merge:true keeps an
+    // existing ledger doc (e.g. from a partial registration retry) intact
+    // where fields already exist.
+    batch.set(_ledgers.doc(uid), {
+      'uid':            uid,
+      'annualTarget':   amount,
+      'currentBalance': amount,
+      'year':           y,
+      'createdAt':      Timestamp.now(),
+      'updatedAt':      Timestamp.now(),
+    }, SetOptions(merge: true));
+    await batch.commit();
+    return payment;
   }
 
   // ── Monthly Dues (per-lot — rate is locked to whichever month it's for) ────
@@ -718,6 +857,10 @@ class FirestoreService {
 
     final dueDate = DateTime(year, month, dueDay);
     final period  = '${month.toString().padLeft(2, '0')}/$year';
+    // One running sequence for the whole run — distinct IDs across every
+    // lot/month created by this batch (sequence is per type + YEAR, not
+    // month, so dues from different months never collide either).
+    var seq = await _nextPaymentSeq(PaymentType.dues, year);
     await _commitInChunks(toCreate.length, (batch, i) {
       final bill  = toCreate[i];
       final ref   = _payments.doc();
@@ -739,7 +882,12 @@ class FirestoreService {
         createdAt:  DateTime.now(),
         lotId:      bill.lot.id,
         lotLabel:   label,
+        transactionId: TransactionIdService.paymentTransactionId(
+            PaymentType.dues, year, seq),
+        txnYear:    year,
+        txnSeq:     seq,
       );
+      seq++;
       batch.set(ref, payment.toMap());
     });
 
@@ -797,6 +945,7 @@ class FirestoreService {
     }
 
     final dueDate = DateTime(year, month, 25); // Arbitrary day
+    var seq = await _nextPaymentSeq(PaymentType.monthlyMembership, year);
     await _commitInChunks(toCreate.length, (batch, i) {
       final member = toCreate[i];
       final ref = _payments.doc();
@@ -811,7 +960,12 @@ class FirestoreService {
         recordedBy: recordedBy,
         notes:      'Auto-generated monthly membership',
         createdAt:  DateTime.now(),
+        transactionId: TransactionIdService.paymentTransactionId(
+            PaymentType.monthlyMembership, year, seq),
+        txnYear:    year,
+        txnSeq:     seq,
       );
+      seq++;
       batch.set(ref, payment.toMap());
       // Do NOT touch the ledger here — it holds the ANNUAL target balance
       // (set by generateMembershipFees). Monthly membership records deduct

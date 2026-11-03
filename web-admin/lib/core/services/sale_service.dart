@@ -16,6 +16,7 @@ import '../models/lot_model.dart';
 import '../models/lot_sale_model.dart';
 import '../models/lot_payment_model.dart';
 import '../models/rate_schedule_model.dart';
+import '../utils/lot_pricing.dart';
 import 'amortization_service.dart';
 
 class SaleService {
@@ -27,6 +28,31 @@ class SaleService {
       _db.collection('lot_sales');
   CollectionReference<Map<String, dynamic>> get _payments =>
       _db.collection('lot_payments');
+
+  /// Alias or method for registering a sale matching member registration wizard.
+  Future<void> registerSale({
+    required LotModel lot,
+    required String buyerUid,
+    required String buyerName,
+    required SaleType saleType,
+    required double downPayment,
+    required int termMonths,
+    required double annualInterestRate,
+    required DateTime soldDate,
+    required String recordedBy,
+  }) async {
+    final effectiveTermMonths = saleType == SaleType.installment ? termMonths : 0;
+    return recordSale(
+      lot: lot,
+      buyerUid: buyerUid,
+      buyerName: buyerName,
+      downPayment: downPayment,
+      termMonths: effectiveTermMonths,
+      annualInterestRate: annualInterestRate,
+      soldDate: soldDate,
+      recordedBy: recordedBy,
+    );
+  }
 
   /// Records a sale for [lot] to [buyerUid] / [buyerName].
   ///
@@ -46,11 +72,11 @@ class SaleService {
     required DateTime soldDate,
     required String recordedBy,
   }) async {
-    final totalPrice = lot.price ?? 0.0;
+    // Price comes from the lot area (see LotPricing); falls back to lot.price.
+    final totalPrice = LotPricing.priceFor(lot);
     final financedAmount = totalPrice - downPayment;
     final monthlyPayment = termMonths > 0
-        ? AmortizationService.monthlyPayment(
-            financedAmount, annualInterestRate, termMonths)
+        ? LotPricing.monthlyFor(financedAmount, annualInterestRate, termMonths)
         : 0.0;
 
     final saleSeq = await _nextSaleSeq(soldDate.year);
@@ -259,8 +285,10 @@ class SaleService {
         'amount': p.amount,
         'status': p.status.name,
         'buyerName': s?.buyerName ?? 'Unknown',
+        'buyerUid': s?.buyerUid ?? '',
         'lotNumber': s?.lotNumber ?? 'Unknown',
         'soldDate': s?.soldDate,
+        'dueDate': p.dueDate,
       };
     }).toList();
   }
@@ -275,13 +303,16 @@ class SaleService {
   }
 
   Stream<List<LotPaymentModel>> streamPaymentsForSale(String saleId) {
+    // where + orderBy on different fields would need a composite index —
+    // without it the stream just errors. One sale has at most a few hundred
+    // periods, so sorting client-side is free and needs no index.
     return _payments
         .where('saleId', isEqualTo: saleId)
-        .orderBy('period')
         .snapshots()
         .map((snap) => snap.docs
             .map((d) => LotPaymentModel.fromMap(d.data()))
-            .toList());
+            .toList()
+          ..sort((a, b) => a.period.compareTo(b.period)));
   }
 
   Future<LotSaleModel?> getSale(String saleId) async {

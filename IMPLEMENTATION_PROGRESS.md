@@ -5,8 +5,8 @@ Source of truth: `docs/plan-coding.md` (8 phases), `docs/plan-payment-overhaul.m
 
 ## Current state
 
-**Phase 0-6** — COMPLETED.
-**Phase 7 — Reports + mobile views** — IN PROGRESS.
+**Phase 0-7** — COMPLETED.
+**Phase 8 — Acceptance tests & final review** — IN PROGRESS.
 
 ## Completed tasks
 
@@ -16,6 +16,12 @@ Source of truth: `docs/plan-coding.md` (8 phases), `docs/plan-payment-overhaul.m
 - Updated `InstallmentReportScreen` with filters and dataset fetching
 - Added full-screen `StatementPreviewScreen` and registered `/statement/:memberId` route
 - Implemented Bulk Lot Update mechanism (Phase 7 Flow 13)
+- Fixed Settings Screen structure (Association info, Dues configuration dialog, Sales rate configuration)
+- Fixed Firestore Security Rules for rate schedules and sales rates
+- Completed Phase 7 Report filtering and CSV export enhancements
+- Fixed member registration permission failure (added `lot_sales` / `lot_payments` Firestore rules — the missing rules made the whole sale batch fail: no lot assignment, no finance records)
+- Auto-charge annual membership fee on member registration (`createInitialMembershipFee` — payment + ledger from Settings)
+- Transaction IDs on every payments-collection record (`MF-`/`MD-`/`MM-`/`LPAY-`/`PEN-`/`SA-`/`TXN-{year}-{seq}` via TransactionIdService; lot payments keep `LP-{year}-{seq}-{period}`)
 
 ## Files created or modified
 

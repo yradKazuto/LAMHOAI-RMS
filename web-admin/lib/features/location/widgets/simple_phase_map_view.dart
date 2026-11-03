@@ -2323,13 +2323,13 @@ class _LotHighlightPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = Colors.amber.withOpacity(0.35)
+        ..color = AppColors.warning.withOpacity(0.35)
         ..style = PaintingStyle.fill,
     );
     canvas.drawPath(
       path,
       Paint()
-        ..color = Colors.amber.shade800
+        ..color = AppColors.warning
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
         ..strokeJoin = StrokeJoin.round,

@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class RateTier {
   final String label;
   final double threshold;
@@ -9,9 +7,9 @@ class RateTier {
 
   Map<String, dynamic> toMap() => {'label': label, 'threshold': threshold, 'rate': rate};
   factory RateTier.fromMap(Map<String, dynamic> map) => RateTier(
-    label: map['label'],
-    threshold: map['threshold'].toDouble(),
-    rate: map['rate'].toDouble(),
+    label: map['label'] as String? ?? '',
+    threshold: (map['threshold'] as num?)?.toDouble() ?? 0.0,
+    rate: (map['rate'] as num?)?.toDouble() ?? 0.0,
   );
 }
 
@@ -31,8 +29,11 @@ class RateScheduleModel {
 
   factory RateScheduleModel.fromMap(String id, Map<String, dynamic> map) => RateScheduleModel(
     id: id,
-    year: map['year'],
-    isActive: map['isActive'],
-    tiers: (map['tiers'] as List).map((t) => RateTier.fromMap(t)).toList(),
+    year: (map['year'] as num?)?.toInt() ?? DateTime.now().year,
+    isActive: map['isActive'] as bool? ?? false,
+    tiers: (map['tiers'] as List?)
+            ?.map((t) => RateTier.fromMap(t as Map<String, dynamic>))
+            .toList() ??
+        [],
   );
 }
