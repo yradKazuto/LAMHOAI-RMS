@@ -66,6 +66,24 @@ class AmortizationService {
     final m = monthlyPayment(sale.financedAmount, sale.annualInterestRate, sale.termMonths);
     final n = sale.termMonths;
 
+    /// Returns `anchor` advanced by [monthsAhead] whole calendar months, with
+    /// the day clamped to the last day of the target month so an end-of-month
+    /// anchor (e.g. Jan 31) never overflows into the following month
+    /// (Feb 31 -> Mar 3). Each date is computed independently from `anchor`,
+    /// never chained month-to-month, and is built at midnight (date-only) so
+    /// there is no timezone shift.
+    DateTime offsetMonths(DateTime anchor, int monthsAhead) {
+      var targetMonth = anchor.month + monthsAhead;
+      var targetYear = anchor.year;
+      while (targetMonth > 12) {
+        targetMonth -= 12;
+        targetYear += 1;
+      }
+      final lastDay = DateTime(targetYear, targetMonth + 1, 0).day;
+      final day = anchor.day > lastDay ? lastDay : anchor.day;
+      return DateTime(targetYear, targetMonth, day);
+    }
+
     if (sale.downPayment > 0) {
       periods.add(_period(
         sale: sale,
@@ -83,7 +101,7 @@ class AmortizationService {
 
     double balance = sale.financedAmount;
     for (var i = 1; i <= n; i++) {
-      final due = DateTime(firstDueDate.year, firstDueDate.month + i, firstDueDate.day);
+      final due = offsetMonths(firstDueDate, i);
       final interest = _round2(balance * r);
       double principal;
       double amount;

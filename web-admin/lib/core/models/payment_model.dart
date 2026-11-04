@@ -91,6 +91,19 @@ class PaymentModel {
   final int txnYear;
   final int txnSeq;
 
+  // penaltyAmount stored separately from principal (₱45 per overdue, once).
+  // Default 0 on existing records — backward compatible.
+  final double penaltyAmount;
+
+  // Cumulative amount already allocated toward this obligation across all
+  // payments. Used by FIFO allocation to support partial payments without
+  // mutating `amount`. Defaults to 0.
+  final double paidAmount;
+
+  // Payment method for the obligation (e.g. 'cash'). Extensible enum/config
+  // for future methods. Only 'cash' is enabled for current version.
+  final String paymentMethod;
+
   const PaymentModel({
     required this.id,
     required this.uid,         // fixed: was memberId
@@ -108,6 +121,9 @@ class PaymentModel {
     this.transactionId = '',
     this.txnYear = 0,
     this.txnSeq = 0,
+    this.penaltyAmount = 0.0,
+    this.paidAmount = 0.0,
+    this.paymentMethod = 'cash',
   });
 
   factory PaymentModel.fromMap(Map<String, dynamic> map, String id) {
@@ -128,6 +144,9 @@ class PaymentModel {
       transactionId: map['transactionId']?.toString() ?? '',
       txnYear:    (map['txnYear'] as num?)?.toInt() ?? 0,
       txnSeq:     (map['txnSeq'] as num?)?.toInt() ?? 0,
+      penaltyAmount:  (map['penaltyAmount'] as num?)?.toDouble()   ?? 0.0,
+      paidAmount:     (map['paidAmount'] as num?)?.toDouble()     ?? 0.0,
+      paymentMethod: map['paymentMethod']?.toString() ?? 'cash',
     );
   }
 
@@ -147,6 +166,9 @@ class PaymentModel {
     'transactionId': transactionId,
     'txnYear':    txnYear,
     'txnSeq':     txnSeq,
+    'penaltyAmount': penaltyAmount,
+    'paidAmount':  paidAmount,
+    'paymentMethod': paymentMethod,
   };
 
   PaymentModel copyWith({
@@ -155,6 +177,7 @@ class PaymentModel {
     DateTime? dueDate, DateTime? paidDate, String? recordedBy,
     String? notes, DateTime? createdAt, String? lotId, String? lotLabel,
     String? transactionId, int? txnYear, int? txnSeq,
+    double? penaltyAmount, double? paidAmount, String? paymentMethod,
   }) => PaymentModel(
     id:         id         ?? this.id,
     uid:        uid        ?? this.uid,
@@ -172,6 +195,9 @@ class PaymentModel {
     transactionId: transactionId ?? this.transactionId,
     txnYear:    txnYear    ?? this.txnYear,
     txnSeq:     txnSeq     ?? this.txnSeq,
+    penaltyAmount: penaltyAmount ?? this.penaltyAmount,
+    paidAmount:  paidAmount ?? this.paidAmount,
+    paymentMethod: paymentMethod ?? this.paymentMethod,
   );
 }
 

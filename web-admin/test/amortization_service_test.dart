@@ -13,6 +13,7 @@ void main() {
     int termMonths = 12,
     double annualRate = 12.0,
     int saleSeq = 1,
+    DateTime? firstDueDate,
   }) {
     final financed = totalPrice - downPayment;
     final m = AmortizationService.monthlyPayment(financed, annualRate,
@@ -23,7 +24,7 @@ void main() {
       totalPrice: totalPrice, downPayment: downPayment, financedAmount: financed,
       termMonths: termMonths, annualInterestRate: annualRate,
       monthlyPayment: m, status: LotSaleStatus.active,
-      soldDate: DateTime(2026, 1, 15), saleSeq: saleSeq,
+      soldDate: firstDueDate ?? DateTime(2026, 1, 15), saleSeq: saleSeq,
       createdBy: createdBy,
       createdAt: DateTime.now(), updatedAt: DateTime.now(),
     );
@@ -131,6 +132,74 @@ void main() {
 
       expect(installments.first.dueDate, DateTime(2026, 2, 15));
       expect(installments.last.dueDate, DateTime(2027, 1, 15));
+    });
+
+    group('buildSchedule — end-of-month dates', () {
+      test('Jan 31 anchor clamps to Feb last day (28 in non-leap year)', () {
+        final sale = installmentSale(firstDueDate: DateTime(2026, 1, 31));
+        final periods = AmortizationService.buildSchedule(
+          sale: sale, firstDueDate: DateTime(2026, 1, 31),
+          createdBy: createdBy, saleSeq: 1,
+        );
+        final installments = periods.where((p) => p.period > 0).toList();
+
+        // Feb 31 does not exist -> clamps to Feb 28, NOT Mar 3.
+        expect(installments.first.dueDate, DateTime(2026, 2, 28));
+        expect(installments[1].dueDate, DateTime(2026, 3, 31));
+        expect(installments[2].dueDate, DateTime(2026, 4, 30));
+        // 12 months from Jan 2026 lands in Jan 2027, day clamped to 31.
+        expect(installments.last.dueDate, DateTime(2027, 1, 31));
+      });
+
+      test('Dec 31 anchor crosses into next January', () {
+        final sale = installmentSale(firstDueDate: DateTime(2026, 12, 31));
+        final periods = AmortizationService.buildSchedule(
+          sale: sale, firstDueDate: DateTime(2026, 12, 31),
+          createdBy: createdBy, saleSeq: 1,
+        );
+        final installments = periods.where((p) => p.period > 0).toList();
+
+        expect(installments.first.dueDate, DateTime(2027, 1, 31));
+        expect(installments.last.dueDate, DateTime(2027, 12, 31));
+      });
+
+      test('leap-year Feb 29 anchor advances to Mar 29 (not Feb 30)', () {
+        final sale = installmentSale(firstDueDate: DateTime(2024, 2, 29));
+        final periods = AmortizationService.buildSchedule(
+          sale: sale, firstDueDate: DateTime(2024, 2, 29),
+          createdBy: createdBy, saleSeq: 1,
+        );
+        final installments = periods.where((p) => p.period > 0).toList();
+
+        expect(installments.first.dueDate, DateTime(2024, 3, 29));
+        expect(installments[1].dueDate, DateTime(2024, 4, 29));
+        // Feb 29 + 12 months -> Feb 2025 has no 29th, clamps to Feb 28.
+        expect(installments.last.dueDate, DateTime(2025, 2, 28));
+      });
+
+      test('each date is computed independently from the anchor (no chaining drift)', () {
+        final sale = installmentSale(firstDueDate: DateTime(2026, 1, 31));
+        final periods = AmortizationService.buildSchedule(
+          sale: sale, firstDueDate: DateTime(2026, 1, 31),
+          createdBy: createdBy, saleSeq: 1,
+        );
+        final installments = periods.where((p) => p.period > 0).toList();
+
+        // Month 13 from Jan -> Feb of next year, day clamped to last day of Feb.
+        expect(installments[11].dueDate, DateTime(2027, 1, 31));
+        expect(installments.length, 12);
+      });
+    });
+
+    test('down payment period keeps firstDueDate unchanged (period 0)', () {
+      final sale = installmentSale(firstDueDate: DateTime(2026, 1, 31));
+      final periods = AmortizationService.buildSchedule(
+        sale: sale, firstDueDate: DateTime(2026, 1, 31),
+        createdBy: createdBy, saleSeq: 1,
+      );
+      final p0 = periods.firstWhere((p) => p.period == 0);
+      expect(p0.dueDate, DateTime(2026, 1, 31));
+      expect(p0.amount, closeTo(40000.0, 0.01));
     });
   });
 

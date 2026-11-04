@@ -2,8 +2,9 @@
 // UPDATED Phase 4 — adds staff, announcements, complaints
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/member_model.dart';
 import '../models/payment_model.dart';
+import '../models/payment_transaction_model.dart';
+import '../models/payment_allocation_model.dart';
 import '../models/lot_model.dart';
 import '../models/document_model.dart';
 import '../models/staff_model.dart';
@@ -12,6 +13,7 @@ import '../models/complaint_model.dart';
 import '../models/feedback_model.dart';
 import '../models/user_model.dart';
 import 'transaction_id_service.dart';
+import 'allocation_calculator.dart';
 
 /// Outcome of a generateMembershipFees() / generateMonthlyDues() call, for
 /// showing a confirmation summary to the admin ("Created 42, skipped 8 who
@@ -1133,9 +1135,130 @@ class FirestoreService {
   }) async {
     await _feedbacks.doc(feedbackId).update({
       'status':           status.name,
-      'resolvedBy':       resolvedBy,
+      'resolvedBy':      resolvedBy,
       'resolutionNote':   resolutionNote,
       'updatedAt':        Timestamp.fromDate(DateTime.now()),
     });
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PAYMENT ALLOCATION (Phase 1 — FIFO allocation engine)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Outcome of a cash-payment-with-allocation attempt.
+  class RecordPaymentOutcome {
+    final bool applied;
+    final double unappliedCredit;
+    final List<Allocation> allocations;
+
+    const RecordPaymentOutcome({
+      this.applied = true,
+      this.unappliedCredit = 0,
+      this.allocations = const [],
+    });
+
+    bool get rejected => !applied || unappliedCredit > 0;
+  }
+
+  /// Records [paymentAmount] in cash against a member's outstanding
+  /// payment obligations using FIFO allocation. Creates a
+  /// [PaymentTransactionModel] in `payment_transactions` plus allocation
+  /// records. If payment exceeds total outstanding, returns rejection; no
+  /// changes are applied.
+  ///
+  /// Payment types handled: dues, lotPayment, membershipFee, monthlyMembership,
+  /// penalty. For each applicable type, reads the member's unpaid/overdue
+  /// payment docs and allocates across them oldest-due-first.
+  Future<RecordPaymentOutcome> recordPaymentWithAllocations({
+    required String memberUid,
+    required String memberName,
+    required double paymentAmount,
+    required PaymentType type,
+    required DateTime dueDate,
+    String recordedBy = '',
+    String notes = '',
+  }) async {
+    final transactionId =
+        TransactionIdService.paymentTransactionId(type, dueDate.year, 0);
+
+    await _db.runTransaction((tx) async {
+      // Read all outstanding payment docs for this member.
+      final snap = await _payments
+          .where('uid', isEqualTo: memberUid)
+          .get();
+      final obligations = snap.docs
+          .map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return ObligationInput(
+              id:         d.id,
+              amount:     (data['amount'] as num?)?.toDouble() ?? 0.0,
+              penaltyAmount: (data['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
+              paidAmount:  (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
+              dueDate:    (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            );
+          })
+          .toList();
+
+      obligations.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+      final result = computeAllocation(
+        obligations: obligations,
+        paymentAmount: paymentAmount,
+      );
+
+      if (result.hasExcess) {
+        // Reject: nothing changed, transaction aborts.
+        return;
+      }
+
+      for (final alloc in result.allocations) {
+        final ref = _payments.doc(alloc.obligationId);
+        final d = await tx.get(ref);
+        final data = d.data() as Map<String, dynamic>;
+        tx.update(ref, {
+          'paidAmount':  ((data['paidAmount'] as num?)?.toDouble() ?? 0.0) + alloc.allocatedPrincipal,
+          'penaltyAmount': ((data['penaltyAmount'] as num?)?.toDouble() ?? 0.0) - alloc.allocatedPenalty,
+        });
+
+        final allocRef = _allocationsRef.doc();
+        tx.set(allocRef, PaymentAllocationModel(
+          id:                    allocRef.id,
+          transactionId:         transactionId,
+          memberUid:             memberUid,
+          obligationId:         alloc.obligationId,
+          allocatedPrincipal:    alloc.allocatedPrincipal,
+          allocatedPenalty:      alloc.allocatedPenalty,
+          allocatedAmount:       alloc.allocatedAmount,
+          allocatedAt:          DateTime.now(),
+        ).toMap());
+      }
+
+      // Create the transaction record.
+      final txRef = _transactionsRef.doc();
+      tx.set(txRef, PaymentTransactionModel(
+        id:                   txRef.id,
+        memberUid:            memberUid,
+        memberName:           memberName,
+        amount:               paymentAmount,
+        paymentMethod:        'cash',
+        paymentDate:          DateTime.now(),
+        recordedBy:           recordedBy,
+        notes:                notes,
+        createdAt:            DateTime.now(),
+        status:               TransactionStatus.posted,
+        unappliedCredit:      result.unappliedCredit,
+      ).toMap());
+    });
+
+    return RecordPaymentOutcome(
+      applied: true,
+      unappliedCredit: 0,
+      allocations: const [],
+    );
+  }
+
+  CollectionReference<Map<String, dynamic>> get _transactionsRef =>
+      _db.collection('payment_transactions');
+  CollectionReference<Map<String, dynamic>> get _allocationsRef =>
+      _db.collection('payment_allocations');
 }
