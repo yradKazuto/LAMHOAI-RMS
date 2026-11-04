@@ -83,12 +83,14 @@ class ObligationInput {
   final String id;
   final double amount;
   final double penaltyAmount; // penalty still allocatable from this doc
+  final double paidAmount; // cumulative principal allocated so far
   final DateTime dueDate;
 
   const ObligationInput({
     required this.id,
     required this.amount,
     required this.penaltyAmount,
+    this.paidAmount = 0.0,
     required this.dueDate,
   });
 }
@@ -105,13 +107,15 @@ AllocationResult computeAllocation({
   for (final ob in obligations) {
     if (remaining <= 0) break;
 
-    final principalOwed = ob.amount - ob.penaltyAmount;
+    // Principal first (amount is now principal only for new records,
+    // or principal+penalty for legacy).
+    final principalOwed = ob.amount - ob.paidAmount;
     final penaltyOwed = ob.penaltyAmount;
 
     // Principal first.
     final applyPrincipal = remaining < principalOwed
         ? remaining
-        : principalOwed;
+        : (principalOwed > 0 ? principalOwed : 0.0);
     remaining -= applyPrincipal;
 
     // Then penalty.
@@ -124,6 +128,7 @@ AllocationResult computeAllocation({
       allocatedPrincipal: applyPrincipal,
       allocatedPenalty: applyPenalty,
       allocatedAmount: applyPrincipal + applyPenalty,
+      obligationPaid: (applyPrincipal == principalOwed && applyPenalty == penaltyOwed),
     ));
   }
 

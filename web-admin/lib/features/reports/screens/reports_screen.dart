@@ -956,7 +956,7 @@ class _MemberDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
+    return StreamBuilder<List<MemberModel>>(
       stream: fs.streamMembers(),
       builder: (context, snap) {
         final members = snap.data ?? [];

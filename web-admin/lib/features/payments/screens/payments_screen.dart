@@ -9,6 +9,7 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/settings_service.dart';
 import 'add_payment_screen.dart';
+import 'record_payment_screen.dart';
 import 'membership_dues_screen.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/routing/app_router.dart';
@@ -329,7 +330,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             icon: Icons.batch_prediction_outlined,
                             label: 'Batch',
                             tooltip: 'Batch Mark Paid',
-                            onPressed: _importing ? null : _openImportDialog,
+                            onPressed: _importing ? null : () {},
                             filled: false,
                             loading: _importing,
                           ),
@@ -361,7 +362,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                             icon: Icons.add,
                             label: 'Record',
                             tooltip: 'Record Payment',
-                            onPressed: () => AddPaymentScreen.show(context),
+                            onPressed: () => RecordPaymentScreen.show(context),
                             filled: true,
                           ),
                         ],
@@ -411,7 +412,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: () => AddPaymentScreen.show(context),
+                      onPressed: () => RecordPaymentScreen.show(context),
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('Record Payment'),
                       style: ElevatedButton.styleFrom(
@@ -424,7 +425,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       ),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _importing ? null : _openBatchMarkDialog,
+                      onPressed: _importing ? null : () {},
                       icon: const Icon(Icons.batch_prediction_outlined, size: 18),
                       label: const Text('Batch Mark Paid'),
                       style: OutlinedButton.styleFrom(

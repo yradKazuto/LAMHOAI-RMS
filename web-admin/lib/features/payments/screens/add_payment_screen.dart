@@ -309,24 +309,24 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       }
 
       final auth = context.read<AuthProvider>();
-      final id   = FirebaseFirestore.instance.collection('payments').doc().id;
-      await _fs.addPayment(PaymentModel(
-        id:         id,
-        uid:        _memberId!,
+      final outcome = await _fs.recordPaymentWithAllocations(
+        memberUid: _memberId!,
         memberName: _memberName ?? '',
-        type:       _type,
-        amount:     amount,
-        status:     _status,
-        dueDate:    _dueDate,
-        paidDate:   _status == PaymentStatus.paid
-            ? (_paidDate ?? DateTime.now())
-            : null,
+        paymentAmount: amount,
+        type: _type,
+        dueDate: _dueDate,
         recordedBy: auth.userModel?.uid ?? '',
-        notes:      _notes.text.trim(),
-        createdAt:  DateTime.now(),
-        lotId:      lotId,
-        lotLabel:   lot,
-      ));
+        notes: _notes.text.trim(),
+      );
+
+      if (!outcome.applied) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _formError = 'Payment exceeds outstanding balance or was rejected.';
+        });
+        return;
+      }
 
       // ── Audit log ──────────────────────────────────────────────────────
       // Kept in its own try/catch: the payment is already saved at this
@@ -338,8 +338,8 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
           performedBy:      auth.userModel?.uid ?? '',
           performedByName:  auth.userModel?.displayName ?? '',
           action:           AuditAction.created,
-          targetCollection: 'payments',
-          targetId:         id,
+          targetCollection: 'payment_transactions',
+          targetId:         '',
           description:
               'Recorded ${_type.label} payment of ₱${amount.toStringAsFixed(2)} '
               'for $_memberName'

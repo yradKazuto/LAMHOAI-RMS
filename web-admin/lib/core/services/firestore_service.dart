@@ -2,6 +2,7 @@
 // UPDATED Phase 4 — adds staff, announcements, complaints
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/member_model.dart';
 import '../models/payment_model.dart';
 import '../models/payment_transaction_model.dart';
 import '../models/payment_allocation_model.dart';
@@ -60,6 +61,21 @@ class _LotBill {
   final MemberModel member;
   final LotModel lot;
   const _LotBill(this.member, this.lot);
+}
+
+/// Outcome of a cash-payment-with-allocation attempt.
+class RecordPaymentOutcome {
+  final bool applied;
+  final double unappliedCredit;
+  final List<Allocation> allocations;
+
+  const RecordPaymentOutcome({
+    this.applied = true,
+    this.unappliedCredit = 0,
+    this.allocations = const [],
+  });
+
+  bool get rejected => !applied || unappliedCredit > 0;
 }
 
 class FirestoreService {
@@ -523,9 +539,9 @@ class FirestoreService {
     await _commitInChunks(toPenalize.length, (batch, i) {
       final doc    = toPenalize[i];
       final data   = doc.data() as Map<String, dynamic>;
-      final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+      // Phase 3: Store penalty separately
       batch.update(doc.reference, {
-        'amount':         amount + penaltyAmount,
+        'penaltyAmount':  penaltyAmount,
         'penaltyApplied': true,
       });
     });
@@ -1141,34 +1157,11 @@ class FirestoreService {
     });
   }
 
+
   // ═══════════════════════════════════════════════════════════════════════
   // PAYMENT ALLOCATION (Phase 1 — FIFO allocation engine)
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Outcome of a cash-payment-with-allocation attempt.
-  class RecordPaymentOutcome {
-    final bool applied;
-    final double unappliedCredit;
-    final List<Allocation> allocations;
-
-    const RecordPaymentOutcome({
-      this.applied = true,
-      this.unappliedCredit = 0,
-      this.allocations = const [],
-    });
-
-    bool get rejected => !applied || unappliedCredit > 0;
-  }
-
-  /// Records [paymentAmount] in cash against a member's outstanding
-  /// payment obligations using FIFO allocation. Creates a
-  /// [PaymentTransactionModel] in `payment_transactions` plus allocation
-  /// records. If payment exceeds total outstanding, returns rejection; no
-  /// changes are applied.
-  ///
-  /// Payment types handled: dues, lotPayment, membershipFee, monthlyMembership,
-  /// penalty. For each applicable type, reads the member's unpaid/overdue
-  /// payment docs and allocates across them oldest-due-first.
   Future<RecordPaymentOutcome> recordPaymentWithAllocations({
     required String memberUid,
     required String memberName,
@@ -1181,10 +1174,28 @@ class FirestoreService {
     final transactionId =
         TransactionIdService.paymentTransactionId(type, dueDate.year, 0);
 
+    RecordPaymentOutcome? outcome;
+
     await _db.runTransaction((tx) async {
-      // Read all outstanding payment docs for this member.
+      // 1. Fetch existing unapplied credit
+      final txSnap = await _transactionsRef
+          .where('memberUid', isEqualTo: memberUid)
+          .where('unappliedCredit', isGreaterThan: 0)
+          .get();
+
+      double existingCredit = 0.0;
+      for (final doc in txSnap.docs) {
+        final data = doc.data();
+        final credit = (data['unappliedCredit'] as num?)?.toDouble() ?? 0.0;
+        existingCredit += credit;
+        // Void/Clear old credit (set to 0)
+        tx.update(doc.reference, {'unappliedCredit': 0});
+      }
+
+      // 2. Read all outstanding payment docs for this member.
       final snap = await _payments
           .where('uid', isEqualTo: memberUid)
+          .where('status', whereIn: [PaymentStatus.unpaid.name, PaymentStatus.overdue.name])
           .get();
       final obligations = snap.docs
           .map((d) {
@@ -1203,11 +1214,14 @@ class FirestoreService {
 
       final result = computeAllocation(
         obligations: obligations,
-        paymentAmount: paymentAmount,
+        paymentAmount: paymentAmount + existingCredit,
       );
 
+      // (rest of the logic remains same, result.unappliedCredit will include excess)
+
+
       if (result.hasExcess) {
-        // Reject: nothing changed, transaction aborts.
+        outcome = RecordPaymentOutcome(applied: false);
         return;
       }
 
@@ -1215,10 +1229,15 @@ class FirestoreService {
         final ref = _payments.doc(alloc.obligationId);
         final d = await tx.get(ref);
         final data = d.data() as Map<String, dynamic>;
-        tx.update(ref, {
+        final updates = <String, dynamic>{
           'paidAmount':  ((data['paidAmount'] as num?)?.toDouble() ?? 0.0) + alloc.allocatedPrincipal,
           'penaltyAmount': ((data['penaltyAmount'] as num?)?.toDouble() ?? 0.0) - alloc.allocatedPenalty,
-        });
+        };
+        if (alloc.obligationPaid) {
+          updates['status'] = PaymentStatus.paid.name;
+          updates['paidDate'] = Timestamp.fromDate(DateTime.now());
+        }
+        tx.update(ref, updates);
 
         final allocRef = _allocationsRef.doc();
         tx.set(allocRef, PaymentAllocationModel(
@@ -1239,22 +1258,24 @@ class FirestoreService {
         id:                   txRef.id,
         memberUid:            memberUid,
         memberName:           memberName,
-        amount:               paymentAmount,
+        amount:               paymentAmount, // New cash only
         paymentMethod:        'cash',
         paymentDate:          DateTime.now(),
         recordedBy:           recordedBy,
-        notes:                notes,
+        notes:                '${notes.isNotEmpty ? '$notes | ' : ''}Consumed existing credit: ₱${existingCredit.toStringAsFixed(2)}',
         createdAt:            DateTime.now(),
         status:               TransactionStatus.posted,
         unappliedCredit:      result.unappliedCredit,
       ).toMap());
+
+      outcome = RecordPaymentOutcome(
+        applied: true,
+        unappliedCredit: result.unappliedCredit,
+        allocations: result.allocations,
+      );
     });
 
-    return RecordPaymentOutcome(
-      applied: true,
-      unappliedCredit: 0,
-      allocations: const [],
-    );
+    return outcome ?? const RecordPaymentOutcome(applied: false);
   }
 
   CollectionReference<Map<String, dynamic>> get _transactionsRef =>
