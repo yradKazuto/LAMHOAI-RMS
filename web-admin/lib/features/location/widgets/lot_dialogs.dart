@@ -1417,7 +1417,6 @@ class _ForSaleLotDialogState
   bool _showRecordSaleForm = false;
   SaleType _recordSaleMode = SaleType.cash;
 
-  late final TextEditingController _buyerController;
   late final TextEditingController _downPaymentController;
   late final TextEditingController _termMonthsController;
   late final TextEditingController _annualInterestRateController;
@@ -1447,7 +1446,6 @@ class _ForSaleLotDialogState
       text: widget.lot.notes ?? '',
     );
 
-    _buyerController = TextEditingController();
     _downPaymentController = TextEditingController(text: '0.00');
     _termMonthsController = TextEditingController(text: '12');
     _annualInterestRateController = TextEditingController(text: '12.0');
@@ -1458,7 +1456,6 @@ class _ForSaleLotDialogState
     _priceController.dispose();
     _contactController.dispose();
     _notesController.dispose();
-    _buyerController.dispose();
     _downPaymentController.dispose();
     _termMonthsController.dispose();
     _annualInterestRateController.dispose();
@@ -1772,12 +1769,6 @@ class _ForSaleLotDialogState
             ),
           ],
         ),
-        _textField(
-          controller: _buyerController,
-          label: 'Buyer Name',
-          hint: 'Enter buyer name',
-          icon: Icons.person,
-        ),
         if (_recordSaleMode == SaleType.installment) ...[
           const SizedBox(height: 12),
           _textField(
@@ -1819,11 +1810,56 @@ class _ForSaleLotDialogState
   }
 
   Future<void> _recordSale() async {
-    final buyer = _buyerController.text.trim();
-    if (buyer.isEmpty) {
-      _showError('Please enter a buyer name.');
+    final members = await widget.loadAssignableMembers();
+    if (!mounted) return;
+
+    if (members.isEmpty) {
+      _showError('No members available to assign.');
       return;
     }
+
+    String query = '';
+    final selected = await showDialog<MapEntry<String, String>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final filtered = members.where((m) => m.value.toLowerCase().contains(query.toLowerCase())).toList();
+            return AlertDialog(
+              title: const Text('Select Buyer'),
+              content: SizedBox(
+                width: dialogWidth(context, 360),
+                height: dialogHeight(context, 420),
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(hintText: 'Search member...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+                      onChanged: (v) => setDialogState(() => query = v),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const Center(child: Text('No members found.'))
+                          : ListView.separated(
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (_, index) => ListTile(
+                                leading: const CircleAvatar(child: Icon(Icons.person)),
+                                title: Text(filtered[index].value),
+                                onTap: () => Navigator.of(dialogContext).pop(filtered[index]),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selected == null) return;
 
     final double downPayment;
     final int term;
@@ -1847,8 +1883,8 @@ class _ForSaleLotDialogState
     try {
       await _saleService.recordSale(
         lot: widget.lot,
-        buyerUid: 'TODO-BUYER-UID', // FIXME: Need to handle buyer selection properly
-        buyerName: buyer,
+        buyerUid: selected.key,
+        buyerName: selected.value,
         downPayment: downPayment,
         termMonths: term,
         annualInterestRate: rate,

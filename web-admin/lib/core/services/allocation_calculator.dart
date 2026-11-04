@@ -110,7 +110,7 @@ AllocationResult computeAllocation({
     // Principal first (amount is now principal only for new records,
     // or principal+penalty for legacy).
     final principalOwed = ob.amount - ob.paidAmount;
-    final penaltyOwed = ob.penaltyAmount;
+    final penaltyOwed = ob.penaltyAmount.clamp(0.0, double.infinity);
 
     // Principal first.
     final applyPrincipal = remaining < principalOwed

@@ -182,3 +182,98 @@ class LotModel {
 
   String get displayLabel => '$phase • $block • $lotNumber';
 }
+
+/// Represents a transfer/assignment of ownership for a lot.
+/// Collection: `lot_ownership_history`
+class LotOwnershipHistoryModel {
+  final String id;
+  final String lotId;
+  final String lotPhase;
+  final String lotBlock;
+  final String lotNumber;
+  final String type; // 'assign' | 'transfer' | 'unassign'
+  final String? previousOwnerUid;
+  final String? previousOwnerName;
+  final String? currentOwnerUid;
+  final String? currentOwnerName;
+  final Timestamp transferredAt;
+  final Timestamp createdAt;
+
+  LotOwnershipHistoryModel({
+    required this.id,
+    required this.lotId,
+    required this.lotPhase,
+    required this.lotBlock,
+    required this.lotNumber,
+    required this.type,
+    this.previousOwnerUid,
+    this.previousOwnerName,
+    this.currentOwnerUid,
+    this.currentOwnerName,
+    required this.transferredAt,
+    required this.createdAt,
+  });
+
+  factory LotOwnershipHistoryModel.fromMap(String id, Map<String, dynamic> map) {
+    return LotOwnershipHistoryModel(
+      id: id,
+      lotId: map['lotId'] ?? '',
+      lotPhase: map['lotPhase'] ?? '',
+      lotBlock: map['lotBlock'] ?? '',
+      lotNumber: map['lotNumber'] ?? '',
+      type: map['type'] ?? '',
+      previousOwnerUid: map['previousOwnerUid'],
+      previousOwnerName: map['previousOwnerName'],
+      currentOwnerUid: map['currentOwnerUid'],
+      currentOwnerName: map['currentOwnerName'],
+      transferredAt: map['transferredAt'] ?? Timestamp.now(),
+      createdAt: map['createdAt'] ?? Timestamp.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'lotId': lotId,
+      'lotPhase': lotPhase,
+      'lotBlock': lotBlock,
+      'lotNumber': lotNumber,
+      'type': type,
+      'previousOwnerUid': previousOwnerUid,
+      'previousOwnerName': previousOwnerName,
+      'currentOwnerUid': currentOwnerUid,
+      'currentOwnerName': currentOwnerName,
+      'transferredAt': transferredAt,
+      'createdAt': createdAt,
+    };
+  }
+
+  LotOwnershipHistoryModel copyWith({
+    String? id,
+    String? lotId,
+    String? lotPhase,
+    String? lotBlock,
+    String? lotNumber,
+    String? type,
+    String? previousOwnerUid,
+    String? previousOwnerName,
+    String? currentOwnerUid,
+    String? currentOwnerName,
+    Timestamp? transferredAt,
+    Timestamp? createdAt,
+  }) {
+    return LotOwnershipHistoryModel(
+      id: id ?? this.id,
+      lotId: lotId ?? this.lotId,
+      lotPhase: lotPhase ?? this.lotPhase,
+      lotBlock: lotBlock ?? this.lotBlock,
+      lotNumber: lotNumber ?? this.lotNumber,
+      type: type ?? this.type,
+      previousOwnerUid: previousOwnerUid ?? this.previousOwnerUid,
+      previousOwnerName: previousOwnerName ?? this.previousOwnerName,
+      currentOwnerUid: currentOwnerUid ?? this.currentOwnerUid,
+      currentOwnerName: currentOwnerName ?? this.currentOwnerName,
+      transferredAt: transferredAt ?? this.transferredAt,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+}

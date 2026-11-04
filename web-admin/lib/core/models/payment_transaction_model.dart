@@ -17,6 +17,9 @@ class PaymentTransactionModel {
   final DateTime createdAt;
   final TransactionStatus status;
   final double unappliedCredit;
+  final String transactionId;
+  final int txnYear;
+  final int txnSeq;
 
   const PaymentTransactionModel({
     required this.id,
@@ -31,6 +34,9 @@ class PaymentTransactionModel {
     required this.createdAt,
     required this.status,
     required this.unappliedCredit,
+    this.transactionId = '',
+    this.txnYear = 0,
+    this.txnSeq = 0,
   });
 
   factory PaymentTransactionModel.fromMap(Map<String, dynamic> map, String id) {
@@ -47,6 +53,9 @@ class PaymentTransactionModel {
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: map['status'] == 'voided' ? TransactionStatus.voided : TransactionStatus.posted,
       unappliedCredit: (map['unappliedCredit'] as num?)?.toDouble() ?? 0.0,
+      transactionId: map['transactionId']?.toString() ?? '',
+      txnYear: (map['txnYear'] as num?)?.toInt() ?? 0,
+      txnSeq: (map['txnSeq'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -62,5 +71,8 @@ class PaymentTransactionModel {
     'createdAt': Timestamp.fromDate(createdAt),
     'status': status.name,
     'unappliedCredit': unappliedCredit,
+    'transactionId': transactionId,
+    'txnYear': txnYear,
+    'txnSeq': txnSeq,
   };
 }

@@ -167,6 +167,10 @@ class LotService {
     if (!memberSnap.exists) throw Exception('The selected member could not be found.');
 
     final batch = _db.batch();
+    final currentOwnerUid = uid;
+    final currentOwnerName = ownerName;
+    final previousOwnerUid = previousUid;
+    final previousOwnerName = lotData['ownerName'] as String?;
 
     if (previousUid != null && previousUid.isNotEmpty && previousUid != uid) {
       final previousMemberRef = users.doc(previousUid);
@@ -188,6 +192,25 @@ class LotService {
 
     batch.update(memberRef, {'phase': phase, 'lotNumber': lotNumber});
 
+    final historyType = previousUid != null && previousUid.isNotEmpty && previousUid != uid
+        ? 'transfer'
+        : 'assign';
+    final historyRef = _db.collection('lot_ownership_history').doc();
+    batch.set(historyRef, {
+      'id': historyRef.id,
+      'lotId': lotId,
+      'lotPhase': phase,
+      'lotBlock': lotData['block'] as String? ?? '',
+      'lotNumber': lotNumber,
+      'type': historyType,
+      'previousOwnerUid': previousOwnerUid,
+      'previousOwnerName': previousOwnerName,
+      'currentOwnerUid': currentOwnerUid,
+      'currentOwnerName': currentOwnerName,
+      'transferredAt': Timestamp.now(),
+      'createdAt': Timestamp.now(),
+    });
+
     await batch.commit();
   }
 
@@ -205,6 +228,7 @@ class LotService {
     if (!lotSnap.exists) throw Exception('Lot not found.');
     final lotData = lotSnap.data() as Map<String, dynamic>;
     final uid = lotData['uid'] as String?;
+    final ownerName = lotData['ownerName'] as String?;
 
     final batch = _db.batch();
     batch.update(lotRef, {
@@ -222,6 +246,22 @@ class LotService {
         batch.update(memberRef, {'phase': '', 'lotNumber': ''});
       }
     }
+
+    final historyRef = _db.collection('lot_ownership_history').doc();
+    batch.set(historyRef, {
+      'id': historyRef.id,
+      'lotId': lotId,
+      'lotPhase': lotData['phase'] as String? ?? '',
+      'lotBlock': lotData['block'] as String? ?? '',
+      'lotNumber': lotData['lotNumber'] as String? ?? '',
+      'type': 'unassign',
+      'previousOwnerUid': uid,
+      'previousOwnerName': ownerName,
+      'currentOwnerUid': null,
+      'currentOwnerName': null,
+      'transferredAt': Timestamp.now(),
+      'createdAt': Timestamp.now(),
+    });
 
     await batch.commit();
   }

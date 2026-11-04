@@ -1,14 +1,3 @@
-// core/services/sale_service.dart
-//
-// Handles Firestore writes for lot sales and payment schedules.
-//
-// Collections:
-//   `lot_sales`  — one document per sale (cash or installment)
-//   `lot_payments` — one document per payment period
-//
-// `recordSale` is the single entry point: it writes the sale doc, the
-// payment schedule, and links the lot to the buyer in one batch so the
-// three collections always stay in sync.
 
 import 'package:cloud_firestore/cloud_firestore.dart'
     show CollectionReference, FirebaseFirestore, SetOptions, Timestamp;
@@ -19,6 +8,13 @@ import '../models/rate_schedule_model.dart';
 import '../utils/lot_pricing.dart';
 import 'amortization_service.dart';
 
+class LotNotAvailableException implements Exception {
+  final String lotId;
+  const LotNotAvailableException(this.lotId);
+  @override
+  String toString() => 'Lot $lotId is no longer available.';
+}
+
 class SaleService {
   final FirebaseFirestore _db;
 
@@ -28,6 +24,21 @@ class SaleService {
       _db.collection('lot_sales');
   CollectionReference<Map<String, dynamic>> get _payments =>
       _db.collection('lot_payments');
+
+  Future<void> _verifyLotAvailable({required String lotId}) async {
+    if (lotId.isEmpty) return;
+    final snap = await _db.collection('lots').doc(lotId).get();
+    if (!snap.exists) throw LotNotAvailableException(lotId);
+    final data = snap.data() as Map<String, dynamic>;
+    final status = data['status'] as String? ?? '';
+    final uid = data['uid'];
+    if (status != LotStatus.vacant.name && status != LotStatus.forSale.name) {
+      throw LotNotAvailableException(lotId);
+    }
+    if ((uid as String?)?.isNotEmpty == true) {
+      throw LotNotAvailableException(lotId);
+    }
+  }
 
   /// Alias or method for registering a sale matching member registration wizard.
   Future<void> registerSale({
@@ -72,6 +83,8 @@ class SaleService {
     required DateTime soldDate,
     required String recordedBy,
   }) async {
+    await _verifyLotAvailable(lotId: lot.id);
+
     // Price comes from the lot area (see LotPricing); falls back to lot.price.
     final totalPrice = LotPricing.priceFor(lot);
     final financedAmount = totalPrice - downPayment;
@@ -248,6 +261,8 @@ class SaleService {
   }) async {
     final saleDoc = await _sales.doc(saleId).get();
     if (!saleDoc.exists) throw Exception('Sale not found.');
+
+    await _verifyLotAvailable(lotId: saleDoc.data()!['lotId']);
 
     final sale = LotSaleModel.fromMap(saleDoc.data()!, saleDoc.id);
 

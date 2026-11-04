@@ -726,6 +726,15 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
         // exist by then).
         throw Exception('Failed while $failedAt: $e');
       }
+    } on LotNotAvailableException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

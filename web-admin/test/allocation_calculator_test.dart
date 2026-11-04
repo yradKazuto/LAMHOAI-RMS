@@ -1,7 +1,7 @@
 // test/allocation_calculator_test.dart
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:web_admin/core/services/allocation_calculator.dart';
+import 'package:lamhoai_admin/core/services/allocation_calculator.dart';
 
 void main() {
   group('AllocationCalculator FIFO tests', () {
@@ -52,7 +52,7 @@ void main() {
         ),
       ];
 
-      // Pay 1045: covers obl1 (955 principal + 45 penalty) exactly
+      // Pay 1045: covers obl1 (1000 principal + 45 penalty) exactly
       final result = computeAllocation(
         obligations: obligations,
         paymentAmount: 1045.0,
@@ -60,7 +60,7 @@ void main() {
 
       expect(result.allocations.length, 1);
       expect(result.allocations[0].obligationId, 'obl1');
-      expect(result.allocations[0].allocatedPrincipal, 955.0);
+      expect(result.allocations[0].allocatedPrincipal, 1000.0);
       expect(result.allocations[0].allocatedPenalty, 45.0);
       expect(result.unappliedCredit, 0.0);
     });

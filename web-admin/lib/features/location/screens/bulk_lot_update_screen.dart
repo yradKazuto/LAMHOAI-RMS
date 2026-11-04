@@ -1,7 +1,8 @@
-import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:csv/csv.dart';
+import 'dart:convert';
 import '../../../core/services/lot_service.dart';
 import '../../../core/theme/design_tokens.dart';
 
@@ -42,7 +43,8 @@ class _BulkLotUpdateScreenState extends State<BulkLotUpdateScreen> {
     if (_csvData.isEmpty || _phase == null) return;
     setState(() => _isLoading = true);
     try {
-      final count = await _lotService.bulkUpdateLotAreas(_phase!, _csvData, 'admin');
+      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? 'unknown_user';
+      final count = await _lotService.bulkUpdateLotAreas(_phase!, _csvData, currentUid);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Updated $count lots')));
       }

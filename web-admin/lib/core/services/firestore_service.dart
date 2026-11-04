@@ -1192,7 +1192,31 @@ class FirestoreService {
         tx.update(doc.reference, {'unappliedCredit': 0});
       }
 
-      // 2. Read all outstanding payment docs for this member.
+      // 2. Fetch last transaction sequence for this type+year to generate unique ID.
+      final lastTxSnap = await _transactionsRef
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      int nextSeq = 1;
+      if (lastTxSnap.docs.isNotEmpty) {
+          final lastData = lastTxSnap.docs.first.data();
+          if ((lastData['txnYear'] as num?)?.toInt() == dueDate.year) {
+              nextSeq = ((lastData['txnSeq'] as num?)?.toInt() ?? 0) + 1;
+          }
+      }
+      final transactionId = TransactionIdService.paymentTransactionId(type, dueDate.year, nextSeq);
+
+      // 3. Duplicate check
+      final duplicateSnap = await _transactionsRef
+          .where('transactionId', isEqualTo: transactionId)
+          .get();
+      if (duplicateSnap.docs.isNotEmpty) {
+        outcome = RecordPaymentOutcome(applied: false);
+        return; // Already submitted
+      }
+
+      // 4. Read all outstanding payment docs for this member.
       final snap = await _payments
           .where('uid', isEqualTo: memberUid)
           .where('status', whereIn: [PaymentStatus.unpaid.name, PaymentStatus.overdue.name])
@@ -1266,6 +1290,9 @@ class FirestoreService {
         createdAt:            DateTime.now(),
         status:               TransactionStatus.posted,
         unappliedCredit:      result.unappliedCredit,
+        transactionId:        transactionId,
+        txnYear:              dueDate.year,
+        txnSeq:               nextSeq,
       ).toMap());
 
       outcome = RecordPaymentOutcome(
