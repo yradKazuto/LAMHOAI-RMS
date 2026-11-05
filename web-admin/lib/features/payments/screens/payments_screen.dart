@@ -9,6 +9,7 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/sale_service.dart';
+import '../../../core/utils/payment_labels.dart';
 import 'member_installments_section.dart';
 import 'add_payment_screen.dart';
 import 'record_payment_screen.dart';
@@ -132,16 +133,25 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   }
 
   List<PaymentModel> _filtered(List<PaymentModel> all) {
-    return all.where((p) {
+    final result = all.where((p) {
       final q = _searchQuery.toLowerCase();
       final matchSearch = q.isEmpty ||
           p.memberName.toLowerCase().contains(q) ||
-          p.type.label.toLowerCase().contains(q) ||
+          p.typeLabel.toLowerCase().contains(q) ||
           p.lotLabel.toLowerCase().contains(q);
       final matchStatus = _statusFilter == null || p.displayStatus == _statusFilter;
       final matchType   = _typeFilter   == null || p.type   == _typeFilter;
       return matchSearch && matchStatus && matchType;
     }).toList();
+
+    // Newest created record first. Falls back to due date for older
+    // records that have no createdAt timestamp.
+    result.sort((a, b) {
+      final aT = a.createdAt ?? a.dueDate;
+      final bT = b.createdAt ?? b.dueDate;
+      return bT.compareTo(aT);
+    });
+    return result;
   }
 
   // Summary totals
@@ -1100,7 +1110,21 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
     final payment = widget.payment;
 
     try {
-      await widget.fs.markPaymentPaid(payment.id);
+      if (payment.type == PaymentType.lotPayment &&
+          payment.id.startsWith('lot_')) {
+        // Lot payments live in TWO collections (lot_payments + payments).
+        // This marks both paid together and closes the sale if it was the
+        // last amount owed. Calling only fs.markPaymentPaid would leave the
+        // lot_payments row pending.
+        final auth = context.read<AuthProvider>();
+        await SaleService().markLotPaymentRecordPaid(
+          paymentId: payment.id,
+          payer:     payment.memberName,
+          paidBy:    auth.userModel?.uid ?? '',
+        );
+      } else {
+        await widget.fs.markPaymentPaid(payment.id);
+      }
 
       // Notify the member their payment was confirmed. Fire this after
       // the Firestore update succeeds, so a failed/slow push never
@@ -1109,7 +1133,7 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
         uid: payment.uid,
         title: 'Payment Confirmed',
         body: 'Hi ${payment.memberName}, your ₱${payment.amount.toStringAsFixed(2)} '
-            '${payment.type.label}'
+            '${payment.typeLabel}'
             '${payment.lotLabel.isEmpty ? '' : ' (${payment.lotLabel})'} '
             'payment has been received and confirmed.',
         type: 'payment',
@@ -1207,8 +1231,8 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                 Flexible(
                   child: Text(
                       payment.lotLabel.isEmpty
-                          ? payment.type.label
-                          : '${payment.type.label} · ${payment.lotLabel}',
+                          ? payment.typeLabel
+                          : '${payment.typeLabel} · ${payment.lotLabel}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted)),
@@ -1289,7 +1313,7 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(payment.type.label,
+              Text(payment.typeLabel,
                   style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
               if (payment.lotLabel.isNotEmpty)
                 Text(payment.lotLabel,

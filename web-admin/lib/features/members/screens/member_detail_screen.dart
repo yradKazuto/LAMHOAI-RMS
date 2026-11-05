@@ -10,15 +10,19 @@ import '../../../core/models/payment_model.dart';
 import '../../../core/models/document_model.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/models/lot_model.dart';
+import '../../../core/models/lot_sale_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/lot_service.dart';
+import '../../../core/services/sale_service.dart';
+import '../../../core/utils/payment_labels.dart';
 import '../../payments/screens/add_payment_screen.dart';
 import '../../payments/screens/member_installments_section.dart';
 import '../../payments/screens/statement_preview_dialog.dart';
+import 'member_ledger_card.dart';
 import '../../documents/widgets/document_upload_flow.dart';
 import '../../../core/theme/design_tokens.dart';
 
@@ -855,8 +859,6 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                             setState(() => _selectedLotId = lot.id);
                             widget.onViewLot(lot);
                           },
-                          onHistory: () => context.go(AppRoutes.lotHistory,
-                              extra: lot.id),
                         ),
                       ))
                   .toList(),
@@ -897,13 +899,11 @@ class _OwnedLotTile extends StatelessWidget {
   final LotModel lot;
   final bool isSelected;
   final VoidCallback onTap;
-  final VoidCallback onHistory;
 
   const _OwnedLotTile({
     required this.lot,
     required this.isSelected,
     required this.onTap,
-    required this.onHistory,
   });
 
   @override
@@ -938,16 +938,6 @@ class _OwnedLotTile extends StatelessWidget {
           children: [
             Icon(Icons.location_on_outlined,
                 size: 15, color: isSelected ? AppColors.primary : AppColors.primary),
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: onHistory,
-              borderRadius: BorderRadius.circular(4),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(Icons.history_outlined, size: 16,
-                    color: isSelected ? AppColors.primary : AppColors.textMuted),
-              ),
-            ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -1103,103 +1093,174 @@ class _MemberInfoCard extends StatelessWidget {
   }
 }
 
-class _PaymentsTab extends StatelessWidget {
+class _PaymentsTab extends StatefulWidget {
   final String memberId;
   final String memberName;
   final AuthProvider auth;
-  final _fs = FirestoreService();
 
-  _PaymentsTab({
+  const _PaymentsTab({
     required this.memberId,
     required this.memberName,
     required this.auth,
   });
 
   @override
+  State<_PaymentsTab> createState() => _PaymentsTabState();
+}
+
+class _PaymentsTabState extends State<_PaymentsTab> {
+  final _fs = FirestoreService();
+
+  // Created ONCE so rebuilds don't open new Firestore listeners.
+  late final Stream<List<LotSaleModel>> _salesStream;
+
+  // Also created once — the ledger and the payment list both read from
+  // this single snapshot, so they can never disagree.
+  late final Stream<List<PaymentModel>> _paymentsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _salesStream = SaleService().streamSalesForBuyer(widget.memberId);
+    _paymentsStream = _fs.streamPaymentsForMember(widget.memberId);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final canRecord = auth.isAdmin || auth.isAccountant;
+    final memberId   = widget.memberId;
+    final memberName = widget.memberName;
+    final canRecord  = widget.auth.isAdmin || widget.auth.isAccountant;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(builder: (context, c) {
-            const title = Text('Payment History',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary));
+          StreamBuilder<List<LotSaleModel>>(
+            stream: _salesStream,
+            builder: (context, saleSnap) {
+              final sales = (saleSnap.data ?? const <LotSaleModel>[])
+                  .where((s) => s.status != LotSaleStatus.cancelled)
+                  .toList();
 
-            final addBtn = canRecord
-                ? ElevatedButton.icon(
-                    onPressed: () => AddPaymentScreen.show(
-                      context,
-                      preselectedMemberId: memberId,
-                      preselectedMemberName: memberName,
-                    ),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Payment'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.textPrimary,
-                      foregroundColor: AppColors.textInverted,
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                    ),
-                  )
-                : null;
+              // Installment member = has at least one installment sale.
+              // Cash-only member = has sales, none of them installment
+              // (fully paid up front, so no schedule/statement exists).
+              final hasInstallment =
+                  sales.any((s) => s.saleType == SaleType.installment);
+              final cashOnly = sales.isNotEmpty && !hasInstallment;
 
-            final previewBtn = ElevatedButton.icon(
-              onPressed: () => StatementPreviewDialog.show(context, memberId),
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-              label: const Text('Preview Statement'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.surfaceAlt,
-                foregroundColor: AppColors.textPrimary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
-              ),
-            );
-
-            if (c.maxWidth < 420 && addBtn != null) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  title,
-                  const SizedBox(height: 10),
-                  previewBtn,
-                  const SizedBox(height: 10),
-                  SizedBox(
-                      width: double.infinity, child: addBtn),
+                  LayoutBuilder(builder: (context, c) {
+                    const title = Text('Payment History',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary));
+
+                    final addBtn = canRecord
+                        ? ElevatedButton.icon(
+                            onPressed: () => AddPaymentScreen.show(
+                              context,
+                              preselectedMemberId: memberId,
+                              preselectedMemberName: memberName,
+                            ),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Add Payment'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.textPrimary,
+                              foregroundColor: AppColors.textInverted,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                            ),
+                          )
+                        : null;
+
+                    // The installment statement only exists for
+                    // installment buyers — hidden for cash purchases.
+                    final previewBtn = hasInstallment
+                        ? ElevatedButton.icon(
+                            onPressed: () => StatementPreviewDialog.show(
+                                context, memberId),
+                            icon: const Icon(
+                                Icons.picture_as_pdf_outlined,
+                                size: 16),
+                            label: const Text('Preview Statement'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.surfaceAlt,
+                              foregroundColor: AppColors.textPrimary,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                            ),
+                          )
+                        : null;
+
+                    if (c.maxWidth < 420 &&
+                        (addBtn != null || previewBtn != null)) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          title,
+                          if (previewBtn != null) ...[
+                            const SizedBox(height: 10),
+                            previewBtn,
+                          ],
+                          if (addBtn != null) ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                                width: double.infinity, child: addBtn),
+                          ],
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        title,
+                        const Spacer(),
+                        if (previewBtn != null) previewBtn,
+                        if (previewBtn != null && addBtn != null)
+                          const SizedBox(width: 10),
+                        if (addBtn != null) addBtn,
+                      ],
+                    );
+                  }),
+                  if (sales.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _PaymentTypeChip(
+                      label: cashOnly
+                          ? 'Cash purchase · Fully paid'
+                          : 'Installment plan',
+                      color: cashOnly
+                          ? AppColors.success
+                          : AppColors.primary,
+                      bg: cashOnly
+                          ? AppColors.successBg
+                          : AppColors.primary.withOpacity(0.1),
+                    ),
+                  ],
                 ],
               );
-            }
-
-            return Row(
-              children: [
-                title,
-                const Spacer(),
-                previewBtn,
-                const SizedBox(width: 10),
-                if (addBtn != null) addBtn,
-              ],
-            );
-          }),
+            },
+          ),
           const SizedBox(height: 16),
 
           // Lot installments: down payment + the next three unpaid periods
           // (Period 1, 2, 3 …) and the paid-period history, straight from
-          // `lot_payments`. These don't exist in `payments` until paid, so
-          // without this section upcoming periods never show here.
+          // `lot_payments`. This section renders nothing for cash buyers
+          // (it only lists active installment sales).
           MemberInstallmentsSection(uid: memberId, canRecord: canRecord),
 
           StreamBuilder<List<PaymentModel>>(
-            stream: _fs.streamPaymentsForMember(memberId),
+            stream: _paymentsStream,
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Padding(
@@ -1216,7 +1277,14 @@ class _PaymentsTab extends StatelessWidget {
                           style: TextStyle(color: AppColors.textMuted))),
                 );
               }
-              return LayoutBuilder(
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // T-account: charges (debit) vs payments (credit).
+                  MemberLedgerCard(
+                      payments: payments, memberName: memberName),
+                  const SizedBox(height: 16),
+                  LayoutBuilder(
                 builder: (context, c) {
                   // Type/Amount/Due/Paid plus a status badge and
                   // "Mark Paid" button can't stay readable below
@@ -1243,6 +1311,8 @@ class _PaymentsTab extends StatelessWidget {
                     ),
                   );
                 },
+                  ),
+                ],
               );
             },
           ),
@@ -1250,6 +1320,27 @@ class _PaymentsTab extends StatelessWidget {
       ),
     );
   }
+}
+
+// Small pill showing whether the member paid cash or is on an installment plan.
+class _PaymentTypeChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color bg;
+  const _PaymentTypeChip(
+      {required this.label, required this.color, required this.bg});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+            color: bg, borderRadius: BorderRadius.circular(20)),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: color)),
+      );
 }
 
 class _DocumentsTab extends StatelessWidget {
@@ -1583,9 +1674,22 @@ class _PaymentRow extends StatelessWidget {
       '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
 
   Future<void> _markPaid(BuildContext context) async {
-    await fs.markPaymentPaid(payment.id);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    if (payment.type == PaymentType.lotPayment &&
+        payment.id.startsWith('lot_')) {
+      // Lot payments live in TWO collections (lot_payments + payments).
+      // Mark both together so the schedule and the records stay in sync.
+      await SaleService().markLotPaymentRecordPaid(
+        paymentId: payment.id,
+        payer:     payment.memberName,
+        paidBy:    auth.userModel?.uid ?? '',
+      );
+    } else {
+      await fs.markPaymentPaid(payment.id);
+    }
+
     if (context.mounted) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
       await SettingsService().logAction(
         performedBy:      auth.userModel?.uid ?? '',
         performedByName:  auth.userModel?.displayName ?? '',
@@ -1644,7 +1748,7 @@ class _PaymentRow extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(payment.type.label,
+                  child: Text(payment.typeLabel,
                       style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
@@ -1704,7 +1808,7 @@ class _PaymentRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(payment.type.label,
+                Text(payment.typeLabel,
                     style: const TextStyle(fontSize: 13.5,
                         fontWeight: FontWeight.w500,
                         color: AppColors.textPrimary)),

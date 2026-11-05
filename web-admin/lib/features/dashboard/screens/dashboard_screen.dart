@@ -1273,12 +1273,7 @@ class AppSidebar extends StatelessWidget {
                       onTap: () => context.go(AppRoutes.location),
                     ),
                   if (role == UserRole.admin || role == UserRole.officer)
-                    _NavItem(
-                      icon:     Icons.history_outlined,
-                      label:    'Lot History',
-                      selected: currentPath == AppRoutes.lotHistory,
-                      onTap: () => context.go(AppRoutes.lotHistory),
-                    ),
+                    
                   _NavItem(
                     icon:     Icons.campaign_outlined,
                     label:    'Announcements',

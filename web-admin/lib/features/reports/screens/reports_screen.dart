@@ -11,6 +11,7 @@
 // (_confirmingExport), not only during CSV export (_exporting).
 // UPDATED — payments PDF is now a per-member Statement of Account
 // (outstanding balance, membership dues records, lot amortization schedule).
+// UPDATED — statement tables now include a Transaction ID column.
 // FIXED — preview dialog now uses the public PdfPreview widget from the
 // `printing` package (PreviewScaffold is private to that package).
 // TEMP — the Payments / General Ledger toggle is hidden via _kShowLedgerToggle.
@@ -28,6 +29,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/payment_model.dart';
+import '../../../core/utils/payment_labels.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
@@ -196,7 +198,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
          'Due Date', 'Paid Date', 'Notes'],
         ...payments.map((p) => [
           p.memberName,
-          p.type.label,
+          p.typeLabel,
           p.amount.toStringAsFixed(2),
           p.displayStatus.label,
           _fmt(p.dueDate),
@@ -280,6 +282,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (s.lotNumber.isNotEmpty) 'Lot ${s.lotNumber}',
     ];
     return parts.isEmpty ? 'Lot' : parts.join(' · ');
+  }
+
+  /// Same reference SaleService writes on the payment record:
+  /// LP-<year>-<sale seq>-DP / P### (amortization only lists installment sales).
+  String _lotTxnId(LotSaleModel s, LotPaymentModel p) {
+    final seq  = s.saleSeq.toString().padLeft(4, '0');
+    final tail = p.period == 0
+        ? (s.termMonths == 0 ? 'CASH' : 'DP')
+        : 'P${p.period.toString().padLeft(3, '0')}';
+    return 'LP-${s.soldDate.year}-$seq-$tail';
   }
 
   PdfColor _duesColor(PaymentStatus s) {
@@ -535,21 +547,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
         memberWidgets.add(sectionTitle('Membership Dues & Other Payments'));
         memberWidgets.add(dataTable(
           headers: const [
-            'Description', 'Due Date', 'Paid Date', 'Amount', 'Status'
+            'Transaction ID', 'Description', 'Due Date', 'Paid Date',
+            'Amount', 'Status'
           ],
           widths: {
-            0: const pw.FlexColumnWidth(3.2),
-            1: const pw.FlexColumnWidth(1.4),
-            2: const pw.FlexColumnWidth(1.4),
-            3: const pw.FlexColumnWidth(1.6),
-            4: const pw.FlexColumnWidth(1.2),
+            0: const pw.FlexColumnWidth(2.3),
+            1: const pw.FlexColumnWidth(2.6),
+            2: const pw.FlexColumnWidth(1.3),
+            3: const pw.FlexColumnWidth(1.3),
+            4: const pw.FlexColumnWidth(1.5),
+            5: const pw.FlexColumnWidth(1.1),
           },
           rows: [
             for (final p in recs)
               [
+                txt(p.transactionId.isEmpty ? '—' : p.transactionId,
+                    size: 8),
                 txt(p.lotLabel.isEmpty
-                    ? p.type.label
-                    : '${p.type.label} · ${p.lotLabel}'),
+                    ? p.typeLabel
+                    : '${p.typeLabel} · ${p.lotLabel}'),
                 txt(_fmt(p.dueDate)),
                 txt(_fmt(p.paidDate)),
                 txt(_money(p.amount), align: pw.TextAlign.right),
@@ -595,16 +611,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
               color: PdfColors.grey600));
         } else {
         memberWidgets.add(dataTable(
-          headers: const ['Period', 'Due Date', 'Amount', 'Status'],
+          headers: const [
+            'Transaction ID', 'Period', 'Due Date', 'Amount', 'Status'
+          ],
           widths: {
-            0: const pw.FlexColumnWidth(1),
-            1: const pw.FlexColumnWidth(1.6),
-            2: const pw.FlexColumnWidth(1.8),
-            3: const pw.FlexColumnWidth(1.4),
+            0: const pw.FlexColumnWidth(2.4),
+            1: const pw.FlexColumnWidth(1.3),
+            2: const pw.FlexColumnWidth(1.5),
+            3: const pw.FlexColumnWidth(1.7),
+            4: const pw.FlexColumnWidth(1.3),
           },
           rows: [
             for (final p in shown)
               [
+                txt(_lotTxnId(s.sale, p), size: 8),
                 txt(p.period == 0 ? 'Down payment' : 'Period ${p.period}'),
                 txt(_fmt(p.dueDate)),
                 txt(_money(p.amount), align: pw.TextAlign.right),
@@ -639,7 +659,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              txt('LAMHOAI-RMS',
+              txt('LAMHSYS',
                   size: 18, bold: true, color: PdfColors.indigo900),
               pw.SizedBox(height: 2),
               txt('Statement of Account',
@@ -1440,7 +1460,7 @@ class _PaymentRow extends StatelessWidget {
             const SizedBox(height: AppSpacing.space1),
             Row(
               children: [
-                Text(payment.type.label,
+                Text(payment.typeLabel,
                     style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
                 const SizedBox(width: AppSpacing.space1),
                 Text(
@@ -1476,7 +1496,7 @@ class _PaymentRow extends StatelessWidget {
           ),
           Expanded(
             flex: 2,
-            child: Text(payment.type.label,
+            child: Text(payment.typeLabel,
                 style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
           ),
           Expanded(

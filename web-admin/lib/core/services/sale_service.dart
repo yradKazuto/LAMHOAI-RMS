@@ -43,12 +43,17 @@ class SaleService {
   // ── Mirror into the main `payments` collection ──────────────────────────
   // The Payments screen, its summary cards, the member payment records and the
   // Reports all read the `payments` collection. Lot down payments and
-  // installment periods live in `lot_payments`, so every time one of them is
-  // PAID we also write a matching `payments` record (type lotPayment).
+  // installment periods live in `lot_payments`, so we keep a matching
+  // `payments` record (type lotPayment) for them.
+  //
+  // • The cash purchase / down payment record is created at registration as
+  //   PENDING (unpaid). It becomes PAID only when someone marks it paid after
+  //   the money is received.
+  // • Installment periods get their record when they are paid.
   //
   // The mirror's document id is deterministic (lot_<saleId>_<period>), so the
-  // same period can never be mirrored twice — re-running a save or the
-  // backfill below just finds the existing record.
+  // same period can never be mirrored twice — marking a pending record paid
+  // updates that same document.
   CollectionReference<Map<String, dynamic>> get _mainPayments =>
       _db.collection('payments');
 
@@ -66,13 +71,18 @@ class SaleService {
     return 'LP-${sale.soldDate.year}-$seq-$tail';
   }
 
+  /// Builds the `payments` record for a lot payment.
+  ///
+  /// Pass [paidAt] when the money has been received (status paid). Leave it
+  /// null to create a PENDING record (status unpaid, no paid date).
   Map<String, dynamic> _mirrorMap({
     required LotSaleModel sale,
     required LotPaymentModel p,
-    required DateTime paidAt,
     required String recordedBy,
     required String method,
+    DateTime? paidAt,
   }) {
+    final isPaid = paidAt != null;
     final note = p.period == 0
         ? (sale.termMonths == 0 ? 'Lot purchase (cash)' : 'Lot down payment')
         : 'Lot installment · Period ${p.period}';
@@ -83,7 +93,7 @@ class SaleService {
       memberName: sale.buyerName,
       type: PaymentType.lotPayment,
       amount: p.amount,
-      status: PaymentStatus.paid,
+      status: isPaid ? PaymentStatus.paid : PaymentStatus.unpaid,
       dueDate: p.dueDate,
       paidDate: paidAt,
       recordedBy: recordedBy,
@@ -96,8 +106,8 @@ class SaleService {
         phase: sale.phase,
       ),
       transactionId: _mirrorTxnId(sale, p),
-      paidAmount: p.amount,
-      paymentMethod: method,
+      paidAmount: isPaid ? p.amount : 0,
+      paymentMethod: isPaid ? method : '',
     );
 
     return {
@@ -110,8 +120,10 @@ class SaleService {
     };
   }
 
-  /// Marks one lot_payments row paid AND writes its `payments` mirror in a
-  /// single batch, so the two collections can't drift apart.
+  /// Marks one lot_payments row paid AND updates/creates its `payments`
+  /// record in a single batch, so the two collections can't drift apart.
+  /// If a pending record already exists (cash / down payment), it is updated
+  /// in place rather than duplicated.
   Future<void> _markPeriodPaid({
     required DocumentReference<Map<String, dynamic>> ref,
     required LotPaymentModel p,
@@ -144,15 +156,49 @@ class SaleService {
           recordedBy: paidBy,
           method: method.name,
         ),
+        SetOptions(merge: true),
       );
     }
 
     await batch.commit();
   }
 
-  /// ONE-TIME catch-up: creates the `payments` mirror for every lot payment
-  /// that was already paid before mirroring existed. Safe to run repeatedly —
-  /// records that already exist are skipped. Returns how many were created.
+  /// Use this from the Payments screen's "Mark Paid" for lot payment records.
+  ///
+  /// The `payments` document id encodes the sale and period
+  /// (lot_<saleId>_<period>), so this finds the matching lot_payments row and
+  /// marks BOTH sides paid together. Calling only the generic
+  /// `markPaymentPaid` would leave `lot_payments` still pending.
+  Future<void> markLotPaymentRecordPaid({
+    required String paymentId,
+    required String payer,
+    required String paidBy,
+    PaymentMethod method = PaymentMethod.cash,
+  }) async {
+    if (!paymentId.startsWith('lot_')) {
+      throw Exception('Not a lot payment record.');
+    }
+    final body = paymentId.substring(4);
+    final cut = body.lastIndexOf('_');
+    final period = cut > 0 ? int.tryParse(body.substring(cut + 1)) : null;
+    if (cut <= 0 || period == null) {
+      throw Exception('Unrecognized lot payment record id: $paymentId');
+    }
+
+    await markInstallmentPaid(
+      saleId: body.substring(0, cut),
+      period: period,
+      payer: payer,
+      paidBy: paidBy,
+      method: method,
+    );
+  }
+
+  /// ONE-TIME catch-up: creates the `payments` record for every lot payment
+  /// that is already PAID but has none. Safe to run repeatedly — records that
+  /// already exist are skipped, so it never overwrites a pending record and
+  /// never turns a pending payment into a paid one. Returns how many were
+  /// created.
   Future<int> backfillLotPaymentRecords({String recordedBy = 'system'}) async {
     final paidSnap = await _payments
         .where('status', isEqualTo: LotPaymentStatus.paid.name)
@@ -255,15 +301,20 @@ class SaleService {
 
   /// Records a sale for [lot] to [buyerUid] / [buyerName].
   ///
+  /// Nothing is marked paid at registration — money is only counted once it is
+  /// received and the payment is marked paid.
+  ///
   /// Cash:
-  /// - One payment document marked paid.
-  /// - Sale status paidOff.
-  /// - Lot status occupied.
+  /// - One payment document, pending (scheduled), with a pending record in
+  ///   the payment records.
+  /// - Sale status active until that payment is marked paid, then paidOff.
+  /// - Lot status occupied (reserved for the buyer).
   ///
   /// Installment:
   /// - Sale status active.
   /// - Payment documents generated for the schedule.
-  /// - Period 0 down payment marked paid when downPayment > 0.
+  /// - Period 0 down payment (when downPayment > 0) is pending too, with a
+  ///   pending record in the payment records.
   /// - Lot status occupied.
   Future<void> recordSale({
     required LotModel lot,
@@ -308,9 +359,9 @@ class SaleService {
       termMonths: termMonths,
       annualInterestRate: annualInterestRate,
       monthlyPayment: monthlyPayment,
-      status: termMonths == 0
-          ? LotSaleStatus.paidOff
-          : LotSaleStatus.active,
+      // Cash is no longer paidOff at registration: it stays active until the
+      // payment is received and marked paid (_checkIfPaidOff then closes it).
+      status: LotSaleStatus.active,
       soldDate: soldDate,
       saleSeq: saleSeq,
       createdBy: recordedBy,
@@ -333,26 +384,25 @@ class SaleService {
       final isCash = termMonths == 0;
       final isDown = p.period == 0 && downPayment > 0;
 
+      // Every row starts out unpaid (scheduled) — including cash and the
+      // down payment. They are marked paid later, when the money is received.
       batch.set(
         _payments.doc(),
         p.copyWith(
-          status: (isCash || isDown)
-              ? LotPaymentStatus.paid
-              : LotPaymentStatus.scheduled,
-          paidAt: (isCash || isDown) ? DateTime.now() : null,
-          paidBy: (isCash || isDown) ? recordedBy : null,
+          status: LotPaymentStatus.scheduled,
+          paidAt: null,
+          paidBy: null,
         ).toMap(),
       );
 
-      // Down payment / cash purchase is paid at the sale — mirror it into the
-      // main payments collection so it shows in the payment records.
+      // Cash purchase / down payment: save a PENDING record in the payment
+      // records right away so it shows up and can be marked paid on receipt.
       if ((isCash || isDown) && p.amount > 0) {
         batch.set(
           _mainPayments.doc(_mirrorId(saleId, p.period)),
           _mirrorMap(
             sale: sale,
             p: p,
-            paidAt: DateTime.now(),
             recordedBy: recordedBy,
             method: 'cash',
           ),

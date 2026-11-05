@@ -32,9 +32,27 @@ Widget installmentStatementContent({
         return const Center(child: CircularProgressIndicator());
       }
 
-      final sales = saleSnap.data!.where((s) => s.buyerUid == memberId).toList();
+      // Only installment sales have a statement. Cash purchases are paid
+      // in full up front, so there is no schedule to show — and a member
+      // with both a cash lot and an installment lot must get the
+      // installment one, not whichever sale happens to be first.
+      final sales = saleSnap.data!
+          .where((s) =>
+              s.buyerUid == memberId &&
+              s.saleType == SaleType.installment &&
+              s.status != LotSaleStatus.cancelled)
+          .toList();
       if (sales.isEmpty) {
-        return const Center(child: Text('No sale found for member'));
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'This member has no installment plan (cash purchase).',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          ),
+        );
       }
       final sale = sales.first;
 
