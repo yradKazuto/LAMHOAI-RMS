@@ -706,6 +706,18 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
           );
         }
 
+        // 6. Safety net: make sure every PAID lot payment (cash purchase or
+        //    down payment) has its record in the Payments screen. The sale
+        //    already writes these, and this is idempotent (deterministic
+        //    ids), so it only fills in anything that was missed — e.g. a
+        //    sale made before records were mirrored. Never blocks registration.
+        try {
+          await SaleService().backfillLotPaymentRecords(
+              recordedBy: FirebaseAuth.instance.currentUser!.uid);
+        } catch (e) {
+          debugPrint('Lot payment records sync failed: $e');
+        }
+
         await secondaryAuth.signOut();
         await secondaryApp.delete();
 

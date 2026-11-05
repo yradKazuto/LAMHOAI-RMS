@@ -9,13 +9,8 @@ import '../../../core/routing/app_router.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/design_tokens.dart';
 
-
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
-
-  
-  
-  
 
   @override
   Widget build(BuildContext context) {
@@ -66,8 +61,7 @@ class AnalyticsScreen extends StatelessWidget {
                 final isWide = constraints.maxWidth > 700;
                 return isWide
                     ? Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                               flex: 3,
@@ -75,8 +69,7 @@ class AnalyticsScreen extends StatelessWidget {
                           const SizedBox(width: 20),
                           Expanded(
                               flex: 2,
-                              child:
-                                  _MemberStatusPieChart(svc: _svc)),
+                              child: _MemberStatusPieChart(svc: _svc)),
                         ],
                       )
                     : Column(
@@ -114,10 +107,10 @@ class _SummaryTilesRow extends StatelessWidget {
             svc.getPaymentStatusBreakdown(),
           ]),
           builder: (context, AsyncSnapshot<List<dynamic>> snap2) {
-            final memberBreakdown = snap2.data?[0]
-                as MemberStatusBreakdown?;
-            final paymentBreakdown = snap2.data?[1]
-                as PaymentStatusBreakdown?;
+            final memberBreakdown =
+                snap2.data?[0] as MemberStatusBreakdown?;
+            final paymentBreakdown =
+                snap2.data?[1] as PaymentStatusBreakdown?;
 
             return LayoutBuilder(
               builder: (context, constraints) {
@@ -193,37 +186,50 @@ class _SummaryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: AppRadius.cardBorderRadius,
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.label),
-        const SizedBox(height: 4),
-        Text(value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.greeting.copyWith(
-              fontSize: 20,
-              color: valueColor ?? AppColors.textPrimary,
-            )),
-      ],
-    ),
-  );
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: AppRadius.cardBorderRadius,
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label),
+            const SizedBox(height: 4),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.greeting.copyWith(
+                  fontSize: 20,
+                  color: valueColor ?? AppColors.textPrimary,
+                )),
+          ],
+        ),
+      );
 }
 
-class _MonthlyBarChart extends StatelessWidget {
+class _MonthlyBarChart extends StatefulWidget {
   final AnalyticsService svc;
   const _MonthlyBarChart({required this.svc});
 
-  
+  @override
+  State<_MonthlyBarChart> createState() => _MonthlyBarChartState();
+}
+
+class _MonthlyBarChartState extends State<_MonthlyBarChart> {
+  // key = number of months passed to the service, value = label.
+  // Keys are unique, so the dropdown always has exactly one matching item.
+  static const _options = <int, String>{
+    3: 'Last 3 months',
+    6: 'Last 6 months',
+    12: 'Last 12 months',
+  };
+
+  int _months = 6;
 
   @override
   Widget build(BuildContext context) {
@@ -237,25 +243,47 @@ class _MonthlyBarChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Monthly Collections',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary)),
-          const SizedBox(height: 4),
-          Text('Last 6 months',
-              style: TextStyle(
-                  fontSize: 12, color: AppColors.textMuted)),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Monthly Collections',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    const SizedBox(height: 4),
+                    Text(_options[_months]!,
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textMuted)),
+                  ],
+                ),
+              ),
+              DropdownButton<int>(
+                value: _months,
+                items: _options.entries
+                    .map((e) => DropdownMenuItem<int>(
+                          value: e.key,
+                          child: Text(e.value),
+                        ))
+                    .toList(),
+                onChanged: (val) {
+                  if (val == null) return;
+                  setState(() => _months = val);
+                },
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           FutureBuilder<List<MonthlyCollection>>(
-            future: svc.getMonthlyCollections(months: 6),
+            future: widget.svc.getMonthlyCollections(months: _months),
             builder: (context, snap) {
-              if (snap.connectionState ==
-                  ConnectionState.waiting) {
+              if (snap.connectionState == ConnectionState.waiting) {
                 return const SizedBox(
                   height: 200,
-                  child: Center(
-                      child: CircularProgressIndicator()),
+                  child: Center(child: CircularProgressIndicator()),
                 );
               }
 
@@ -265,17 +293,14 @@ class _MonthlyBarChart extends StatelessWidget {
                   height: 200,
                   child: Center(
                       child: Text('No data available.',
-                          style: TextStyle(
-                              color: AppColors.textMuted))),
+                          style: TextStyle(color: AppColors.textMuted))),
                 );
               }
 
-              final maxVal = data
-                  .map((d) => d.total)
-                  .reduce((a, b) => a > b ? a : b);
-              final maxY = maxVal == 0
-                  ? 1000.0
-                  : (maxVal * 1.3).ceilToDouble();
+              final maxVal =
+                  data.map((d) => d.total).reduce((a, b) => a > b ? a : b);
+              final maxY =
+                  maxVal == 0 ? 1000.0 : (maxVal * 1.3).ceilToDouble();
 
               return SizedBox(
                 height: 220,
@@ -297,21 +322,17 @@ class _MonthlyBarChart extends StatelessWidget {
                         sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: 52,
-                          getTitlesWidget: (val, meta) =>
-                              Text(
+                          getTitlesWidget: (val, meta) => Text(
                             '₱${(val / 1000).toStringAsFixed(0)}k',
                             style: TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textMuted),
+                                fontSize: 10, color: AppColors.textMuted),
                           ),
                         ),
                       ),
                       rightTitles: const AxisTitles(
-                          sideTitles:
-                              SideTitles(showTitles: false)),
+                          sideTitles: SideTitles(showTitles: false)),
                       topTitles: const AxisTitles(
-                          sideTitles:
-                              SideTitles(showTitles: false)),
+                          sideTitles: SideTitles(showTitles: false)),
                       bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
@@ -321,13 +342,11 @@ class _MonthlyBarChart extends StatelessWidget {
                               return const SizedBox.shrink();
                             }
                             return Padding(
-                              padding:
-                                  const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.only(top: 6),
                               child: Text(data[i].month,
                                   style: TextStyle(
                                       fontSize: 11,
-                                      color:
-                                          AppColors.textSecondary)),
+                                      color: AppColors.textSecondary)),
                             );
                           },
                         ),
@@ -342,15 +361,12 @@ class _MonthlyBarChart extends StatelessWidget {
                             barRods: [
                               BarChartRodData(
                                 toY: e.value.total,
-                                color:
-                                    AppColors.primary,
+                                color: AppColors.primary,
                                 width: 28,
-                                borderRadius:
-                                    const BorderRadius.vertical(
+                                borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(6),
                                 ),
-                                backDrawRodData:
-                                    BackgroundBarChartRodData(
+                                backDrawRodData: BackgroundBarChartRodData(
                                   show: true,
                                   toY: maxY,
                                   color: AppColors.background,
@@ -362,11 +378,9 @@ class _MonthlyBarChart extends StatelessWidget {
                         .toList(),
                     barTouchData: BarTouchData(
                       touchTooltipData: BarTouchTooltipData(
-                        getTooltipColor: (_) =>
-                            AppColors.textPrimary,
-                        getTooltipItem:
-                            (group, groupIndex, rod, rodIndex) =>
-                                BarTooltipItem(
+                        getTooltipColor: (_) => AppColors.textPrimary,
+                        getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                            BarTooltipItem(
                           '₱${rod.toY.toStringAsFixed(0)}',
                           const TextStyle(
                               color: AppColors.textInverted,
@@ -391,15 +405,11 @@ class _MemberStatusPieChart extends StatefulWidget {
   const _MemberStatusPieChart({required this.svc});
 
   @override
-  State<_MemberStatusPieChart> createState() =>
-      _MemberStatusPieChartState();
+  State<_MemberStatusPieChart> createState() => _MemberStatusPieChartState();
 }
 
-class _MemberStatusPieChartState
-    extends State<_MemberStatusPieChart> {
+class _MemberStatusPieChartState extends State<_MemberStatusPieChart> {
   int _touched = -1;
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -420,18 +430,15 @@ class _MemberStatusPieChartState
                   color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text('Breakdown by status',
-              style: TextStyle(
-                  fontSize: 12, color: AppColors.textMuted)),
+              style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           const SizedBox(height: 24),
           FutureBuilder<MemberStatusBreakdown>(
             future: widget.svc.getMemberStatusBreakdown(),
             builder: (context, snap) {
-              if (snap.connectionState ==
-                  ConnectionState.waiting) {
+              if (snap.connectionState == ConnectionState.waiting) {
                 return const SizedBox(
                   height: 200,
-                  child: Center(
-                      child: CircularProgressIndicator()),
+                  child: Center(child: CircularProgressIndicator()),
                 );
               }
 
@@ -441,8 +448,7 @@ class _MemberStatusPieChartState
                   height: 200,
                   child: Center(
                       child: Text('No member data.',
-                          style: TextStyle(
-                              color: AppColors.textMuted))),
+                          style: TextStyle(color: AppColors.textMuted))),
                 );
               }
 
@@ -459,9 +465,7 @@ class _MemberStatusPieChartState
                     value: data.delinquent.toDouble(),
                     color: AppColors.danger,
                     label: 'Delinquent'),
-              ]
-                  .where((s) => s.value > 0)
-                  .toList();
+              ].where((s) => s.value > 0).toList();
 
               return Column(
                 children: [
@@ -472,35 +476,27 @@ class _MemberStatusPieChartState
                         pieTouchData: PieTouchData(
                           touchCallback: (event, response) {
                             setState(() {
-                              if (!event
-                                      .isInterestedForInteractions ||
+                              if (!event.isInterestedForInteractions ||
                                   response == null ||
-                                  response.touchedSection ==
-                                      null) {
+                                  response.touchedSection == null) {
                                 _touched = -1;
                                 return;
                               }
-                              _touched = response
-                                  .touchedSection!
-                                  .touchedSectionIndex;
+                              _touched =
+                                  response.touchedSection!.touchedSectionIndex;
                             });
                           },
                         ),
                         sectionsSpace: 2,
                         centerSpaceRadius: 40,
-                        sections: sections
-                            .asMap()
-                            .entries
-                            .map((e) {
-                          final isTouched =
-                              e.key == _touched;
+                        sections: sections.asMap().entries.map((e) {
+                          final isTouched = e.key == _touched;
                           return PieChartSectionData(
                             value: e.value.value,
                             color: e.value.color,
                             radius: isTouched ? 60 : 50,
-                            title: isTouched
-                                ? '${e.value.value.toInt()}'
-                                : '',
+                            title:
+                                isTouched ? '${e.value.value.toInt()}' : '',
                             titleStyle: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -531,8 +527,7 @@ class _MemberStatusPieChartState
                                   '${s.label} (${s.value.toInt()})',
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color:
-                                          AppColors.textSecondary),
+                                      color: AppColors.textSecondary),
                                 ),
                               ],
                             ))
@@ -550,19 +545,15 @@ class _MemberStatusPieChartState
 
 class _PieSection {
   final double value;
-  final Color  color;
+  final Color color;
   final String label;
   const _PieSection(
-      {required this.value,
-      required this.color,
-      required this.label});
+      {required this.value, required this.color, required this.label});
 }
 
 class _PaymentComplianceCard extends StatelessWidget {
   final AnalyticsService svc;
   const _PaymentComplianceCard({required this.svc});
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -583,24 +574,20 @@ class _PaymentComplianceCard extends StatelessWidget {
                   color: AppColors.textPrimary)),
           const SizedBox(height: 4),
           Text('All payment records',
-              style: TextStyle(
-                  fontSize: 12, color: AppColors.textMuted)),
+              style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           const SizedBox(height: 20),
           FutureBuilder<PaymentStatusBreakdown>(
             future: svc.getPaymentStatusBreakdown(),
             builder: (context, snap) {
-              if (snap.connectionState ==
-                  ConnectionState.waiting) {
-                return const Center(
-                    child: CircularProgressIndicator());
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
               }
 
               final data = snap.data;
               if (data == null || data.total == 0) {
                 return const Center(
                     child: Text('No payment data.',
-                        style:
-                            TextStyle(color: AppColors.textMuted)));
+                        style: TextStyle(color: AppColors.textMuted)));
               }
 
               return Column(
@@ -635,13 +622,11 @@ class _PaymentComplianceCard extends StatelessWidget {
                     child: Row(
                       children: [
                         const Icon(Icons.verified_outlined,
-                            color: AppColors.dataInk,
-                            size: 20),
+                            color: AppColors.dataInk, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text('Payment Compliance Rate',
                                   maxLines: 1,
@@ -684,8 +669,8 @@ class _PaymentComplianceCard extends StatelessWidget {
 
 class _ComplianceBar extends StatelessWidget {
   final String label;
-  final int    count, total;
-  final Color  color;
+  final int count, total;
+  final Color color;
 
   const _ComplianceBar({
     required this.label,
@@ -722,9 +707,7 @@ class _ComplianceBar extends StatelessWidget {
           child: Text(
             '$count (${(pct * 100).toStringAsFixed(0)}%)',
             textAlign: TextAlign.right,
-            style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ),
       ],

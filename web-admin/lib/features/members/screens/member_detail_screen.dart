@@ -17,6 +17,7 @@ import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/lot_service.dart';
 import '../../payments/screens/add_payment_screen.dart';
+import '../../payments/screens/member_installments_section.dart';
 import '../../payments/screens/statement_preview_dialog.dart';
 import '../../documents/widgets/document_upload_flow.dart';
 import '../../../core/theme/design_tokens.dart';
@@ -834,6 +835,8 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
           ),
           const SizedBox(height: 10),
 
+          const SizedBox(height: 10),
+
           if (widget.ownedLots.isEmpty)
             Align(
               alignment: Alignment.centerLeft,
@@ -852,6 +855,8 @@ class _ProfileSidebarCardState extends State<_ProfileSidebarCard> {
                             setState(() => _selectedLotId = lot.id);
                             widget.onViewLot(lot);
                           },
+                          onHistory: () => context.go(AppRoutes.lotHistory,
+                              extra: lot.id),
                         ),
                       ))
                   .toList(),
@@ -892,11 +897,13 @@ class _OwnedLotTile extends StatelessWidget {
   final LotModel lot;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onHistory;
 
   const _OwnedLotTile({
     required this.lot,
     required this.isSelected,
     required this.onTap,
+    required this.onHistory,
   });
 
   @override
@@ -931,6 +938,16 @@ class _OwnedLotTile extends StatelessWidget {
           children: [
             Icon(Icons.location_on_outlined,
                 size: 15, color: isSelected ? AppColors.primary : AppColors.primary),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onHistory,
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.history_outlined, size: 16,
+                    color: isSelected ? AppColors.primary : AppColors.textMuted),
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -1102,7 +1119,7 @@ class _PaymentsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final canRecord = auth.isAdmin || auth.isAccountant;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1174,47 +1191,60 @@ class _PaymentsTab extends StatelessWidget {
             );
           }),
           const SizedBox(height: 16),
-          Expanded(
-            child: StreamBuilder<List<PaymentModel>>(
-              stream: _fs.streamPaymentsForMember(memberId),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final payments = snap.data ?? [];
-                if (payments.isEmpty) {
-                  return const Center(
-                      child: Text('No payment records found.',
-                          style: TextStyle(color: AppColors.textMuted)));
-                }
-                return LayoutBuilder(
-                  builder: (context, c) {
-                    // Type/Amount/Due/Paid plus a status badge and
-                    // "Mark Paid" button can't stay readable below
-                    // this width — stack each row as a card instead.
-                    final compact = c.maxWidth < 560;
 
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.textInverted,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: AppColors.border),
-                      ),
-                      child: ListView.separated(
-                        itemCount: payments.length,
-                        separatorBuilder: (_, __) => const Divider(
-                            height: 1, color: AppPrimitiveColors.navy100),
-                        itemBuilder: (_, i) => _PaymentRow(
-                            payment: payments[i],
-                            fs: _fs,
-                            compact: compact),
-                      ),
-                    );
-                  },
+          // Lot installments: down payment + the next three unpaid periods
+          // (Period 1, 2, 3 …) and the paid-period history, straight from
+          // `lot_payments`. These don't exist in `payments` until paid, so
+          // without this section upcoming periods never show here.
+          MemberInstallmentsSection(uid: memberId, canRecord: canRecord),
+
+          StreamBuilder<List<PaymentModel>>(
+            stream: _fs.streamPaymentsForMember(memberId),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
                 );
-              },
-            ),
+              }
+              final payments = snap.data ?? [];
+              if (payments.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                      child: Text('No payment records found.',
+                          style: TextStyle(color: AppColors.textMuted))),
+                );
+              }
+              return LayoutBuilder(
+                builder: (context, c) {
+                  // Type/Amount/Due/Paid plus a status badge and
+                  // "Mark Paid" button can't stay readable below
+                  // this width — stack each row as a card instead.
+                  final compact = c.maxWidth < 560;
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.textInverted,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: ListView.separated(
+                      // The whole tab scrolls, so the list just sizes
+                      // itself to its rows.
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: payments.length,
+                      separatorBuilder: (_, __) => const Divider(
+                          height: 1, color: AppPrimitiveColors.navy100),
+                      itemBuilder: (_, i) => _PaymentRow(
+                          payment: payments[i], fs: _fs, compact: compact),
+                    ),
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
@@ -1535,6 +1565,7 @@ class _PaymentRow extends StatelessWidget {
       case PaymentStatus.unpaid:  return AppColors.warning;
       case PaymentStatus.overdue: return AppColors.danger;
       case PaymentStatus.waived:  return AppColors.textSecondary;
+      case PaymentStatus.voided:  return AppColors.textSecondary;
     }
   }
 
@@ -1544,6 +1575,7 @@ class _PaymentRow extends StatelessWidget {
       case PaymentStatus.unpaid:  return AppColors.warningBg;
       case PaymentStatus.overdue: return AppColors.dangerBg;
       case PaymentStatus.waived:  return AppColors.background;
+      case PaymentStatus.voided:  return AppColors.background;
     }
   }
 
@@ -1578,6 +1610,22 @@ class _PaymentRow extends StatelessWidget {
             color: _statusColor(payment.displayStatus))),
   );
 
+  // Lot payments carry "Lot installment · Period 2" / "Lot down payment"
+  // in notes, plus the lot label — show them so rows are distinguishable.
+  String get _detail {
+    final parts = <String>[];
+    final note = payment.notes.trim();
+    if (note.isNotEmpty) parts.add(note);
+    final lot = payment.lotLabel.trim();
+    if (lot.isNotEmpty) parts.add(lot);
+    return parts.join('  ·  ');
+  }
+
+  Widget _detailText() => Text(_detail,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 11.5, color: AppColors.textMuted));
+
   bool get _canMarkPaid =>
       payment.status == PaymentStatus.unpaid ||
       payment.status == PaymentStatus.overdue;
@@ -1608,6 +1656,10 @@ class _PaymentRow extends StatelessWidget {
                 _statusPill(),
               ],
             ),
+            if (_detail.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              _detailText(),
+            ],
             const SizedBox(height: 4),
             Text('₱${payment.amount.toStringAsFixed(2)}',
                 style: const TextStyle(
@@ -1647,9 +1699,19 @@ class _PaymentRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(flex: 3, child: Text(payment.type.label,
-              style: const TextStyle(fontSize: 13.5,
-                  fontWeight: FontWeight.w500, color: AppColors.textPrimary))),
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(payment.type.label,
+                    style: const TextStyle(fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary)),
+                if (_detail.isNotEmpty) _detailText(),
+              ],
+            ),
+          ),
           Expanded(flex: 2, child: Text(
               '₱${payment.amount.toStringAsFixed(2)}',
               style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary))),

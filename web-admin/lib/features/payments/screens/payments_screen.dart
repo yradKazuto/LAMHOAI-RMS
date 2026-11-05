@@ -8,12 +8,17 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../core/services/sale_service.dart';
+import 'member_installments_section.dart';
 import 'add_payment_screen.dart';
 import 'record_payment_screen.dart';
 import 'membership_dues_screen.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/routing/app_router.dart';
 import 'package:go_router/go_router.dart';
+
+// Runs the lot-payment backfill at most once per app launch.
+bool _lotBackfillChecked = false;
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -55,10 +60,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   PaymentStatus? _statusFilter;
   PaymentType?   _typeFilter;
 
-  
-  
-  
-
   @override
   void initState() {
     super.initState();
@@ -82,6 +83,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       try {
         await _fs.syncOverdueStatuses();
         await _applyPenalties();
+        await _backfillLotPayments();
       } catch (e) {
         debugPrint('Payment maintenance failed: $e');
         if (mounted) {
@@ -97,6 +99,21 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       }
     }();
     await _maintenanceTask;
+  }
+
+  /// One-time catch-up: copies lot payments (down payments / periods) that
+  /// were marked paid BEFORE mirroring existed into the `payments`
+  /// collection so they show in the records. Idempotent — existing records
+  /// are skipped. Once it has run you can delete this method and its call.
+  Future<void> _backfillLotPayments() async {
+    if (_lotBackfillChecked) return;
+    _lotBackfillChecked = true;
+    try {
+      final n = await SaleService().backfillLotPaymentRecords();
+      debugPrint('Lot payment backfill: $n record(s) created');
+    } catch (e) {
+      debugPrint('Lot payment backfill failed: $e');
+    }
   }
 
   Future<void> _applyPenalties() async {
@@ -440,11 +457,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   ],
                 ];
 
-                // Phones: title, then the three actions as one compact
-                // row (icon + short label, evenly divided) so they
-                // stay horizontal instead of wrapping to three lines —
-                // that extra stacked height was what pushed the table
-                // below the bottom of the screen.
+                // Phones: title, then the actions as one compact row
+                // (icon + short label, evenly divided) so they stay
+                // horizontal instead of wrapping to several lines.
                 if (phone) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1062,6 +1077,7 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
       case PaymentStatus.unpaid:  return AppColors.warning;
       case PaymentStatus.overdue: return AppColors.danger;
       case PaymentStatus.waived:  return AppColors.textSecondary;
+      case PaymentStatus.voided:  return AppColors.textSecondary;
     }
   }
 
@@ -1071,6 +1087,7 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
       case PaymentStatus.unpaid:  return AppColors.warningBg;
       case PaymentStatus.overdue: return AppColors.dangerBg;
       case PaymentStatus.waived:  return AppColors.background;
+      case PaymentStatus.voided:  return AppColors.background;
     }
   }
 
@@ -1360,9 +1377,6 @@ class _FilterPopoverButton extends StatefulWidget {
 }
 
 class _FilterPopoverButtonState extends State<_FilterPopoverButton> {
-  
-  
-
   final LayerLink _link = LayerLink();
   OverlayEntry? _entry;
 
@@ -1546,8 +1560,6 @@ class _FilterChipGroup<T> extends StatelessWidget {
     required this.onChanged,
   });
 
-  
-
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 8,
@@ -1664,8 +1676,6 @@ class _MemberPaymentsDialog extends StatelessWidget {
     required this.canRecord,
   });
 
-  
-
   @override
   Widget build(BuildContext context) {
     final size  = MediaQuery.of(context).size;
@@ -1705,8 +1715,22 @@ class _MemberPaymentsDialog extends StatelessWidget {
               const Text('Payment records',
                   style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
               const SizedBox(height: 14),
+              // Next three unpaid lot-installment periods per active sale.
+              // Renders nothing when the member has no active installment
+              // sales; carries its own 16px bottom padding when it does.
+              // Everything below the header scrolls together. Before, the
+              // installments card and the records list were stacked in a
+              // non-scrolling Column, so a member with many periods pushed
+              // the totals past the dialog's max height ("BOTTOM OVERFLOWED").
               Flexible(
-                child: StreamBuilder<List<PaymentModel>>(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      MemberInstallmentsSection(
+                          uid: uid, canRecord: canRecord),
+                      StreamBuilder<List<PaymentModel>>(
                   stream: paymentsStream,
                   initialData: initialPayments,
                   builder: (context, snap) {
@@ -1746,7 +1770,8 @@ class _MemberPaymentsDialog extends StatelessWidget {
                     final totalDue = records
                         .where((p) =>
                             p.status != PaymentStatus.paid &&
-                            p.status != PaymentStatus.waived)
+                            p.status != PaymentStatus.waived &&
+                            p.status != PaymentStatus.voided)
                         .fold<double>(0, (sum, p) => sum + p.amount);
 
                     return Column(
@@ -1771,23 +1796,26 @@ class _MemberPaymentsDialog extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 14),
-                        Flexible(
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            itemCount: records.length,
-                            separatorBuilder: (_, __) => const Divider(
-                                height: 1, color: AppColors.background),
-                            itemBuilder: (_, i) => _PaymentTableRow(
-                              payment: records[i],
-                              fs: fs,
-                              canRecord: canRecord,
-                              compact: true, // dialog is narrow regardless
-                            ),
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          itemCount: records.length,
+                          separatorBuilder: (_, __) => const Divider(
+                              height: 1, color: AppColors.background),
+                          itemBuilder: (_, i) => _PaymentTableRow(
+                            payment: records[i],
+                            fs: fs,
+                            canRecord: canRecord,
+                            compact: true, // dialog is narrow regardless
                           ),
                         ),
                       ],
                     );
                   },
+                ),
+                    ],
+                  ),
                 ),
               ),
             ],

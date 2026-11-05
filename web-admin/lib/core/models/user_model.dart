@@ -31,6 +31,7 @@ class UserModel {
   final UserRole role;
   final DateTime createdAt;
   final bool isActive;
+  final Map<String, bool> notificationPreferences;
 
   const UserModel({
     required this.uid,
@@ -39,6 +40,7 @@ class UserModel {
     required this.role,
     required this.createdAt,
     this.isActive = true,
+    this.notificationPreferences = const {'push': true, 'sms': false},
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String uid) {
@@ -49,6 +51,8 @@ class UserModel {
       role: UserRoleExtension.fromString(map['role'] as String?),
       createdAt: (map['createdAt'] as dynamic)?.toDate() ?? DateTime.now(),
       isActive: map['isActive'] as bool? ?? true,
+      notificationPreferences: Map<String, bool>.from(
+          map['notificationPreferences'] ?? {'push': true, 'sms': false}),
     );
   }
 
@@ -60,6 +64,7 @@ class UserModel {
       'role': role.name,
       'createdAt': createdAt,
       'isActive': isActive,
+      'notificationPreferences': notificationPreferences,
     };
   }
 

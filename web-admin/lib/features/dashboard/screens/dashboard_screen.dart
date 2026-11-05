@@ -15,6 +15,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:lamhoai_admin/core/services/notification_service.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/routing/app_router.dart';
@@ -50,6 +52,7 @@ class DashboardScreen extends StatelessWidget {
               'Good day, ${user?.displayName ?? 'User'}',
               style: AppTypography.greeting,
             ),
+            if (user != null) _NotificationFeed(uid: user.uid),
             const SizedBox(height: 4),
             Text(
               'You are logged in as ${user?.role.label ?? ''}.',
@@ -70,6 +73,52 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Notification Feed ────────────────────────────────────────────────────────
+class _NotificationFeed extends StatelessWidget {
+  final String uid;
+  const _NotificationFeed({required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    final db = context.read<FirebaseFirestore>() ?? FirebaseFirestore.instance;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: db.collection('notifications')
+          .where('uid', isEqualTo: uid)
+          .where('isRead', isEqualTo: false)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox.shrink();
+        final docs = snapshot.data!.docs;
+        final unreadCount = docs.length;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Notifications', style: AppTypography.sectionHeader),
+              trailing: Badge(
+                label: Text('$unreadCount'),
+                backgroundColor: AppColors.danger,
+              ),
+            ),
+            ...docs.take(5).map((doc) {
+              final data = doc.data();
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(data['title'] ?? 'No title', style: AppTypography.bodyMedium),
+                subtitle: Text(data['body'] ?? 'No body', style: AppTypography.caption),
+                trailing: Text(_timeAgo((data['createdAt'] as Timestamp).toDate()), style: AppTypography.caption),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }
@@ -1222,6 +1271,13 @@ class AppSidebar extends StatelessWidget {
                       label:    'Location Mapping',
                       selected: currentPath == AppRoutes.location,
                       onTap: () => context.go(AppRoutes.location),
+                    ),
+                  if (role == UserRole.admin || role == UserRole.officer)
+                    _NavItem(
+                      icon:     Icons.history_outlined,
+                      label:    'Lot History',
+                      selected: currentPath == AppRoutes.lotHistory,
+                      onTap: () => context.go(AppRoutes.lotHistory),
                     ),
                   _NavItem(
                     icon:     Icons.campaign_outlined,

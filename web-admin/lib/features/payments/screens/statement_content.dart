@@ -489,6 +489,8 @@ String _monthName(int m) {
   return names[m - 1];
 }
 
+// Used only inside the dark navy header block, so both texts must be
+// light-colored (dark text on navy is unreadable).
 class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
@@ -499,15 +501,16 @@ class _DetailRow extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(label,
-          style: const TextStyle(
-              fontSize: 10, color: AppColors.textMuted)),
+          style: TextStyle(
+              fontSize: 10,
+              color: AppColors.textInverted.withValues(alpha: 0.65))),
       const SizedBox(height: AppSpacing.space0_5),
       Text(value,
           style: const TextStyle(
               fontFamily: AppTypography.fontFamily,
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary),
+              color: AppColors.textInverted),
           overflow: TextOverflow.ellipsis),
     ],
   );

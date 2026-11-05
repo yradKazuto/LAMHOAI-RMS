@@ -1,0 +1,32 @@
+{
+  "description": "Proposed Accounting Data Model for Phase 3 (PROPOSED - UNAPPROVED)",
+  "version": "1.0.0-proposed",
+  "definitions": {
+    "JournalEntry": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/EntryLine" }
+        },
+        "status": { "type": "string", "enum": ["draft", "proposed", "posted"] }
+      }
+    },
+    "EntryLine": {
+      "type": "object",
+      "properties": {
+        "accountId": { "type": "string" },
+        "debit": { "type": "number" },
+        "credit": { "type": "number" }
+      }
+    }
+  },
+  "unresolvedDecisions": [
+    "Definition of all required Account IDs for the Chart of Accounts.",
+    "Handling of multi-currency transactions if required.",
+    "Automation level of journal entry creation."
+  ]
+}

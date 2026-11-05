@@ -25,6 +25,11 @@ import '../../features/help/screens/help_screen.dart';
 import '../../features/payments/screens/statement_preview_screen.dart';
 import '../../features/location/screens/bulk_lot_update_screen.dart';
 import '../../core/theme/design_tokens.dart';
+import '../../features/reports/screens/chart_of_accounts_screen.dart';
+import '../../features/reports/screens/general_ledger_screen.dart';
+import '../../features/reports/screens/ar_aging_screen.dart';
+import '../../features/reports/screens/t_account_screen.dart';
+import '../../features/reports/screens/lot_ownership_history_screen.dart';
 
 class AppRoutes {
   static const login          = '/login';
@@ -45,6 +50,12 @@ class AppRoutes {
   static const help           = '/help';
   static const statement      = '/statement';
   static const bulkUpdate     = '/bulk-update';
+  // Phase 3 accounting prototype routes — read-only for all authenticated users.
+  static const chartOfAccounts  = '/accounts';
+  static const generalLedger     = '/journal';
+  static const tAccount         = '/t-accounts';
+  static const arAging          = '/ar-aging';
+  static const lotHistory       = '/lot-history';
 }
 
 GoRouter createRouter(AuthProvider authProvider) {
@@ -134,6 +145,13 @@ GoRouter createRouter(AuthProvider authProvider) {
 
       // Location Mapping — Admin + Officer
       if (path.startsWith(AppRoutes.location) &&
+          role != UserRole.admin &&
+          role != UserRole.officer) {
+        return AppRoutes.dashboard;
+      }
+
+      // Lot History — Admin + Officer
+      if (path.startsWith(AppRoutes.lotHistory) &&
           role != UserRole.admin &&
           role != UserRole.officer) {
         return AppRoutes.dashboard;
@@ -231,6 +249,33 @@ GoRouter createRouter(AuthProvider authProvider) {
             name: 'statement',
             builder: (_, state) => StatementPreviewScreen(
               memberId: state.pathParameters['memberId']!,
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.tAccount,
+            name: 't-account',
+            builder: (_, __) => const TAccountScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.chartOfAccounts,
+            name: 'chart-of-accounts',
+            builder: (_, __) => const ChartOfAccountsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.generalLedger,
+            name: 'general-ledger',
+            builder: (_, __) => const GeneralLedgerScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.arAging,
+            name: 'ar-aging',
+            builder: (_, __) => const ArAgingScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.lotHistory,
+            name: 'lot-history',
+            builder: (context, state) => LotOwnershipHistoryScreen(
+              lotId: state.extra as String? ?? '',
             ),
           ),
           GoRoute(

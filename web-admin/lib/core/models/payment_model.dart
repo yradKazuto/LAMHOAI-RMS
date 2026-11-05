@@ -39,20 +39,22 @@ extension PaymentTypeExt on PaymentType {
       enumFromString(v, _paymentTypeLookup, defaultValue: PaymentType.other);
 }
 
-enum PaymentStatus { paid, unpaid, overdue, waived }
+enum PaymentStatus { paid, unpaid, overdue, waived, voided }
 
 const Map<PaymentStatus, String> _paymentStatusLabels = {
   PaymentStatus.paid: 'Paid',
   PaymentStatus.unpaid: 'Unpaid',
   PaymentStatus.overdue: 'Overdue',
   PaymentStatus.waived: 'Waived',
+  PaymentStatus.voided: 'Voided',
 };
 
 const Map<String, PaymentStatus> _paymentStatusLookup = {
-  'paid': PaymentStatus.paid,
-  'unpaid': PaymentStatus.unpaid,
-  'overdue': PaymentStatus.overdue,
-  'waived': PaymentStatus.waived,
+  'paid':        PaymentStatus.paid,
+  'unpaid':      PaymentStatus.unpaid,
+  'overdue':     PaymentStatus.overdue,
+  'waived':      PaymentStatus.waived,
+  'voided':      PaymentStatus.voided,
 };
 
 extension PaymentStatusExt on PaymentStatus {

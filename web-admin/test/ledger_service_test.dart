@@ -1,139 +1,120 @@
-import 'package:flutter_test/flutter_test.dart';
+// test/ledger_service_test.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
-import 'package:lamhoai_admin/core/models/payment_model.dart';
-import 'package:lamhoai_admin/core/services/firestore_service.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lamhoai_admin/core/services/chart_of_accounts_service.dart';
+import 'package:lamhoai_admin/core/services/ledger_service.dart';
+import 'package:lamhoai_admin/core/models/journal_entry_model.dart';
 
 void main() {
-  late FakeFirebaseFirestore fakeDb;
-  late FirestoreService firestoreService;
+  late FakeFirebaseFirestore instance;
+  late ChartOfAccountsService accounts;
+  late LedgerService ledger;
 
-  setUp(() {
-    fakeDb = FakeFirebaseFirestore();
-    firestoreService = FirestoreService(db: fakeDb);
+  setUp(() async {
+    instance = FakeFirebaseFirestore();
+    accounts = ChartOfAccountsService(db: instance);
+    ledger = LedgerService(db: instance, accounts: accounts);
   });
 
-  group('createOrUpdateLedger', () {
-    test('creates a new ledger with given fields', () async {
-      const uid = 'member123';
-      await firestoreService.createOrUpdateLedger(uid, 1500.0, 1500.0, 2026);
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect(doc.exists, isTrue);
-      expect(doc['annualTarget'], 1500.0);
-      expect(doc['currentBalance'], 1500.0);
-      expect(doc['year'], 2026);
-      expect(doc['uid'], uid);
-    });
-
-    test('updates existing ledger without overwriting target', () async {
-      const uid = 'member456';
-      await firestoreService.createOrUpdateLedger(uid, 1500.0, 1500.0, 2026);
-      // Later set again — should update currentBalance but keep annualTarget
-      await firestoreService.createOrUpdateLedger(uid, 2000.0, 1800.0, 2027);
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect(doc.exists, isTrue);
-      expect(doc['annualTarget'], 2000.0); // Changed
-      expect(doc['currentBalance'], 1800.0); // Changed
-    });
-  });
-
-  group('updateLedgerBalance', () {
-    test('increases balance when amountDelta > 0', () async {
-      await firestoreService.createOrUpdateLedger('memA', 1000.0, 0.0, 2026);
-      await firestoreService.updateLedgerBalance('memA', 200.0);
-      await firestoreService.updateLedgerBalance('memA', -500.0);
-      final doc = await fakeDb.collection('member_ledgers').doc('memA').get();
-      expect((doc.data()?['currentBalance'] as num?)?.toDouble() ?? -999.0, closeTo(-300.0, 0.01));
-    });
-
-    test('does nothing if ledger doc does not exist', () async {
-      // Should not throw, just return
-      await firestoreService.updateLedgerBalance('nonexistent', 100.0);
-    });
-  });
-
-  group('ledger in payment lifecycle', () {
-    test('adding membershipFee payment decreases ledger balance', () async {
-      const uid = 'memTest1';
-      await firestoreService.createOrUpdateLedger(uid, 1000.0, 1000.0, 2026);
-      final p = PaymentModel(
-        id: 'p1', uid: uid, memberName: 'Test', type: PaymentType.membershipFee,
-        amount: 300.0, status: PaymentStatus.paid, dueDate: DateTime(2026, 1, 1),
-        recordedBy: 'admin', notes: 'test', createdAt: DateTime.now(),
+  group('LedgerService', () {
+    test('Balanced posting succeeds and updates balances', () async {
+      final id = await ledger.postJournalEntry(
+        description: 'Test balanced entry',
+        lines: const [
+          JournalLine(accountId: 'CASH', amount: 100, type: 'DEBIT'),
+          JournalLine(accountId: 'CASH', amount: 100, type: 'CREDIT'),
+        ],
+        timestamp: DateTime(2026, 1, 5),
+        type: JournalEntryType.PAYMENT,
       );
-      await firestoreService.addPayment(p);
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect((doc.data()?['currentBalance'] as num?)?.toDouble() ?? 1000.0, closeTo(700.0, 0.01));
+      final balanceMap = await ledger.getBalances();
+      expect(balanceMap['CASH'], 0.0);
+      final entries = await ledger.getEntries();
+      expect(entries.length, 1);
+      expect(entries.first.id, id);
+      expect(entries.first.isBalanced, isTrue);
     });
 
-    test('adding monthlyMembership payment decreases ledger balance', () async {
-      const uid = 'memTest2';
-      await firestoreService.createOrUpdateLedger(uid, 0.0, 0.0, 2026);
-      final p = PaymentModel(
-        id: 'p2', uid: uid, memberName: 'Test', type: PaymentType.monthlyMembership,
-        amount: 200.0, status: PaymentStatus.unpaid, dueDate: DateTime(2026, 3, 1),
-        recordedBy: 'admin', notes: 'test', createdAt: DateTime.now(),
+    test('Unbalanced entry rejected with LedgerPostingException', () async {
+      await expectLater(
+        ledger.postJournalEntry(
+          description: 'Unbalanced 2-line test',
+          lines: const [
+            JournalLine(accountId: 'CASH', amount: 100, type: 'DEBIT'),
+            JournalLine(accountId: 'CASH', amount: 50, type: 'CREDIT'),
+          ],
+          timestamp: DateTime(2026, 2, 1),
+        ),
+        throwsA(isA<LedgerPostingException>()),
       );
-      await firestoreService.addPayment(p);
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect((doc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0, closeTo(200.0, 0.01));
+      // Balances unchanged
+      final balanceMap = await ledger.getBalances();
+      expect(balanceMap['CASH'], 0.0);
     });
 
-    test('adding non-membership payment does not touch ledger', () async {
-      const uid = 'memNonMem';
-      await firestoreService.createOrUpdateLedger(uid, 1000.0, 1000.0, 2026);
-      final p = PaymentModel(
-        id: 'p3', uid: uid, memberName: 'Test', type: PaymentType.dues,
-        amount: 50.0, status: PaymentStatus.unpaid, dueDate: DateTime(2026, 3, 1),
-        recordedBy: 'admin', notes: 'lot dues', createdAt: DateTime.now(),
+    test('Empty entry rejected', () async {
+      await expectLater(
+        ledger.postJournalEntry(
+          description: 'Empty entry',
+          lines: const [],
+          timestamp: DateTime(2026, 3, 1),
+        ),
+        throwsA(isA<LedgerPostingException>()),
       );
-      await firestoreService.addPayment(p);
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect((doc.data()?['currentBalance'] as num?)?.toDouble() ?? 1000.0, closeTo(1000.0, 0.01));
     });
 
-    test('deleting membership payment restores ledger balance', () async {
-      const uid = 'memDel';
-      await firestoreService.createOrUpdateLedger(uid, 1000.0, 1000.0, 2026);
-      final p = PaymentModel(
-        id: 'p4', uid: uid, memberName: 'Test', type: PaymentType.membershipFee,
-        amount: 250.0, status: PaymentStatus.paid, dueDate: DateTime(2026, 1, 1),
-        recordedBy: 'admin', notes: 'should restore', createdAt: DateTime.now(),
+    test('Unknown account id rejected', () async {
+      await expectLater(
+        ledger.postJournalEntry(
+          description: 'Unknown account test',
+          lines: const [
+            JournalLine(accountId: 'NOT_A_ACCOUNT', amount: 10, type: 'DEBIT'),
+            JournalLine(accountId: 'CASH', amount: 10, type: 'CREDIT'),
+          ],
+          timestamp: DateTime(2026, 4, 1),
+        ),
+        throwsA(isA<LedgerPostingException>()),
       );
-      await firestoreService.addPayment(p);
-      await firestoreService.deletePayment('p4');
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect((doc.data()?['currentBalance'] as num?)?.toDouble() ?? 1000.0, closeTo(1000.0, 0.01));
-    });
-    test('deleting non-membership payment does not touch ledger', () async {
-      const uid = 'memNoLedgerTouch';
-      await firestoreService.createOrUpdateLedger(uid, 1000.0, 1000.0, 2026);
-      final p = PaymentModel(
-        id: 'p5', uid: uid, memberName: 'Test', type: PaymentType.dues,
-        amount: 50.0, status: PaymentStatus.unpaid, dueDate: DateTime(2026, 1, 1),
-        recordedBy: 'admin', notes: 'lot dues', createdAt: DateTime.now(),
-      );
-      await firestoreService.addPayment(p);
-      await firestoreService.deletePayment('p5');
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect((doc.data()?['currentBalance'] as num?)?.toDouble() ?? 1000.0, closeTo(1000.0, 0.01));
     });
 
-    test('deducts twice for two membership payments', () async {
-      const uid = 'memDeduct2';
-      await firestoreService.createOrUpdateLedger(uid, 500.0, 500.0, 2026);
-      await firestoreService.addPayment(
-        PaymentModel(id: 'd1', uid: uid, memberName: 'T', type: PaymentType.membershipFee,
-          amount: 100.0, status: PaymentStatus.paid, dueDate: DateTime(2026, 1, 1),
-          recordedBy: 'a', notes: '', createdAt: DateTime.now()),
+    test('Multiple debits across different accounts handled', () async {
+      await ledger.postJournalEntry(
+        description: 'Multi-line test',
+        lines: const [
+          JournalLine(accountId: 'CASH', amount: 300, type: 'DEBIT'),
+          JournalLine(accountId: 'REVENUE_DUES', amount: 300, type: 'DEBIT'),
+          JournalLine(accountId: 'ASSETS', amount: 300, type: 'CREDIT'),
+          JournalLine(accountId: 'REVENUE_DUES', amount: 300, type: 'CREDIT'),
+        ],
+        timestamp: DateTime(2026, 5, 1),
+        type: JournalEntryType.PAYMENT,
       );
-      await firestoreService.addPayment(
-        PaymentModel(id: 'd2', uid: uid, memberName: 'T', type: PaymentType.membershipFee,
-          amount: 200.0, status: PaymentStatus.paid, dueDate: DateTime(2026, 1, 1),
-          recordedBy: 'a', notes: '', createdAt: DateTime.now()),
+      final b = await ledger.getBalances();
+      expect(b['CASH'], -300.0);
+      expect(b['REVENUE_DUES'], 300.0);
+      expect(b['ASSETS'], -300.0);
+    });
+
+    test('Duplicate posting prevented', () async {
+      const lines = [
+        JournalLine(accountId: 'CASH', amount: 50, type: 'DEBIT'),
+        JournalLine(accountId: 'CASH', amount: 50, type: 'CREDIT'),
+      ];
+      await ledger.postJournalEntry(
+        description: 'Original',
+        lines: lines,
+        timestamp: DateTime(2026, 6, 1),
       );
-      final doc = await fakeDb.collection('member_ledgers').doc(uid).get();
-      expect((doc.data()?['currentBalance'] as num?)?.toDouble() ?? 500.0, closeTo(200.0, 0.01));
+      await expectLater(
+        ledger.postJournalEntry(
+          description: 'Duplicate attempt',
+          lines: lines,
+          timestamp: DateTime(2026, 6, 1),
+        ),
+        throwsA(isA<LedgerPostingException>()),
+      );
     });
   });
 }

@@ -32,10 +32,6 @@ class _MemberPreviewScreenState
   final _searchFocus  = FocusNode();
   bool  _showResults  = false;
 
-  
-  
-  
-
   @override
   void initState() {
     super.initState();
@@ -356,6 +352,7 @@ class _PaymentsPreview extends StatelessWidget {
       case PaymentStatus.unpaid:  return AppColors.warning;
       case PaymentStatus.overdue: return AppColors.danger;
       case PaymentStatus.waived:  return AppColors.textSecondary;
+      case PaymentStatus.voided:  return AppColors.textSecondary;
     }
   }
 
@@ -365,6 +362,7 @@ class _PaymentsPreview extends StatelessWidget {
       case PaymentStatus.unpaid:  return AppColors.warningBg;
       case PaymentStatus.overdue: return AppColors.dangerBg;
       case PaymentStatus.waived:  return AppColors.background;
+      case PaymentStatus.voided:  return AppColors.background;
     }
   }
 

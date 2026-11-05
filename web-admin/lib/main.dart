@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/routing/app_router.dart';
@@ -28,8 +29,12 @@ class LamhoaiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // Fixes ProviderNotFoundError in _NotificationFeed
+        Provider<FirebaseFirestore>.value(value: FirebaseFirestore.instance),
+      ],
       child: Builder(
         builder: (context) {
           final authProvider = context.read<AuthProvider>();

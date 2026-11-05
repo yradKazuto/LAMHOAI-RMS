@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import '../../../core/models/lot_model.dart';
 import '../../../core/services/lot_service.dart';
 import '../../../core/services/rate_service.dart';
-import '../../../core/services/sale_service.dart';
-import '../../../core/models/lot_sale_model.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/models/lot_ownership_model.dart';
+import '../../../core/services/sale_service.dart';
+import '../../../core/utils/lot_pricing.dart';
+import 'assign_lot_wizard.dart';
 
 
 const Color _blue = AppColors.primary;
@@ -209,6 +211,16 @@ class OccupiedLotDialog extends StatelessWidget {
                   'Contact',
                   lot.contactNumber!,
                 ),
+
+              const SizedBox(height: 18),
+
+              _sectionTitle(
+                'Ownership History',
+              ),
+
+              const SizedBox(height: 8),
+
+              _OwnershipHistoryTable(lotId: lot.id),
 
               if (lot.notes != null &&
                   lot.notes!
@@ -453,10 +465,28 @@ class OccupiedLotDialog extends StatelessWidget {
 
       if (selected == null) return;
 
-      await LotService().assignOwner(
+      // The outstanding balance stays with the lot, so show what the new
+      // owner is taking over before anything is changed.
+      final saleService = SaleService();
+      final sale = await saleService.getCurrentSaleForLot(lot.id);
+      final balance = sale == null
+          ? 0.0
+          : await saleService.outstandingBalanceForSale(sale.id);
+
+      if (!context.mounted) return;
+
+      final ok = await _confirmTransfer(
+        context,
+        newOwner: selected.value,
+        balance: balance,
+        hasSale: sale != null,
+      );
+      if (!ok) return;
+
+      await saleService.changeLotOwner(
         lotId: lot.id,
-        uid: selected.key,
-        ownerName: selected.value,
+        newBuyerUid: selected.key,
+        newBuyerName: selected.value,
         updatedBy: currentUserId ?? '',
       );
 
@@ -476,6 +506,58 @@ class OccupiedLotDialog extends StatelessWidget {
         ),
       );
     }
+  }
+
+  Future<bool> _confirmTransfer(
+    BuildContext context, {
+    required String newOwner,
+    required double balance,
+    required bool hasSale,
+  }) async {
+    final previous = _displayValue(lot.ownerName);
+
+    final String detail;
+    if (!hasSale) {
+      detail = 'No sale is recorded for this lot, so only the owner changes. '
+          'There is no balance to transfer.';
+    } else if (balance > 0) {
+      detail = '$newOwner takes over the outstanding balance of '
+          '${LotPricing.peso(balance)} and must pay it all. What $previous '
+          'already paid stays in their payment records.';
+    } else {
+      detail = 'This lot has no outstanding balance. What $previous already '
+          'paid stays in their payment records.';
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Change Owner?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Lot ${lot.lotNumber}: $previous  \u2192  $newOwner',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Text(detail),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Change Owner'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   Future<bool> _confirmUnassign(
@@ -1138,181 +1220,20 @@ class _VacantLotDialogState
   // ================================================================
 
   Future<void> _openAssignOwner() async {
-    setState(() {
-      _saving = true;
-    });
+    // Opens the assign-lot wizard (member -> payment -> review -> save).
+    // It records the sale through SaleService.registerSale, so the lot is
+    // assigned AND the payment shows up on the Payments screen.
+    final assigned = await AssignLotWizard.show(
+      context,
+      lot: widget.lot,
+      recordedBy: widget.currentUserId,
+      loadMembers: widget.loadAssignableMembers,
+    );
 
-    try {
-      final members =
-          await widget.loadAssignableMembers();
+    if (!mounted) return;
 
-      if (!mounted) return;
-
-      setState(() {
-        _saving = false;
-      });
-
-      if (members.isEmpty) {
-        _showError(
-          'No members are available to assign.',
-        );
-        return;
-      }
-
-      String query = '';
-
-      final selected =
-          await showDialog<
-              MapEntry<String, String>>(
-        context: context,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (
-              dialogContext,
-              setDialogState,
-            ) {
-              final filtered =
-                  members.where((member) {
-                return member.value
-                    .toLowerCase()
-                    .contains(
-                      query.toLowerCase(),
-                    );
-              }).toList();
-
-              return AlertDialog(
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    14,
-                  ),
-                ),
-                title: const Text(
-                  'Assign Member',
-                ),
-                content: SizedBox(
-                  width: dialogWidth(context, 360),
-                  height: dialogHeight(context, 420),
-                  child: Column(
-                    children: [
-                      TextField(
-                        decoration:
-                            const InputDecoration(
-                          hintText:
-                              'Search member...',
-                          prefixIcon:
-                              Icon(
-                            Icons.search,
-                          ),
-                          border:
-                              OutlineInputBorder(),
-                        ),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            query = value;
-                          });
-                        },
-                      ),
-
-                      const SizedBox(
-                        height: 10,
-                      ),
-
-                      Expanded(
-                        child: filtered
-                                .isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No members found.',
-                                ),
-                              )
-                            : ListView.separated(
-                                itemCount:
-                                    filtered.length,
-                                separatorBuilder:
-                                    (_, __) =>
-                                        const Divider(
-                                  height: 1,
-                                ),
-                                itemBuilder:
-                                    (_, index) {
-                                  final member =
-                                      filtered[
-                                          index];
-
-                                  return ListTile(
-                                    leading:
-                                        const CircleAvatar(
-                                      child:
-                                          Icon(
-                                        Icons
-                                            .person,
-                                      ),
-                                    ),
-                                    title:
-                                        Text(
-                                      member
-                                          .value,
-                                    ),
-                                    onTap: () {
-                                      Navigator.of(
-                                        dialogContext,
-                                      ).pop(
-                                        member,
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(
-                        dialogContext,
-                      ).pop();
-                    },
-                    child:
-                        const Text('Cancel'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-
-      if (selected == null) return;
-
-      setState(() {
-        _saving = true;
-      });
-
-      await _service.assignOwner(
-        lotId: widget.lot.id,
-        uid: selected.key,
-        ownerName: selected.value,
-        updatedBy:
-            widget.currentUserId,
-      );
-
-      if (!mounted) return;
-
+    if (assigned == true) {
       Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _saving = false;
-      });
-
-      _showError(
-        'Failed to assign member.\n$e',
-      );
     }
   }
 
@@ -1403,7 +1324,6 @@ class _ForSaleLotDialogState
     extends State<ForSaleLotDialog> {
   final LotService _service =
       LotService();
-  final SaleService _saleService = SaleService();
 
   late final TextEditingController
       _priceController;
@@ -1413,13 +1333,6 @@ class _ForSaleLotDialogState
 
   late final TextEditingController
       _notesController;
-
-  bool _showRecordSaleForm = false;
-  SaleType _recordSaleMode = SaleType.cash;
-
-  late final TextEditingController _downPaymentController;
-  late final TextEditingController _termMonthsController;
-  late final TextEditingController _annualInterestRateController;
 
   bool _saving = false;
 
@@ -1446,9 +1359,6 @@ class _ForSaleLotDialogState
       text: widget.lot.notes ?? '',
     );
 
-    _downPaymentController = TextEditingController(text: '0.00');
-    _termMonthsController = TextEditingController(text: '12');
-    _annualInterestRateController = TextEditingController(text: '12.0');
   }
 
   @override
@@ -1456,9 +1366,6 @@ class _ForSaleLotDialogState
     _priceController.dispose();
     _contactController.dispose();
     _notesController.dispose();
-    _downPaymentController.dispose();
-    _termMonthsController.dispose();
-    _annualInterestRateController.dispose();
 
     super.dispose();
   }
@@ -1677,18 +1584,24 @@ class _ForSaleLotDialogState
 
               const SizedBox(height: 10),
 
-              if (!_showRecordSaleForm)
+              // Opens the assign-lot wizard, which records the sale through
+              // SaleService.registerSale (lot assigned + schedule + the cash
+              // purchase / down payment written to Payments). Admin only,
+              // same as assigning a member.
+              if (widget.canAssignMembers)
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => setState(
-                        () => _showRecordSaleForm = true),
+                    onPressed: _saving ? null : _openAssignOwner,
                     icon: const Icon(Icons.sell),
                     label: const Text('Record New Sale'),
                   ),
                 )
               else
-                _buildRecordSaleForm(),
+                const Text(
+                  'Only an Admin can record a sale.',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                ),
 
               const SizedBox(height: 18),
             ],
@@ -1742,168 +1655,6 @@ class _ForSaleLotDialogState
           ),
       ],
     );
-  }
-
-  Widget _buildRecordSaleForm() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: RadioListTile<SaleType>(
-                title: const Text('Cash'),
-                value: SaleType.cash,
-                groupValue: _recordSaleMode,
-                onChanged: (val) => setState(() => _recordSaleMode = val!),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<SaleType>(
-                title: const Text('Installment'),
-                value: SaleType.installment,
-                groupValue: _recordSaleMode,
-                onChanged: (val) => setState(() => _recordSaleMode = val!),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ],
-        ),
-        if (_recordSaleMode == SaleType.installment) ...[
-          const SizedBox(height: 12),
-          _textField(
-            controller: _downPaymentController,
-            label: 'Down Payment',
-            hint: '0.00',
-            icon: Icons.payments,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-          ),
-          const SizedBox(height: 12),
-          _textField(
-            controller: _termMonthsController,
-            label: 'Term (Months)',
-            hint: '12',
-            icon: Icons.calendar_month,
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 12),
-          _textField(
-            controller: _annualInterestRateController,
-            label: 'Annual Interest Rate (%)',
-            hint: '12.0',
-            icon: Icons.percent,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-          ),
-        ],
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: _recordSale,
-            child: const Text('Confirm Sale'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _recordSale() async {
-    final members = await widget.loadAssignableMembers();
-    if (!mounted) return;
-
-    if (members.isEmpty) {
-      _showError('No members available to assign.');
-      return;
-    }
-
-    String query = '';
-    final selected = await showDialog<MapEntry<String, String>>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            final filtered = members.where((m) => m.value.toLowerCase().contains(query.toLowerCase())).toList();
-            return AlertDialog(
-              title: const Text('Select Buyer'),
-              content: SizedBox(
-                width: dialogWidth(context, 360),
-                height: dialogHeight(context, 420),
-                child: Column(
-                  children: [
-                    TextField(
-                      decoration: const InputDecoration(hintText: 'Search member...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
-                      onChanged: (v) => setDialogState(() => query = v),
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? const Center(child: Text('No members found.'))
-                          : ListView.separated(
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (_, index) => ListTile(
-                                leading: const CircleAvatar(child: Icon(Icons.person)),
-                                title: Text(filtered[index].value),
-                                onTap: () => Navigator.of(dialogContext).pop(filtered[index]),
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (selected == null) return;
-
-    final double downPayment;
-    final int term;
-    final double rate;
-
-    if (_recordSaleMode == SaleType.installment) {
-      downPayment =
-          double.tryParse(_downPaymentController.text.trim()) ?? 0.0;
-      term = int.tryParse(_termMonthsController.text.trim()) ?? 12;
-      rate = double.tryParse(_annualInterestRateController.text.trim()) ?? 12.0;
-    } else {
-      downPayment = 0.0;
-      term = 0;
-      rate = 0.0;
-    }
-
-    setState(() {
-      _saving = true;
-    });
-
-    try {
-      await _saleService.recordSale(
-        lot: widget.lot,
-        buyerUid: selected.key,
-        buyerName: selected.value,
-        downPayment: downPayment,
-        termMonths: term,
-        annualInterestRate: rate,
-        soldDate: DateTime.now(),
-        recordedBy: widget.currentUserId,
-      );
-
-      if (!mounted) return;
-
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _saving = false;
-      });
-
-      _showError('Failed to record sale.\n$e');
-    }
   }
 
   Future<void> _save() async {
@@ -1980,160 +1731,20 @@ class _ForSaleLotDialogState
   }
 
   Future<void> _openAssignOwner() async {
-    setState(() {
-      _saving = true;
-    });
+    // Opens the assign-lot wizard (member -> payment -> review -> save).
+    // It records the sale through SaleService.registerSale, so the lot is
+    // assigned AND the payment shows up on the Payments screen.
+    final assigned = await AssignLotWizard.show(
+      context,
+      lot: widget.lot,
+      recordedBy: widget.currentUserId,
+      loadMembers: widget.loadAssignableMembers,
+    );
 
-    try {
-      final members =
-          await widget.loadAssignableMembers();
+    if (!mounted) return;
 
-      if (!mounted) return;
-
-      setState(() {
-        _saving = false;
-      });
-
-      if (members.isEmpty) {
-        _showError(
-          'No members are available.',
-        );
-        return;
-      }
-
-      String query = '';
-
-      final selected =
-          await showDialog<
-              MapEntry<String, String>>(
-        context: context,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (
-              context,
-              setDialogState,
-            ) {
-              final filtered =
-                  members.where((member) {
-                return member.value
-                    .toLowerCase()
-                    .contains(
-                      query.toLowerCase(),
-                    );
-              }).toList();
-
-              return AlertDialog(
-                title:
-                    const Text(
-                  'Assign Member',
-                ),
-                content: SizedBox(
-                  width: dialogWidth(context, 360),
-                  height: dialogHeight(context, 420),
-                  child: Column(
-                    children: [
-                      TextField(
-                        decoration:
-                            const InputDecoration(
-                          hintText:
-                              'Search member...',
-                          prefixIcon:
-                              Icon(
-                            Icons.search,
-                          ),
-                          border:
-                              OutlineInputBorder(),
-                        ),
-                        onChanged:
-                            (value) {
-                          setDialogState(() {
-                            query =
-                                value;
-                          });
-                        },
-                      ),
-                      const SizedBox(
-                        height: 10,
-                      ),
-                      Expanded(
-                        child: filtered
-                                .isEmpty
-                            ? const Center(
-                                child:
-                                    Text(
-                                  'No members found.',
-                                ),
-                              )
-                            : ListView.builder(
-                                itemCount:
-                                    filtered.length,
-                                itemBuilder:
-                                    (_, index) {
-                                  final member =
-                                      filtered[
-                                          index];
-
-                                  return ListTile(
-                                    leading:
-                                        const CircleAvatar(
-                                      child:
-                                          Icon(
-                                        Icons
-                                            .person,
-                                      ),
-                                    ),
-                                    title:
-                                        Text(
-                                      member
-                                          .value,
-                                    ),
-                                    onTap: () {
-                                      Navigator.of(
-                                        dialogContext,
-                                      ).pop(
-                                        member,
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-
-      if (selected == null) return;
-
-      setState(() {
-        _saving = true;
-      });
-
-      await _service.assignOwner(
-        lotId: widget.lot.id,
-        uid: selected.key,
-        ownerName: selected.value,
-        updatedBy:
-            widget.currentUserId,
-      );
-
-      if (!mounted) return;
-
+    if (assigned == true) {
       Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _saving = false;
-      });
-
-      _showError(
-        'Failed to assign member.\n$e',
-      );
     }
   }
 
@@ -2650,4 +2261,121 @@ String _formatNumber(
   }
 
   return value.toStringAsFixed(2);
+}
+
+/// ================================================================
+/// OWNERSHIP HISTORY TABLE
+/// ================================================================
+
+class _OwnershipHistoryTable extends StatefulWidget {
+  final String lotId;
+
+  const _OwnershipHistoryTable({required this.lotId});
+
+  @override
+  State<_OwnershipHistoryTable> createState() =>
+      _OwnershipHistoryTableState();
+}
+
+class _OwnershipHistoryTableState extends State<_OwnershipHistoryTable> {
+  late final Stream<List<LotOwnershipRecord>> _stream =
+      SaleService().streamOwnershipHistory(widget.lotId);
+
+  String _fmt(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Widget _cell(String text,
+          {int flex = 1, bool header = false, bool bold = false}) =>
+      Expanded(
+        flex: flex,
+        child: Text(
+          text,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: header ? 11.5 : 12.5,
+            fontWeight: (header || bold) ? FontWeight.w700 : FontWeight.w500,
+            color: header ? AppColors.textSecondary : AppColors.textPrimary,
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<LotOwnershipRecord>>(
+      stream: _stream,
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return const Text(
+            'Could not load ownership history.',
+            style: TextStyle(fontSize: 12.5, color: AppColors.danger),
+          );
+        }
+        if (!snap.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        }
+
+        final rows = snap.data!;
+        if (rows.isEmpty) {
+          return const Text(
+            'No ownership history yet.',
+            style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+          );
+        }
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              Row(children: [
+                _cell('Owner', flex: 3, header: true),
+                _cell('Period', flex: 3, header: true),
+                _cell('Balance taken over', flex: 2, header: true),
+              ]),
+              const Divider(height: 14),
+              for (final r in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _cell(
+                        r.isCurrent ? '${r.ownerName} (current)' : r.ownerName,
+                        flex: 3,
+                        bold: r.isCurrent,
+                      ),
+                      _cell(
+                        '${_fmt(r.startedAt)} \u2013 '
+                        '${r.endedAt == null ? 'Present' : _fmt(r.endedAt!)}',
+                        flex: 3,
+                      ),
+                      _cell(
+                        r.acquiredBy == 'transfer'
+                            ? LotPricing.peso(r.balanceTakenOver)
+                            : '\u2014',
+                        flex: 2,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

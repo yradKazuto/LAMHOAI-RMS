@@ -3,6 +3,12 @@
 // Dues management — handles BOTH the annual association membership fee
 // and the monthly membership fee, switched via the mode toggle at the top.
 //
+// UPDATED — PaymentStatus.voided is now handled. A voided record is
+// cancelled: it is neither collected nor owed. See _indexPayments (voided
+// records are ignored so they never shadow a live record), isSettled in
+// _DuesBody (voided never counts as unpaid / pending), and the exhaustive
+// switches in _DuesTableRowState (_fg / _bgColor).
+//
 // UPDATED — Monthly mode now reads type `monthlyMembership` (the same type
 // the generator creates) and shows ONE ROW PER MEMBER, like annual mode.
 // Before, it read type `dues` and built one row per lot, so generated
@@ -66,14 +72,17 @@ import '../../../core/theme/design_tokens.dart';
 
 enum _DuesMode { annual, monthly }
 
-/// Indexes [list] by [keyOf]. When several records share a key, a PAID record
-/// always wins over a non-paid one; otherwise the first one seen is kept.
+/// Indexes [list] by [keyOf]. Voided records are ignored entirely (they are
+/// cancelled, so they must never shadow a live record). When several records
+/// share a key, a PAID record always wins over a non-paid one; otherwise the
+/// first one seen is kept.
 Map<String, PaymentModel> _indexPayments(
   Iterable<PaymentModel> list,
   String Function(PaymentModel) keyOf,
 ) {
   final map = <String, PaymentModel>{};
   for (final p in list) {
+    if (p.status == PaymentStatus.voided) continue; // cancelled — ignore
     final k = keyOf(p);
     final existing = map[k];
     if (existing == null ||
@@ -741,11 +750,13 @@ class _DuesBody extends StatelessWidget {
               }
             }
 
-            // A waived record is settled — it is neither collected nor owed,
-            // so it must not count as unpaid or add to "Total Pending".
+            // A waived or voided record is settled — it is neither
+            // collected nor owed, so it must not count as unpaid or add to
+            // "Total Pending".
             bool isSettled(_DuesRow r) =>
                 r.payment?.status == PaymentStatus.paid ||
-                r.payment?.status == PaymentStatus.waived;
+                r.payment?.status == PaymentStatus.waived ||
+                r.payment?.status == PaymentStatus.voided;
 
             final paidCount =
                 rows.where((r) => r.payment?.status == PaymentStatus.paid).length;
@@ -1134,6 +1145,7 @@ class _DuesTableRowState extends State<_DuesTableRow> {
       case PaymentStatus.paid:    return AppColors.success;
       case PaymentStatus.overdue: return AppColors.danger;
       case PaymentStatus.waived:  return AppColors.textSecondary;
+      case PaymentStatus.voided:  return AppColors.textMuted;
       case PaymentStatus.unpaid:
       case null:                  return AppColors.warning;
     }
@@ -1144,6 +1156,7 @@ class _DuesTableRowState extends State<_DuesTableRow> {
       case PaymentStatus.paid:    return AppColors.successBg;
       case PaymentStatus.overdue: return AppColors.dangerBg;
       case PaymentStatus.waived:  return AppColors.background;
+      case PaymentStatus.voided:  return AppColors.background;
       case PaymentStatus.unpaid:
       case null:                  return AppColors.warningBg;
     }

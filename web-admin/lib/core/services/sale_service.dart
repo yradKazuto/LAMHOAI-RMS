@@ -1,16 +1,25 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart'
-    show CollectionReference, FirebaseFirestore, SetOptions, Timestamp;
+    show
+        CollectionReference,
+        DocumentReference,
+        FirebaseFirestore,
+        SetOptions,
+        Timestamp;
+
 import '../models/lot_model.dart';
 import '../models/lot_sale_model.dart';
 import '../models/lot_payment_model.dart';
+import '../models/lot_ownership_model.dart';
+import '../models/payment_model.dart';
 import '../models/rate_schedule_model.dart';
 import '../utils/lot_pricing.dart';
 import 'amortization_service.dart';
 
 class LotNotAvailableException implements Exception {
   final String lotId;
+
   const LotNotAvailableException(this.lotId);
+
   @override
   String toString() => 'Lot $lotId is no longer available.';
 }
@@ -18,23 +27,200 @@ class LotNotAvailableException implements Exception {
 class SaleService {
   final FirebaseFirestore _db;
 
-  SaleService({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
+  SaleService({FirebaseFirestore? db})
+      : _db = db ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _sales =>
       _db.collection('lot_sales');
+
   CollectionReference<Map<String, dynamic>> get _payments =>
       _db.collection('lot_payments');
 
+  /// One row per ownership period of a lot (current owner has endedAt == null).
+  CollectionReference<Map<String, dynamic>> get _ownerHistory =>
+      _db.collection('lot_ownership_history');
+
+  // ── Mirror into the main `payments` collection ──────────────────────────
+  // The Payments screen, its summary cards, the member payment records and the
+  // Reports all read the `payments` collection. Lot down payments and
+  // installment periods live in `lot_payments`, so every time one of them is
+  // PAID we also write a matching `payments` record (type lotPayment).
+  //
+  // The mirror's document id is deterministic (lot_<saleId>_<period>), so the
+  // same period can never be mirrored twice — re-running a save or the
+  // backfill below just finds the existing record.
+  CollectionReference<Map<String, dynamic>> get _mainPayments =>
+      _db.collection('payments');
+
+  static const String _mirrorSource = 'lot_payment';
+
+  String _mirrorId(String saleId, int period) => 'lot_${saleId}_$period';
+
+  /// Readable reference, e.g. LP-2026-0001-DP (down payment) or
+  /// LP-2026-0001-P003 (period 3) — year + sale sequence + period.
+  String _mirrorTxnId(LotSaleModel sale, LotPaymentModel p) {
+    final seq = sale.saleSeq.toString().padLeft(4, '0');
+    final tail = p.period == 0
+        ? (sale.termMonths == 0 ? 'CASH' : 'DP')
+        : 'P${p.period.toString().padLeft(3, '0')}';
+    return 'LP-${sale.soldDate.year}-$seq-$tail';
+  }
+
+  Map<String, dynamic> _mirrorMap({
+    required LotSaleModel sale,
+    required LotPaymentModel p,
+    required DateTime paidAt,
+    required String recordedBy,
+    required String method,
+  }) {
+    final note = p.period == 0
+        ? (sale.termMonths == 0 ? 'Lot purchase (cash)' : 'Lot down payment')
+        : 'Lot installment · Period ${p.period}';
+
+    final record = PaymentModel(
+      id: _mirrorId(sale.id, p.period),
+      uid: sale.buyerUid,
+      memberName: sale.buyerName,
+      type: PaymentType.lotPayment,
+      amount: p.amount,
+      status: PaymentStatus.paid,
+      dueDate: p.dueDate,
+      paidDate: paidAt,
+      recordedBy: recordedBy,
+      notes: note,
+      createdAt: DateTime.now(),
+      lotId: sale.lotId,
+      lotLabel: buildLotLabel(
+        block: sale.block,
+        lotNumber: sale.lotNumber,
+        phase: sale.phase,
+      ),
+      transactionId: _mirrorTxnId(sale, p),
+      paidAmount: p.amount,
+      paymentMethod: method,
+    );
+
+    return {
+      ...record.toMap(),
+      // Extra keys: not part of PaymentModel (fromMap ignores them) but let us
+      // trace / de-duplicate the mirror against its lot_payments source.
+      'source': _mirrorSource,
+      'saleId': sale.id,
+      'period': p.period,
+    };
+  }
+
+  /// Marks one lot_payments row paid AND writes its `payments` mirror in a
+  /// single batch, so the two collections can't drift apart.
+  Future<void> _markPeriodPaid({
+    required DocumentReference<Map<String, dynamic>> ref,
+    required LotPaymentModel p,
+    required String saleId,
+    required String payer,
+    required String paidBy,
+    required PaymentMethod method,
+  }) async {
+    final sale = await getSale(saleId);
+    final paidAt = DateTime.now();
+    final batch = _db.batch();
+
+    batch.update(ref, {
+      'status': LotPaymentStatus.paid.name,
+      'paidAt': Timestamp.fromDate(paidAt),
+      'paidBy': paidBy,
+      'payer': payer,
+      'paymentMethod': method.name,
+      'verifiedAt':
+          method == PaymentMethod.cash ? Timestamp.fromDate(paidAt) : null,
+    });
+
+    if (sale != null && p.amount > 0) {
+      batch.set(
+        _mainPayments.doc(_mirrorId(sale.id, p.period)),
+        _mirrorMap(
+          sale: sale,
+          p: p,
+          paidAt: paidAt,
+          recordedBy: paidBy,
+          method: method.name,
+        ),
+      );
+    }
+
+    await batch.commit();
+  }
+
+  /// ONE-TIME catch-up: creates the `payments` mirror for every lot payment
+  /// that was already paid before mirroring existed. Safe to run repeatedly —
+  /// records that already exist are skipped. Returns how many were created.
+  Future<int> backfillLotPaymentRecords({String recordedBy = 'system'}) async {
+    final paidSnap = await _payments
+        .where('status', isEqualTo: LotPaymentStatus.paid.name)
+        .get();
+    if (paidSnap.docs.isEmpty) return 0;
+
+    final existingSnap = await _mainPayments
+        .where('source', isEqualTo: _mirrorSource)
+        .get();
+    final existing = existingSnap.docs.map((d) => d.id).toSet();
+
+    final salesSnap = await _sales.get();
+    final sales = {
+      for (final d in salesSnap.docs)
+        d.id: LotSaleModel.fromMap(d.data(), d.id),
+    };
+
+    final pending = <MapEntry<String, Map<String, dynamic>>>[];
+    for (final d in paidSnap.docs) {
+      final data = d.data();
+      final p = LotPaymentModel.fromMap(data);
+      final sale = sales[p.saleId];
+      if (sale == null || p.amount <= 0) continue;
+
+      final id = _mirrorId(sale.id, p.period);
+      if (existing.contains(id)) continue;
+
+      pending.add(MapEntry(
+        id,
+        _mirrorMap(
+          sale: sale,
+          p: p,
+          paidAt: (data['paidAt'] as Timestamp?)?.toDate() ?? p.dueDate,
+          recordedBy: (data['paidBy'] as String?) ?? recordedBy,
+          method: (data['paymentMethod'] as String?) ?? 'cash',
+        ),
+      ));
+    }
+
+    // Firestore caps a batch at 500 writes.
+    for (var i = 0; i < pending.length; i += 400) {
+      final batch = _db.batch();
+      for (final e in pending.skip(i).take(400)) {
+        batch.set(_mainPayments.doc(e.key), e.value);
+      }
+      await batch.commit();
+    }
+    return pending.length;
+  }
+
   Future<void> _verifyLotAvailable({required String lotId}) async {
     if (lotId.isEmpty) return;
+
     final snap = await _db.collection('lots').doc(lotId).get();
-    if (!snap.exists) throw LotNotAvailableException(lotId);
+
+    if (!snap.exists) {
+      throw LotNotAvailableException(lotId);
+    }
+
     final data = snap.data() as Map<String, dynamic>;
     final status = data['status'] as String? ?? '';
     final uid = data['uid'];
-    if (status != LotStatus.vacant.name && status != LotStatus.forSale.name) {
+
+    if (status != LotStatus.vacant.name &&
+        status != LotStatus.forSale.name) {
       throw LotNotAvailableException(lotId);
     }
+
     if ((uid as String?)?.isNotEmpty == true) {
       throw LotNotAvailableException(lotId);
     }
@@ -52,7 +238,9 @@ class SaleService {
     required DateTime soldDate,
     required String recordedBy,
   }) async {
-    final effectiveTermMonths = saleType == SaleType.installment ? termMonths : 0;
+    final effectiveTermMonths =
+        saleType == SaleType.installment ? termMonths : 0;
+
     return recordSale(
       lot: lot,
       buyerUid: buyerUid,
@@ -67,12 +255,16 @@ class SaleService {
 
   /// Records a sale for [lot] to [buyerUid] / [buyerName].
   ///
-  /// Cash (`termMonths == 0`): one payment doc marked `paid`, sale status
-  /// `paidOff`, lot status `occupied`.
+  /// Cash:
+  /// - One payment document marked paid.
+  /// - Sale status paidOff.
+  /// - Lot status occupied.
   ///
-  /// Installment (`termMonths > 0`): sale status `active`, N payment docs
-  /// with `scheduled` status (period 0 down payment marked `paid` when
-  /// `downPayment > 0`), lot status `occupied`.
+  /// Installment:
+  /// - Sale status active.
+  /// - Payment documents generated for the schedule.
+  /// - Period 0 down payment marked paid when downPayment > 0.
+  /// - Lot status occupied.
   Future<void> recordSale({
     required LotModel lot,
     required String buyerUid,
@@ -85,11 +277,16 @@ class SaleService {
   }) async {
     await _verifyLotAvailable(lotId: lot.id);
 
-    // Price comes from the lot area (see LotPricing); falls back to lot.price.
+    // Price comes from lot area (see LotPricing).
     final totalPrice = LotPricing.priceFor(lot);
     final financedAmount = totalPrice - downPayment;
+
     final monthlyPayment = termMonths > 0
-        ? LotPricing.monthlyFor(financedAmount, annualInterestRate, termMonths)
+        ? LotPricing.monthlyFor(
+            financedAmount,
+            annualInterestRate,
+            termMonths,
+          )
         : 0.0;
 
     final saleSeq = await _nextSaleSeq(soldDate.year);
@@ -103,14 +300,17 @@ class SaleService {
       block: lot.block,
       buyerUid: buyerUid,
       buyerName: buyerName,
-      saleType: termMonths == 0 ? SaleType.cash : SaleType.installment,
+      saleType:
+          termMonths == 0 ? SaleType.cash : SaleType.installment,
       totalPrice: totalPrice,
       downPayment: downPayment,
       financedAmount: financedAmount,
       termMonths: termMonths,
       annualInterestRate: annualInterestRate,
       monthlyPayment: monthlyPayment,
-      status: termMonths == 0 ? LotSaleStatus.paidOff : LotSaleStatus.active,
+      status: termMonths == 0
+          ? LotSaleStatus.paidOff
+          : LotSaleStatus.active,
       soldDate: soldDate,
       saleSeq: saleSeq,
       createdBy: recordedBy,
@@ -126,20 +326,52 @@ class SaleService {
     );
 
     final batch = _db.batch();
+
     batch.set(_sales.doc(saleId), sale.toMap());
 
     for (final p in schedule) {
       final isCash = termMonths == 0;
       final isDown = p.period == 0 && downPayment > 0;
+
       batch.set(
         _payments.doc(),
         p.copyWith(
-          status: (isCash || isDown) ? LotPaymentStatus.paid : LotPaymentStatus.scheduled,
+          status: (isCash || isDown)
+              ? LotPaymentStatus.paid
+              : LotPaymentStatus.scheduled,
           paidAt: (isCash || isDown) ? DateTime.now() : null,
           paidBy: (isCash || isDown) ? recordedBy : null,
         ).toMap(),
       );
+
+      // Down payment / cash purchase is paid at the sale — mirror it into the
+      // main payments collection so it shows in the payment records.
+      if ((isCash || isDown) && p.amount > 0) {
+        batch.set(
+          _mainPayments.doc(_mirrorId(saleId, p.period)),
+          _mirrorMap(
+            sale: sale,
+            p: p,
+            paidAt: DateTime.now(),
+            recordedBy: recordedBy,
+            method: 'cash',
+          ),
+        );
+      }
     }
+
+    batch.set(
+      _ownerHistory.doc(),
+      LotOwnershipRecord(
+        lotId: lot.id,
+        saleId: saleId,
+        ownerUid: buyerUid,
+        ownerName: buyerName,
+        startedAt: soldDate,
+        acquiredBy: 'sale',
+        transferredBy: recordedBy,
+      ).toMap(),
+    );
 
     batch.set(
       _db.collection('lots').doc(lot.id),
@@ -156,23 +388,34 @@ class SaleService {
     await batch.commit();
   }
 
-  /// Next per-year sale sequence number (1-based), so transaction IDs
-  /// never collide across sales in the same year.
+  /// Next per-year sale sequence number.
   Future<int> _nextSaleSeq(int year) async {
     final snap = await _sales
-        .where('soldDate', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(year, 1, 1)))
-        .where('soldDate', isLessThan: Timestamp.fromDate(DateTime(year + 1, 1, 1)))
+        .where(
+          'soldDate',
+          isGreaterThanOrEqualTo:
+              Timestamp.fromDate(DateTime(year, 1, 1)),
+        )
+        .where(
+          'soldDate',
+          isLessThan: Timestamp.fromDate(DateTime(year + 1, 1, 1)),
+        )
         .get();
+
     if (snap.docs.isEmpty) return 1;
+
     var max = 0;
+
     for (final d in snap.docs) {
       final seq = (d.data()['saleSeq'] as num?)?.toInt() ?? 0;
+
       if (seq > max) max = seq;
     }
+
     return max + 1;
   }
 
-  /// Records a payment for the first unpaid period of a sale.
+  /// Records payment for the first unpaid period.
   Future<void> recordPayment({
     required String saleId,
     required String payer,
@@ -184,40 +427,52 @@ class SaleService {
         .get();
 
     final docs = snap.docs.toList();
+
     docs.sort((a, b) {
       final pa = (a.data()['period'] as num?)?.toInt() ?? 0;
       final pb = (b.data()['period'] as num?)?.toInt() ?? 0;
+
       return pa.compareTo(pb);
     });
 
     for (final doc in docs) {
       final p = LotPaymentModel.fromMap(doc.data());
+
       if (p.status != LotPaymentStatus.paid) {
-        await _payments.doc(doc.id).update({
-          'status': LotPaymentStatus.paid.name,
-          'paidAt': Timestamp.now(),
-          'paidBy': paidBy,
-          'payer': payer,
-          'paymentMethod': method.name,
-          'verifiedAt': method == PaymentMethod.cash ? Timestamp.now() : null,
-        });
+        await _markPeriodPaid(
+          ref: doc.reference,
+          p: p,
+          saleId: saleId,
+          payer: payer,
+          paidBy: paidBy,
+          method: method,
+        );
+
         await _checkIfPaidOff(saleId);
         return;
       }
     }
+
     throw Exception('No unpaid periods for this sale.');
   }
 
+  /// Checks whether all payments for a sale are paid.
   Future<void> _checkIfPaidOff(String saleId) async {
-    final snap = await _payments.where('saleId', isEqualTo: saleId).get();
+    final snap = await _payments
+        .where('saleId', isEqualTo: saleId)
+        .get();
+
     bool allPaid = true;
+
     for (final doc in snap.docs) {
       final p = LotPaymentModel.fromMap(doc.data());
+
       if (p.status != LotPaymentStatus.paid) {
         allPaid = false;
         break;
       }
     }
+
     if (allPaid) {
       await _sales.doc(saleId).update({
         'status': LotSaleStatus.paidOff.name,
@@ -226,6 +481,7 @@ class SaleService {
     }
   }
 
+  /// Closes a sale and voids scheduled payments.
   Future<void> closeoutSale({
     required String saleId,
     required double refundAmount,
@@ -236,10 +492,15 @@ class SaleService {
         .get();
 
     final batch = _db.batch();
+
     for (final doc in snap.docs) {
       final p = LotPaymentModel.fromMap(doc.data());
+
       if (p.status == LotPaymentStatus.scheduled) {
-        batch.update(doc.reference, {'status': LotPaymentStatus.void_.name});
+        batch.update(
+          doc.reference,
+          {'status': LotPaymentStatus.void_.name},
+        );
       }
     }
 
@@ -253,48 +514,177 @@ class SaleService {
     await batch.commit();
   }
 
+  /// The sale that currently belongs to [lotId]: the newest sale that has not
+  /// been cancelled. Null when the lot has no sale on record.
+  Future<LotSaleModel?> getCurrentSaleForLot(String lotId) async {
+    final sales = await getAllSalesForLot(lotId);
+    final live = sales.where((s) => s.status != LotSaleStatus.cancelled).toList()
+      ..sort((a, b) => b.soldDate.compareTo(a.soldDate));
+    return live.isEmpty ? null : live.first;
+  }
+
+  /// What is still owed on [saleId]: every period that is not paid, void or
+  /// waived. This is the balance that stays with the lot when the owner changes.
+  Future<double> outstandingBalanceForSale(String saleId) async {
+    final snap = await _payments.where('saleId', isEqualTo: saleId).get();
+    var total = 0.0;
+    for (final d in snap.docs) {
+      final p = LotPaymentModel.fromMap(d.data());
+      if (p.status == LotPaymentStatus.paid ||
+          p.status == LotPaymentStatus.void_ ||
+          p.status == LotPaymentStatus.waived) {
+        continue;
+      }
+      total += p.amount;
+    }
+    return total;
+  }
+
+  /// Ownership history of a lot, newest first.
+  Stream<List<LotOwnershipRecord>> streamOwnershipHistory(String lotId) {
+    return _ownerHistory
+        .where('lotId', isEqualTo: lotId)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => LotOwnershipRecord.fromMap(d.data(), d.id))
+            .toList()
+          ..sort((a, b) => b.startedAt.compareTo(a.startedAt)));
+  }
+
+  /// Changes the owner of an already-owned lot.
+  ///
+  /// The outstanding balance stays with the lot: the sale is re-pointed at the
+  /// new owner, so every unpaid period is now theirs to pay (and the Payments
+  /// record written when a period is paid carries their name). Anything the
+  /// previous owner already paid stays in their own payment records.
+  ///
+  /// Lot, sale and ownership history are updated in one batch.
+  Future<void> changeLotOwner({
+    required String lotId,
+    required String newBuyerUid,
+    required String newBuyerName,
+    required String updatedBy,
+    String notes = '',
+  }) async {
+    final lotRef = _db.collection('lots').doc(lotId);
+    final lotSnap = await lotRef.get();
+    if (!lotSnap.exists) throw LotNotAvailableException(lotId);
+
+    final lotData = lotSnap.data() as Map<String, dynamic>;
+    final oldUid = (lotData['uid'] as String?) ?? '';
+    final oldName = (lotData['ownerName'] as String?) ?? '';
+    if (oldUid == newBuyerUid) {
+      throw Exception('That member already owns this lot.');
+    }
+
+    final sale = await getCurrentSaleForLot(lotId);
+    final balance =
+        sale == null ? 0.0 : await outstandingBalanceForSale(sale.id);
+    final now = DateTime.now();
+
+    final openSnap = await _ownerHistory
+        .where('lotId', isEqualTo: lotId)
+        .where('endedAt', isEqualTo: null)
+        .get();
+
+    final batch = _db.batch();
+
+    if (openSnap.docs.isNotEmpty) {
+      for (final d in openSnap.docs) {
+        batch.update(d.reference, {
+          'endedAt': Timestamp.fromDate(now),
+          'balanceLeftBehind': balance,
+        });
+      }
+    } else if (oldUid.isNotEmpty) {
+      // Lot was owned before history existed — record the previous owner now.
+      batch.set(
+        _ownerHistory.doc(),
+        LotOwnershipRecord(
+          lotId: lotId,
+          saleId: sale?.id ?? '',
+          ownerUid: oldUid,
+          ownerName: oldName,
+          startedAt: sale?.soldDate ?? now,
+          endedAt: now,
+          acquiredBy: sale == null ? 'assignment' : 'sale',
+          balanceLeftBehind: balance,
+          transferredBy: updatedBy,
+        ).toMap(),
+      );
+    }
+
+    batch.set(
+      _ownerHistory.doc(),
+      LotOwnershipRecord(
+        lotId: lotId,
+        saleId: sale?.id ?? '',
+        ownerUid: newBuyerUid,
+        ownerName: newBuyerName,
+        startedAt: now,
+        acquiredBy: 'transfer',
+        balanceTakenOver: balance,
+        transferredBy: updatedBy,
+        notes: notes,
+      ).toMap(),
+    );
+
+    batch.set(
+      lotRef,
+      {
+        'uid': newBuyerUid,
+        'ownerName': newBuyerName,
+        'updatedBy': updatedBy,
+        'updatedAt': Timestamp.now(),
+      },
+      SetOptions(merge: true),
+    );
+
+    if (sale != null) {
+      batch.update(_sales.doc(sale.id), {
+        'buyerUid': newBuyerUid,
+        'buyerName': newBuyerName,
+        'updatedBy': updatedBy,
+        'updatedAt': Timestamp.now(),
+      });
+    }
+
+    await batch.commit();
+  }
+
+  /// Transfers lot ownership to another buyer. (Previously this refused any
+  /// lot that was already owned, so it could never transfer anything.)
   Future<void> transferLot({
     required String saleId,
     required String newBuyerUid,
     required String newBuyerName,
     required String updatedBy,
   }) async {
-    final saleDoc = await _sales.doc(saleId).get();
-    if (!saleDoc.exists) throw Exception('Sale not found.');
+    final sale = await getSale(saleId);
+    if (sale == null) throw Exception('Sale not found.');
 
-    await _verifyLotAvailable(lotId: saleDoc.data()!['lotId']);
-
-    final sale = LotSaleModel.fromMap(saleDoc.data()!, saleDoc.id);
-
-    // Update lot ownership
-    await _db.collection('lots').doc(sale.lotId).update({
-      'uid': newBuyerUid,
-      'ownerName': newBuyerName,
-      'updatedBy': updatedBy,
-      'updatedAt': Timestamp.now(),
-    });
-
-    // Update sale record
-    await _sales.doc(saleId).update({
-      'buyerUid': newBuyerUid,
-      'buyerName': newBuyerName,
-      'updatedBy': updatedBy,
-      'updatedAt': Timestamp.now(),
-    });
+    await changeLotOwner(
+      lotId: sale.lotId,
+      newBuyerUid: newBuyerUid,
+      newBuyerName: newBuyerName,
+      updatedBy: updatedBy,
+    );
   }
 
+  /// Gets payment report dataset.
   Future<List<Map<String, dynamic>>> getPaymentsReportDataset() async {
     final paymentsSnap = await _payments.get();
     final salesSnap = await _sales.get();
 
     final sales = {
       for (final doc in salesSnap.docs)
-        doc.id: LotSaleModel.fromMap(doc.data(), doc.id)
+        doc.id: LotSaleModel.fromMap(doc.data(), doc.id),
     };
 
     return paymentsSnap.docs.map((doc) {
       final p = LotPaymentModel.fromMap(doc.data());
       final s = sales[p.saleId];
+
       return {
         'period': p.period,
         'amount': p.amount,
@@ -308,6 +698,7 @@ class SaleService {
     }).toList();
   }
 
+  /// Streams sales for a specific lot.
   Stream<List<LotSaleModel>> streamSalesForLot(String lotId) {
     return _sales
         .where('lotId', isEqualTo: lotId)
@@ -317,10 +708,8 @@ class SaleService {
             .toList());
   }
 
+  /// Streams payments for a specific sale.
   Stream<List<LotPaymentModel>> streamPaymentsForSale(String saleId) {
-    // where + orderBy on different fields would need a composite index —
-    // without it the stream just errors. One sale has at most a few hundred
-    // periods, so sorting client-side is free and needs no index.
     return _payments
         .where('saleId', isEqualTo: saleId)
         .snapshots()
@@ -330,27 +719,42 @@ class SaleService {
           ..sort((a, b) => a.period.compareTo(b.period)));
   }
 
+  /// Gets a single sale.
   Future<LotSaleModel?> getSale(String saleId) async {
     final doc = await _sales.doc(saleId).get();
+
     if (!doc.exists) return null;
+
     return LotSaleModel.fromMap(doc.data()!, doc.id);
   }
 
+  /// Streams all sales.
   Stream<List<LotSaleModel>> streamAllSales() {
     return _sales.snapshots().map((snap) => snap.docs
         .map((d) => LotSaleModel.fromMap(d.data(), d.id))
         .toList());
   }
 
+  /// Gets all sales for a specific lot.
   Future<List<LotSaleModel>> getAllSalesForLot(String lotId) async {
-    final snap = await _sales.where('lotId', isEqualTo: lotId).get();
+    final snap = await _sales
+        .where('lotId', isEqualTo: lotId)
+        .get();
+
     return snap.docs
         .map((d) => LotSaleModel.fromMap(d.data(), d.id))
         .toList();
   }
 
-  Future<void> recalculateActiveSales(RateScheduleModel schedule, {required double saleArea}) async {
-    final activeSalesSnap = await _sales.where('status', isEqualTo: 'active').get();
+  /// Recalculates active sales using a new rate schedule.
+  Future<void> recalculateActiveSales(
+    RateScheduleModel schedule, {
+    required double saleArea,
+  }) async {
+    final activeSalesSnap = await _sales
+        .where('status', isEqualTo: 'active')
+        .get();
+
     final batch = _db.batch();
 
     for (final doc in activeSalesSnap.docs) {
@@ -365,12 +769,13 @@ class SaleService {
       );
 
       final newTotalPrice = saleArea * tier.rate;
-      final newFinancedAmount = newTotalPrice - sale.downPayment;
+      final newFinancedAmount =
+          newTotalPrice - sale.downPayment;
 
       final newMonthlyPayment = AmortizationService.monthlyPayment(
         newFinancedAmount,
         sale.annualInterestRate,
-        sale.termMonths
+        sale.termMonths,
       );
 
       batch.update(doc.reference, {
@@ -384,6 +789,7 @@ class SaleService {
           .where('saleId', isEqualTo: sale.id)
           .where('status', isEqualTo: 'scheduled')
           .get();
+
       for (final pDoc in paymentsSnap.docs) {
         batch.delete(pDoc.reference);
       }
@@ -392,7 +798,7 @@ class SaleService {
         sale: sale.copyWith(
           totalPrice: newTotalPrice,
           financedAmount: newFinancedAmount,
-          monthlyPayment: newMonthlyPayment
+          monthlyPayment: newMonthlyPayment,
         ),
         firstDueDate: sale.soldDate,
         createdBy: 'admin',
@@ -402,6 +808,69 @@ class SaleService {
         batch.set(_payments.doc(), p.toMap());
       }
     }
+
     await batch.commit();
+  }
+
+  /// Streams sales belonging to a specific buyer/member.
+  Stream<List<LotSaleModel>> streamSalesForBuyer(String buyerUid) {
+    if (buyerUid.isEmpty) {
+      return Stream.value(<LotSaleModel>[]);
+    }
+
+    return _sales
+        .where('buyerUid', isEqualTo: buyerUid)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => LotSaleModel.fromMap(d.data(), d.id))
+            .toList());
+  }
+
+  /// Marks ONE specific installment period as paid.
+  ///
+  /// Unlike recordPayment(), this allows a specific period
+  /// to be selected directly.
+  Future<void> markInstallmentPaid({
+    required String saleId,
+    required int period,
+    required String payer,
+    required String paidBy,
+    required PaymentMethod method,
+  }) async {
+    final snap = await _payments
+        .where('saleId', isEqualTo: saleId)
+        .get();
+
+    for (final doc in snap.docs) {
+      final p = LotPaymentModel.fromMap(doc.data());
+
+      if (p.period != period) continue;
+
+      if (p.status == LotPaymentStatus.paid) {
+        throw Exception('Period $period is already paid.');
+      }
+
+      if (p.status == LotPaymentStatus.void_ ||
+          p.status == LotPaymentStatus.waived) {
+        throw Exception(
+          'Period $period is ${p.status.label.toLowerCase()} '
+          'and can\'t be marked paid.',
+        );
+      }
+
+      await _markPeriodPaid(
+        ref: doc.reference,
+        p: p,
+        saleId: saleId,
+        payer: payer,
+        paidBy: paidBy,
+        method: method,
+      );
+
+      await _checkIfPaidOff(saleId);
+      return;
+    }
+
+    throw Exception('Period $period not found for this sale.');
   }
 }

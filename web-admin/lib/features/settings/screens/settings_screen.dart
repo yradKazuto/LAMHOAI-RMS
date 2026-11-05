@@ -2,8 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/models/hoa_settings_model.dart';
+import '../../../core/models/user_model.dart';
 import '../../../core/models/monthly_rate_model.dart';
 import '../../../core/models/rate_schedule_model.dart';
 import '../../../core/services/rate_history_service.dart';
@@ -37,6 +40,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _addrCtrl.dispose();
+    _contCtrl.dispose();
+    _emailCtrl.dispose();
+    _presCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -109,7 +122,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => context.canPop()
+                      ? context.pop()
+                      : context.go(AppRoutes.dashboard),
                 ),
                 const SizedBox(width: 8),
                 Column(
@@ -123,6 +138,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: AppSpacing.sectionGap),
             _buildAssociationInfo(),
+            const SizedBox(height: AppSpacing.sectionGap),
+            const _NotificationPreferencesSection(),
             const SizedBox(height: AppSpacing.sectionGap),
             const Divider(),
             const SizedBox(height: AppSpacing.sectionGap),
@@ -229,6 +246,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ---------------------------------------------------------------------------
+// Notification Preferences Section
+// ---------------------------------------------------------------------------
+class _NotificationPreferencesSection extends StatefulWidget {
+  const _NotificationPreferencesSection();
+
+  @override
+  State<_NotificationPreferencesSection> createState() => _NotificationPreferencesSectionState();
+}
+
+class _NotificationPreferencesSectionState extends State<_NotificationPreferencesSection> {
+  bool _push = true;
+  bool _sms = false;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncWithUser();
+  }
+
+  Future<void> _syncWithUser() async {
+    try {
+      final auth = context.read<AuthProvider>();
+      final user = auth.userModel;
+      if (user != null) {
+        final pref = user.notificationPreferences ?? <String, bool>{};
+        if (!_loaded) {
+          _push = pref['push'] ?? true;
+          _sms = pref['sms'] ?? false;
+          if (mounted) setState(() => _loaded = true);
+        }
+      } else {
+        if (mounted) setState(() => _loaded = true);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loaded = true);
+    }
+  }
+
+  Future<void> _updateProfile({required bool push, required bool sms}) async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.userModel;
+    if (user == null) return;
+    final merged = {
+      ...(user.notificationPreferences ?? <String, bool>{}),
+      'push': push,
+      'sms': sms,
+    };
+    // TODO: persist `merged` to the user's Firestore document through a
+    // service. UserModel has no copyWith in this codebase, so for now the
+    // toggle only updates the local UI state.
+    debugPrint('updated prefs: $merged');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Notification Preferences', style: AppTypography.sectionHeader),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Push Notifications'),
+            value: _push,
+            onChanged: (val) {
+              setState(() => _push = val);
+              _updateProfile(push: val, sms: _sms);
+            },
+          ),
+          SwitchListTile(
+            title: const Text('SMS Notifications'),
+            value: _sms,
+            onChanged: (val) {
+              setState(() => _sms = val);
+              _updateProfile(push: _push, sms: val);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dues Configuration Dialog
 // ---------------------------------------------------------------------------
 class _DuesConfigurationDialog extends StatefulWidget {
@@ -257,6 +369,14 @@ class _DuesConfigurationDialogState extends State<_DuesConfigurationDialog> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _rateCtrl.dispose();
+    _annualCtrl.dispose();
+    _specialCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -477,6 +597,12 @@ class _CurrentSalesRateSection extends StatefulWidget {
 class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
   final _svc = RateService();
   final _rateCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _rateCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

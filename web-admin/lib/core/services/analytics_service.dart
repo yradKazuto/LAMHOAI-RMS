@@ -63,38 +63,35 @@ class AnalyticsService {
   // Keyed by paidDate (when the cash actually came in), NOT dueDate — a
   // payment due in September but paid in October (overdue, penalty
   // applied) belongs in October's bar, matching getCollectedThisMonth()
-  // right above it on the Analytics screen. Filtering by dueDate instead
+  // right below on the Analytics screen. Filtering by dueDate instead
   // would silently fold that payment back into September, which by the
   // time October rolls around nobody is looking at anymore.
   Future<List<MonthlyCollection>> getMonthlyCollections({
     int months = 6,
   }) async {
     final now   = DateTime.now();
-    final result = <MonthlyCollection>[];
+    final start = DateTime(now.year, now.month - (months - 1), 1);
+    final end   = DateTime(now.year, now.month + 1, 1);
 
-    // One query for the whole window instead of one per month.
-    final windowStart = DateTime(now.year, now.month - (months - 1), 1);
-    final windowEnd   = DateTime(now.year, now.month + 1, 1);
-    final paid = await _paidBetween(windowStart, windowEnd);
+    final paid = await _paidBetween(start, end);
 
-    for (int i = months - 1; i >= 0; i--) {
-      final date         = DateTime(now.year, now.month - i, 1);
-      final startOfMonth = DateTime(date.year, date.month, 1);
-      final endOfMonth   = DateTime(date.year, date.month + 1, 1);
-
-      final total = paid
-          .where((p) =>
-              !p.paidDate.isBefore(startOfMonth) &&
-              p.paidDate.isBefore(endOfMonth))
-          .fold<double>(0.0, (sum, p) => sum + p.amount);
-
-      result.add(MonthlyCollection(
-        month: _monthLabel(date.month),
-        year:  date.year,
-        total: total,
-      ));
+    // Sum amounts per year-month.
+    final totals = <String, double>{};
+    for (final p in paid) {
+      final key = '${p.paidDate.year}-${p.paidDate.month}';
+      totals[key] = (totals[key] ?? 0) + p.amount;
     }
 
+    // Build one entry per month, oldest first, including empty months.
+    final result = <MonthlyCollection>[];
+    for (int i = months - 1; i >= 0; i--) {
+      final m = DateTime(now.year, now.month - i, 1);
+      result.add(MonthlyCollection(
+        month: _monthLabel(m.month),
+        year:  m.year,
+        total: totals['${m.year}-${m.month}'] ?? 0,
+      ));
+    }
     return result;
   }
 
@@ -173,9 +170,9 @@ class AnalyticsService {
     int paid = 0, unpaid = 0, overdue = 0;
 
     for (final doc in snap.docs) {
-      final data   = doc.data() as Map<String, dynamic>;
-      final status = data['status'] as String? ?? 'unpaid';
-      final dueTs  = data['dueDate'] as Timestamp?;
+      final data    = doc.data() as Map<String, dynamic>;
+      final status  = data['status'] as String? ?? 'unpaid';
+      final dueTs   = data['dueDate'] as Timestamp?;
       final dueDate = dueTs?.toDate();
 
       final effective = (status == 'unpaid' &&

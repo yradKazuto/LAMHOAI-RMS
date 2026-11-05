@@ -80,6 +80,34 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── lot_ownership_history (previous / current owners of a lot) ───────────
+    // One doc per ownership period, written by SaleService.recordSale (first
+    // owner) and SaleService.changeLotOwner (closes the old row, opens the new
+    // one). Admin + accountant can write; staff can read.
+    match /lot_ownership_history/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isFinance();
+      allow delete: if isAdmin();
+    }
+
+    // ── payment_transactions (cash payment + unapplied credit) ───────────────
+    // Written by FirestoreService.recordPaymentWithAllocations. Update is
+    // needed because existing credit is cleared (unappliedCredit -> 0) when it
+    // is consumed. Never deleted.
+    match /payment_transactions/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isFinance();
+      allow delete: if false;
+    }
+
+    // ── payment_allocations (how a payment was split across obligations) ─────
+    // Append-only record created by recordPaymentWithAllocations.
+    match /payment_allocations/{docId} {
+      allow read: if isStaff();
+      allow create: if isFinance();
+      allow update, delete: if false;
+    }
+
     // ── member_ledgers (running balance per member) ───────────────────────────
     // Used by the dues screen (streamMemberLedgers) and updated whenever dues
     // are generated or payments are recorded, so admin AND accountant need
@@ -92,6 +120,24 @@ service cloud.firestore {
                   );
       allow create, update: if isFinance();
       allow delete: if isAdmin();
+    }
+
+    // ── general_ledger (running balance per chart-of-accounts id) ────────────
+    // Written by LedgerService.postJournalEntry via transaction (set with
+    // merge), so finance needs create + update. Staff can read.
+    match /general_ledger/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isFinance();
+      allow delete: if false; // balances are never deleted, only adjusted
+    }
+
+    // ── journal_entries (immutable double-entry audit record) ────────────────
+    // Append-only, like audit_logs: corrections are posted as a new
+    // ADJUSTMENT / REVERSAL entry, never by editing or deleting.
+    match /journal_entries/{docId} {
+      allow read: if isStaff();
+      allow create: if isFinance();
+      allow update, delete: if false;
     }
 
     // ── documents ─────────────────────────────────────────────────────────────
@@ -174,7 +220,7 @@ service cloud.firestore {
     // ── sales_rate ────────────────────────────────────────────────────────────
     match /sales_rate/{docId} {
       allow read: if isStaff();
-      allow update: if isAdmin(); // config doc
+      allow create, update: if isAdmin(); // config doc (create = first save)
     }
 
     // ── monthly_dues_rates (per-lot monthly rate history) ────────────────────
