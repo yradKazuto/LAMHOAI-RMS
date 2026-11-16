@@ -2,14 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/models/payment_model.dart';
-import '../../../core/models/lot_model.dart';
 import '../../../core/models/audit_log_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
-import '../../../core/services/lot_service.dart';
 import '../../../core/services/rate_history_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/theme/design_tokens.dart';
@@ -58,9 +55,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   String?        _memberId;
   String?        _memberName;
   PaymentType    _type      = PaymentType.dues;
-  PaymentStatus  _status    = PaymentStatus.unpaid;
-  DateTime       _dueDate   = DateTime.now();
-  DateTime?      _paidDate;
   bool           _loading   = false;
 
   // Shown inside the dialog. A SnackBar would be hidden behind the modal.
@@ -69,14 +63,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   // Once the user types an amount themselves we stop auto-filling it.
   bool           _amountEdited = false;
 
-  // Lots owned by the selected member (from the lots collection — the
-  // source of truth; the member record's own lotNumber is provisional).
-  List<LotModel> _memberLots   = const [];
-  LotModel?      _selectedLot;
-  bool           _lotsLoading  = false;
-
-  
-
   @override
   void initState() {
     super.initState();
@@ -84,7 +70,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       _memberId   = widget.preselectedMemberId;
       _memberName = widget.preselectedMemberName;
     }
-    if (_memberId != null) _loadLots(_memberId!);
     _suggestAmount();
   }
 
@@ -96,33 +81,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-
-  /// Monthly dues and lot payments each belong to one specific lot.
-  bool get _needsLot =>
-      _type == PaymentType.dues || _type == PaymentType.lotPayment;
-
-  /// Loads the member's lots. One lot → auto-selected; several → the user
-  /// picks; none → recording is blocked for lot-based types.
-  Future<void> _loadLots(String uid) async {
-    setState(() {
-      _lotsLoading = true;
-      _memberLots  = const [];
-      _selectedLot = null;
-    });
-    try {
-      final lots = [...await LotService().streamLotsForMember(uid).first]
-        ..sort(compareLotsForBilling);
-      if (!mounted || _memberId != uid) return; // member changed meanwhile
-      setState(() {
-        _memberLots  = lots;
-        _selectedLot = lots.length == 1 ? lots.first : null;
-        _lotsLoading = false;
-      });
-    } catch (_) {
-      if (!mounted || _memberId != uid) return;
-      setState(() => _lotsLoading = false);
-    }
-  }
 
   /// Parses "1,500.50" / "1500.5". Returns null for empty, non-numeric,
   /// NaN or infinite input.
@@ -136,16 +94,13 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   String get _typeHint {
     switch (_type) {
       case PaymentType.dues:
-        return 'Monthly dues for ONE lot. Normally created in bulk from '
-            'Membership Dues → Generate; use this only for one-off records.';
+        return 'Monthly dues payment.';
       case PaymentType.membershipFee:
-        return 'Yearly association membership fee. Normally created in bulk '
-            'from Membership Dues → Generate.';
+        return 'Yearly membership fee payment.';
       case PaymentType.monthlyMembership:
-        return 'Monthly membership fee.';
+        return 'Monthly membership fee payment.';
       case PaymentType.lotPayment:
-        return 'Payment toward one lot (amortization / installment). '
-            'Separate from monthly and annual dues.';
+        return 'Lot amortization installment payment.';
       case PaymentType.penalty:
       case PaymentType.specialAssessment:
       case PaymentType.other:
@@ -154,121 +109,35 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
   }
 
   /// Pre-fills the amount from the configured rate for the chosen type:
-  ///  • Monthly Dues        → the monthly rate in effect for the due month
+  ///  • Monthly Dues        → the monthly rate in effect for this month
   ///  • Annual Membership   → the annual fee from settings
-  ///  • everything else     → left blank (lot payments vary per lot)
+  ///  • everything else     → left blank (installments vary per lot)
   /// Never overwrites an amount the user typed.
   Future<void> _suggestAmount() async {
     if (_amountEdited) return;
     final forType = _type;
-    final forDue  = _dueDate;
+    final now = DateTime.now();
     double? suggested;
     try {
       if (forType == PaymentType.dues) {
         suggested = await _rateSvc
-            .getRateForMonth(DateTime(forDue.year, forDue.month, 1));
+            .getRateForMonth(DateTime(now.year, now.month, 1));
       } else if (forType == PaymentType.membershipFee) {
         suggested = (await _settings.getSettings()).dues.annual;
       } else if (forType == PaymentType.monthlyMembership) {
         suggested = await _rateSvc
-            .getRateForMonth(DateTime(forDue.year, forDue.month, 1));
+            .getRateForMonth(DateTime(now.year, now.month, 1));
       }
     } catch (_) {
       return; // suggestion is a convenience — never block the form on it
     }
-    // Ignore stale results if the user changed type/date while we waited.
-    if (!mounted || _amountEdited || _type != forType || _dueDate != forDue) {
-      return;
-    }
+    // Ignore stale results if the user changed type while we waited.
+    if (!mounted || _amountEdited || _type != forType) return;
     setState(() {
       _amount.text = (suggested != null && suggested > 0)
           ? suggested.toStringAsFixed(2)
           : '';
     });
-  }
-
-  /// Monthly dues and annual fees are generated one-per-member-per-period,
-  /// and the dues screen shows a single record per member. A second manual
-  /// record for the same period would make totals/rows ambiguous, so block it.
-  /// (Lot payments are installments — multiple per month are legitimate.)
-  Future<String?> _duplicateMessage() async {
-    if (_type != PaymentType.dues && _type != PaymentType.membershipFee && _type != PaymentType.monthlyMembership) {
-      return null;
-    }
-    // Two equality filters only — no composite index needed; the period
-    // check is done in Dart.
-    final snap = await FirebaseFirestore.instance
-        .collection('payments')
-        .where('uid', isEqualTo: _memberId)
-        .where('type', isEqualTo: _type.name)
-        .get();
-
-    for (final d in snap.docs) {
-      final p = PaymentModel.fromMap(d.data(), d.id);
-      final sameYear = p.dueDate.year == _dueDate.year;
-      final sameMonth = p.dueDate.month == _dueDate.month;
-      if (_type == PaymentType.membershipFee && sameYear) {
-        return '$_memberName already has a ${_dueDate.year} membership '
-            'fee record (${p.displayStatus.label}).';
-      }
-      if (_type == PaymentType.monthlyMembership && sameYear && sameMonth) {
-        final lot = _selectedLot;
-        if (lot != null) {
-          // A record with no lotId predates per-lot billing and counts as
-          // the member's first lot (same rule as the generator).
-          final sameLot = p.lotId == lot.id ||
-              (p.lotId.isEmpty &&
-                  _memberLots.isNotEmpty &&
-                  _memberLots.first.id == lot.id);
-          if (sameLot) {
-            final text = buildLotLabel(
-                phase: lot.phase,
-                block: lot.block,
-                lotNumber: lot.lotNumber);
-            return '$_memberName already has a monthly dues record for '
-                '${text.isEmpty ? 'this lot' : text} in '
-                '${_monthName(_dueDate.month)} ${_dueDate.year} '
-                '(${p.displayStatus.label}).';
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  static const _months = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
-  ];
-  String _monthName(int m) => _months[m - 1];
-
-  Future<void> _pickDate(bool isDueDate) async {
-    final now   = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: isDueDate ? _dueDate : (_paidDate ?? today),
-      firstDate: DateTime(2020),
-      // A payment can't have been received in the future.
-      lastDate: isDueDate ? DateTime(now.year + 5, 12, 31) : today,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.textPrimary),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isDueDate) {
-          _dueDate = picked;
-        } else {
-          _paidDate = picked;
-        }
-      });
-      // Monthly rate depends on the due month.
-      if (isDueDate) _suggestAmount();
-    }
   }
 
   Future<void> _submit() async {
@@ -278,43 +147,17 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
       setState(() => _formError = 'Please select a member.');
       return;
     }
-    if (_needsLot && _selectedLot == null) {
-      setState(() => _formError = _memberLots.isEmpty
-          ? '$_memberName has no lot assigned. Assign one from Location '
-            'Mapping first.'
-          : 'Please select the lot this payment is for.');
-      return;
-    }
     final amount = _parseAmount(_amount.text)!; // validated above
-    final lotRef = _needsLot ? _selectedLot : null;
-    final lotId  = lotRef?.id ?? '';
-    final lot    = lotRef == null
-        ? ''
-        : buildLotLabel(
-            phase: lotRef.phase,
-            block: lotRef.block,
-            lotNumber: lotRef.lotNumber);
 
     setState(() => _loading = true);
     try {
-      final dup = await _duplicateMessage();
-      if (dup != null) {
-        if (!mounted) return;
-        setState(() {
-          _loading   = false;
-          _formError = '$dup Use "Mark Paid" on the Membership Dues '
-              'screen instead of adding another.';
-        });
-        return;
-      }
-
       final auth = context.read<AuthProvider>();
       final outcome = await _fs.recordPaymentWithAllocations(
         memberUid: _memberId!,
         memberName: _memberName ?? '',
         paymentAmount: amount,
         type: _type,
-        dueDate: _dueDate,
+        dueDate: DateTime.now(),
         recordedBy: auth.userModel?.uid ?? '',
         notes: _notes.text.trim(),
       );
@@ -342,8 +185,7 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
           targetId:         '',
           description:
               'Recorded ${_type.label} payment of ₱${amount.toStringAsFixed(2)} '
-              'for $_memberName'
-              '${lot.isNotEmpty ? ' ($lot)' : ''}',
+              'for $_memberName',
         );
       } catch (_) {
         auditFailed = true;
@@ -408,6 +250,18 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                     ),
                     const SizedBox(height: 16),
 
+                    // What this form does: records cash received, applied
+                    // oldest-debt-first. Charge creation lives in the dues
+                    // generator, not here.
+                    const Text(
+                      "Cash received is applied to the member's oldest "
+                      'dues and installments first (FIFO). To create an '
+                      'unpaid dues record, use Membership Dues → Generate.',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 16),
+
                     // ── Member selector ───────────────────────────────────
                     _SectionLabel('Member'),
                     const SizedBox(height: 6),
@@ -423,45 +277,21 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                             _memberId   = id;
                             _memberName = name;
                           });
-                          _loadLots(id);
                         },
                       ),
                     const SizedBox(height: 20),
 
-                    // ── Type + Status ─────────────────────────────────────
-                    Row(children: [
-                      Expanded(
-                        child: _FormDropdown<PaymentType>(
-                          label: 'Payment Type',
-                          value: _type,
-                          items: PaymentType.values,
-                          labelOf: (v) => v.label,
-                          onChanged: (v) {
-                            setState(() => _type = v);
-                            _suggestAmount();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _FormDropdown<PaymentStatus>(
-                          label: 'Status',
-                          value: _status,
-                          items: PaymentStatus.values.where((s) => s != PaymentStatus.waived)
-                              .toList(),
-                          labelOf: (v) => v.label,
-                          onChanged: (v) => setState(() {
-                            _status = v;
-                            if (v == PaymentStatus.paid) {
-                              _paidDate ??= DateTime.now();
-                            } else {
-                              // A paid date only makes sense for Paid.
-                              _paidDate = null;
-                            }
-                          }),
-                        ),
-                      ),
-                    ]),
+                    // ── Type ──────────────────────────────────────────────
+                    _FormDropdown<PaymentType>(
+                      label: 'Payment Type',
+                      value: _type,
+                      items: PaymentType.values,
+                      labelOf: (v) => v.label,
+                      onChanged: (v) {
+                        setState(() => _type = v);
+                        _suggestAmount();
+                      },
+                    ),
                     if (_typeHint.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(_typeHint,
@@ -469,49 +299,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                               fontSize: 12, color: AppColors.textSecondary)),
                     ],
                     const SizedBox(height: 20),
-
-                    // ── Lot (monthly dues + lot payments) ─────────────────
-                    if (_needsLot && _memberId != null) ...[
-                      _SectionLabel('Lot'),
-                      const SizedBox(height: 6),
-                      if (_lotsLoading)
-                        Text('Loading lots...',
-                            style: TextStyle(
-                                fontSize: 12.5, color: AppColors.textSecondary))
-                      else if (_memberLots.isEmpty)
-                        Text(
-                            'This member has no lot assigned yet. Assign one '
-                            'from Location Mapping before recording '
-                            '${_type.label}.',
-                            style: const TextStyle(
-                                fontSize: 12.5, color: AppColors.danger))
-                      else
-                        DropdownButtonFormField<String>(
-                          value: _selectedLot?.id,
-                          hint: Text('Select a lot',
-                              style: TextStyle(
-                                  fontSize: 13, color: AppColors.textMuted)),
-                          style: const TextStyle(
-                              fontSize: 13.5, color: AppColors.textPrimary),
-                          validator: (v) =>
-                              v == null ? 'Please select a lot' : null,
-                          decoration: _fieldDec(''),
-                          items: _memberLots
-                              .map((l) => DropdownMenuItem<String>(
-                                    value: l.id,
-                                    child: Text(buildLotLabel(
-                                        phase: l.phase,
-                                        block: l.block,
-                                        lotNumber: l.lotNumber)),
-                                  ))
-                              .toList(),
-                          onChanged: (v) => setState(() {
-                            _selectedLot = _memberLots
-                                .firstWhere((l) => l.id == v);
-                          }),
-                        ),
-                      const SizedBox(height: 20),
-                    ],
 
                     // ── Amount ────────────────────────────────────────────
                     _SectionLabel('Amount (₱)'),
@@ -531,28 +318,6 @@ class _AddPaymentScreenState extends State<AddPaymentScreen> {
                       style: const TextStyle(fontSize: 14),
                       decoration: _fieldDec('0.00'),
                     ),
-                    const SizedBox(height: 20),
-
-                    // ── Due date + Paid date ──────────────────────────────
-                    Row(children: [
-                      Expanded(
-                        child: _DatePicker(
-                          label: 'Due Date',
-                          date: _dueDate,
-                          onTap: () => _pickDate(true),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _DatePicker(
-                          label: 'Paid Date',
-                          date: _paidDate,
-                          optional: true,
-                          enabled: _status == PaymentStatus.paid,
-                          onTap: () => _pickDate(false),
-                        ),
-                      ),
-                    ]),
                     const SizedBox(height: 20),
 
                     // ── Notes ─────────────────────────────────────────────

@@ -11,9 +11,9 @@ import '../models/lot_sale_model.dart';
 import '../models/lot_payment_model.dart';
 import '../models/lot_ownership_model.dart';
 import '../models/payment_model.dart';
-import '../models/rate_schedule_model.dart';
 import '../utils/lot_pricing.dart';
 import 'amortization_service.dart';
+import 'rate_service.dart';
 
 class LotNotAvailableException implements Exception {
   final String lotId;
@@ -328,8 +328,13 @@ class SaleService {
   }) async {
     await _verifyLotAvailable(lotId: lot.id);
 
+    // Fetch the rate in force on the sale date (sample rate if none).
+    final rateSvc = RateService(db: _db);
+    final salesRate = await rateSvc.getSalesRateFor(soldDate);
+    final ratePerSqm = salesRate?.ratePerSqm;
+
     // Price comes from lot area (see LotPricing).
-    final totalPrice = LotPricing.priceFor(lot);
+    final totalPrice = LotPricing.priceFor(lot, ratePerSqm: ratePerSqm);
     final financedAmount = totalPrice - downPayment;
 
     final monthlyPayment = termMonths > 0
@@ -702,25 +707,6 @@ class SaleService {
     await batch.commit();
   }
 
-  /// Transfers lot ownership to another buyer. (Previously this refused any
-  /// lot that was already owned, so it could never transfer anything.)
-  Future<void> transferLot({
-    required String saleId,
-    required String newBuyerUid,
-    required String newBuyerName,
-    required String updatedBy,
-  }) async {
-    final sale = await getSale(saleId);
-    if (sale == null) throw Exception('Sale not found.');
-
-    await changeLotOwner(
-      lotId: sale.lotId,
-      newBuyerUid: newBuyerUid,
-      newBuyerName: newBuyerName,
-      updatedBy: updatedBy,
-    );
-  }
-
   /// Gets payment report dataset.
   Future<List<Map<String, dynamic>>> getPaymentsReportDataset() async {
     final paymentsSnap = await _payments.get();
@@ -794,72 +780,6 @@ class SaleService {
     return snap.docs
         .map((d) => LotSaleModel.fromMap(d.data(), d.id))
         .toList();
-  }
-
-  /// Recalculates active sales using a new rate schedule.
-  Future<void> recalculateActiveSales(
-    RateScheduleModel schedule, {
-    required double saleArea,
-  }) async {
-    final activeSalesSnap = await _sales
-        .where('status', isEqualTo: 'active')
-        .get();
-
-    final batch = _db.batch();
-
-    for (final doc in activeSalesSnap.docs) {
-      final sale = LotSaleModel.fromMap(doc.data(), doc.id);
-
-      final sortedTiers = List<RateTier>.from(schedule.tiers)
-        ..sort((a, b) => b.threshold.compareTo(a.threshold));
-
-      final tier = sortedTiers.firstWhere(
-        (t) => saleArea >= t.threshold,
-        orElse: () => sortedTiers.last,
-      );
-
-      final newTotalPrice = saleArea * tier.rate;
-      final newFinancedAmount =
-          newTotalPrice - sale.downPayment;
-
-      final newMonthlyPayment = AmortizationService.monthlyPayment(
-        newFinancedAmount,
-        sale.annualInterestRate,
-        sale.termMonths,
-      );
-
-      batch.update(doc.reference, {
-        'totalPrice': newTotalPrice,
-        'financedAmount': newFinancedAmount,
-        'monthlyPayment': newMonthlyPayment,
-        'updatedAt': Timestamp.now(),
-      });
-
-      final paymentsSnap = await _payments
-          .where('saleId', isEqualTo: sale.id)
-          .where('status', isEqualTo: 'scheduled')
-          .get();
-
-      for (final pDoc in paymentsSnap.docs) {
-        batch.delete(pDoc.reference);
-      }
-
-      final newSchedule = AmortizationService.buildSchedule(
-        sale: sale.copyWith(
-          totalPrice: newTotalPrice,
-          financedAmount: newFinancedAmount,
-          monthlyPayment: newMonthlyPayment,
-        ),
-        firstDueDate: sale.soldDate,
-        createdBy: 'admin',
-      );
-
-      for (final p in newSchedule) {
-        batch.set(_payments.doc(), p.toMap());
-      }
-    }
-
-    await batch.commit();
   }
 
   /// Streams sales belonging to a specific buyer/member.

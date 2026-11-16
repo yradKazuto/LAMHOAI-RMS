@@ -92,8 +92,42 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
 
       final list = snap.docs
           .map((d) => PaymentModel.fromMap(d.data(), d.id))
-          .toList()
-        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+          .toList();
+
+      // Same union the service allocates against: lot installments live in
+      // lot_payments, reached via the member's sales — not in `payments`.
+      final salesSnap = await FirebaseFirestore.instance
+          .collection('lot_sales')
+          .where('buyerUid', isEqualTo: uid)
+          .get();
+
+      for (final sale in salesSnap.docs) {
+        final lpSnap = await FirebaseFirestore.instance
+            .collection('lot_payments')
+            .where('saleId', isEqualTo: sale.id)
+            .where('status', whereIn: ['scheduled', 'overdue'])
+            .get();
+
+        for (final d in lpSnap.docs) {
+          final data = d.data();
+          list.add(PaymentModel(
+            id: d.id,
+            uid: uid,
+            memberName: '',
+            type: PaymentType.lotPayment,
+            amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
+            status: PaymentStatus.unpaid,
+            dueDate: (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            recordedBy: '',
+            notes: '',
+            createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            penaltyAmount: (data['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
+            paidAmount: (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
+          ));
+        }
+      }
+
+      list.sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
       if (!mounted || _memberId != uid) return;
       setState(() {
@@ -164,6 +198,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
         dueDate: DateTime.now(),
         recordedBy: auth.userModel?.uid ?? '',
         notes: _notesCtrl.text.trim(),
+        referenceNumber: _referenceCtrl.text.trim(),
       );
 
       if (!outcome.applied) {

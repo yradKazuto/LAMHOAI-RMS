@@ -551,10 +551,6 @@ class _DocumentsPreview extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textMuted)),
-                trailing: TextButton(
-                  onPressed: () {},
-                  child: const Text('View'),
-                ),
               );
             },
           ),

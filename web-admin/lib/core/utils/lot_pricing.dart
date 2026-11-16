@@ -1,27 +1,47 @@
 import '../models/lot_model.dart';
+import '../models/sales_rate_model.dart';
 import '../services/amortization_service.dart';
 
 class LotPricing {
-  static const double areaThresholdSqm = 120;
-  static const double monthlyLarge = 610; // area >= 120 sqm
-  static const double monthlySmall = 590; // area < 120 sqm
+  /// DEMO sample rate — ₱/sqm until the HOA confirms the real one.
+  /// ponytail: sample pricing; a `sales_rates` row in force on the date
+  /// overrides this wherever an admin has set one.
+  static const double sampleRatePerSqm = 2000.0;
+
   static const int years = 25;
 
   static int get totalMonths => years * 12;
 
-  static double monthlyInstallment(double areaSqm) =>
-      areaSqm >= areaThresholdSqm ? monthlyLarge : monthlySmall;
-
-  static double totalInstallment(double areaSqm) =>
-      monthlyInstallment(areaSqm) * totalMonths;
-
-  /// Price used for a sale. Uses the area-based total installment.
+  /// Price used for a sale: area x rate. [ratePerSqm] is the row in force
+  /// on the sale date (LotPricing.rateFor); null/zero falls back to the
+  /// DEMO sample rate.
   /// Falls back to the lot's saved price when the area is not set.
-  static double priceFor(LotModel lot) {
+  static double priceFor(LotModel lot, {double? ratePerSqm}) {
     final area = (lot.areaSqm ?? 0).toDouble();
-    if (area > 0) return totalInstallment(area);
-    return (lot.price ?? 0).toDouble();
+    if (area <= 0) return (lot.price ?? 0).toDouble();
+    final rate =
+        (ratePerSqm != null && ratePerSqm > 0) ? ratePerSqm : sampleRatePerSqm;
+    return area * rate;
   }
+
+  /// The rate row in force on [date] — the latest row whose effective date
+  /// is on or before it. Rows must be sorted by effectiveFrom ascending
+  /// (RateService sorts). Null when the table is empty or every row starts
+  /// in the future; callers then fall back to the DEMO sample rate.
+  static SalesRateEntry? entryFor(
+    DateTime date,
+    List<SalesRateEntry> rows,
+  ) {
+    SalesRateEntry? current;
+    for (final r in rows) {
+      if (!r.effectiveFrom.isAfter(date)) current = r;
+    }
+    return current;
+  }
+
+  /// Rate in force on [date]; 0 when none applies.
+  static double rateFor(DateTime date, List<SalesRateEntry> rows) =>
+      entryFor(date, rows)?.ratePerSqm ?? 0.0;
 
   /// Monthly payment for a financed amount. Handles 0% interest.
   static double monthlyFor(double financed, double annualRate, int months) {

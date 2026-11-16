@@ -56,15 +56,15 @@ void main() {
       expect(sale.status, LotSaleStatus.paidOff);
       expect(sale.saleType, SaleType.cash);
       // Area-based pricing wins over the saved lot price:
-      // 100 sqm -> ₱590/month small-lot rate x 300 months.
-      expect(sale.totalPrice, LotPricing.totalInstallment(100));
+      // 100 sqm x the sample rate (₱2,000/sqm).
+      expect(sale.totalPrice, 100 * LotPricing.sampleRatePerSqm);
 
       // Verify exactly one payment doc, status paid
       final paymentsSnap = await fakeDb.collection('lot_payments').get();
       expect(paymentsSnap.docs.length, 1);
       final payment = LotPaymentModel.fromMap(paymentsSnap.docs.first.data());
       expect(payment.status, LotPaymentStatus.paid);
-      expect(payment.amount, LotPricing.totalInstallment(100));
+      expect(payment.amount, 100 * LotPricing.sampleRatePerSqm);
       expect(payment.period, 0);
       // First sale of 2026, period 0 — transaction ID follows
       // LP-{year}-{saleSeq}-{period}.

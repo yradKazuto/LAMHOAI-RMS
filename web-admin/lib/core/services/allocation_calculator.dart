@@ -50,12 +50,17 @@ class Allocation {
   final double allocatedAmount; // = principal + penalty
   final bool obligationPaid;
 
+  /// Collection the obligation lives in (`payments` / `lot_payments`), so the
+  /// caller writes the allocation back to the right document.
+  final String source;
+
   const Allocation({
     required this.obligationId,
     required this.allocatedPrincipal,
     required this.allocatedPenalty,
     required this.allocatedAmount,
     this.obligationPaid = false,
+    this.source = 'payments',
   });
 
   @override
@@ -86,14 +91,24 @@ class ObligationInput {
   final double paidAmount; // cumulative principal allocated so far
   final DateTime dueDate;
 
+  /// Which Firestore collection this obligation lives in — `payments` (dues)
+  /// or `lot_payments` (lot installments). The caller uses this to route the
+  /// resulting allocation writes back to the correct document.
+  final String source;
+
   const ObligationInput({
     required this.id,
     required this.amount,
     required this.penaltyAmount,
     this.paidAmount = 0.0,
     required this.dueDate,
+    this.source = 'payments',
   });
 }
+
+/// Capped allocation to remaining funds.
+double owedPenalty(double remainder, double owed) =>
+    remainder < owed ? remainder : owed;
 
 /// Computes FIFO allocation. Returns allocation results. Excess beyond
 /// total outstanding is flagged; caller decides rejection.
@@ -119,8 +134,7 @@ AllocationResult computeAllocation({
     remaining -= applyPrincipal;
 
     // Then penalty.
-    var applyPenalty = penaltyOwd(remaining, penaltyOwed);
-    if (applyPenalty > remaining) applyPenalty = remaining;
+    final applyPenalty = owedPenalty(remaining, penaltyOwed);
     remaining -= applyPenalty;
 
     allocs.add(Allocation(
@@ -129,6 +143,7 @@ AllocationResult computeAllocation({
       allocatedPenalty: applyPenalty,
       allocatedAmount: applyPrincipal + applyPenalty,
       obligationPaid: (applyPrincipal == principalOwed && applyPenalty == penaltyOwed),
+      source: ob.source,
     ));
   }
 
@@ -147,7 +162,3 @@ AllocationResult computeAllocation({
             : null,
   );
 }
-
-/// Capped allocation to remaining funds.
-double penaltyOwd(double remainder, double owed) =>
-    remainder < owed ? remainder : owed;

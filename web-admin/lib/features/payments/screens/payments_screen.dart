@@ -11,7 +11,6 @@ import '../../../core/services/settings_service.dart';
 import '../../../core/services/sale_service.dart';
 import '../../../core/utils/payment_labels.dart';
 import 'member_installments_section.dart';
-import 'add_payment_screen.dart';
 import 'record_payment_screen.dart';
 import 'membership_dues_screen.dart';
 import '../../../core/theme/design_tokens.dart';
@@ -35,10 +34,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   bool _sendingReminders = false;
   Future<void>? _maintenanceTask;
-  bool _importing = false;
-  String? _importError;
-  final Set<String> _selectedIds = {};
-  bool _isSelected(String id) => _selectedIds.contains(id);
 
   // Created ONCE. Building `_fs.streamPayments()` inline in build() opened
   // brand-new Firestore listeners on every rebuild (i.e. every keystroke in
@@ -354,15 +349,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     ? Row(
                         children: [
                           compactButton(
-                            icon: Icons.batch_prediction_outlined,
-                            label: 'Batch',
-                            tooltip: 'Batch Mark Paid',
-                            onPressed: _importing ? null : () {},
-                            filled: false,
-                            loading: _importing,
-                          ),
-                          const SizedBox(width: 8),
-                          compactButton(
                             icon: Icons.notifications_active_outlined,
                             label: _sendingReminders ? 'Sending' : 'Remind',
                             tooltip: 'Send Dues Reminder',
@@ -447,19 +433,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                         foregroundColor: AppColors.textInverted,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _importing ? null : () {},
-                      icon: const Icon(Icons.batch_prediction_outlined, size: 18),
-                      label: const Text('Batch Mark Paid'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textPrimary,
-                        side: const BorderSide(color: AppColors.textPrimary),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                       ),

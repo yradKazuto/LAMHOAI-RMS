@@ -20,6 +20,7 @@ import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import '../../../core/models/lot_model.dart';
 import '../../../core/models/lot_sale_model.dart';
 import '../../../core/models/payment_model.dart' show buildLotLabel;
+import '../../../core/services/rate_service.dart';
 import '../../../core/services/sale_service.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/utils/lot_pricing.dart';
@@ -80,10 +81,17 @@ class _AssignLotWizardState extends State<AssignLotWizard> {
   final _termCtrl = TextEditingController(text: '${LotPricing.totalMonths}');
   final _rateCtrl = TextEditingController(text: '0');
 
+  // ── Derived values ────────────────────────────────────────────────────────
+  /// Sales rate per sqm from `sales_rate/config` (null = use sample default).
+  double? _ratePerSqm;
+
   @override
   void initState() {
     super.initState();
     _membersFuture = widget.loadMembers();
+    RateService().getSalesRate().then((r) {
+      if (mounted) setState(() => _ratePerSqm = r?.ratePerSqm);
+    });
   }
 
   @override
@@ -95,8 +103,8 @@ class _AssignLotWizardState extends State<AssignLotWizard> {
     super.dispose();
   }
 
-  // ── Derived values ────────────────────────────────────────────────────────
-  double get _price => LotPricing.priceFor(widget.lot);
+  double get _price =>
+      LotPricing.priceFor(widget.lot, ratePerSqm: _ratePerSqm);
   bool get _isInstallment => _saleType == SaleType.installment;
   double get _down =>
       _isInstallment ? (double.tryParse(_downCtrl.text.trim()) ?? 0.0) : 0.0;

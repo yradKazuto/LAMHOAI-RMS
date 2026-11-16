@@ -7,6 +7,7 @@ import '../models/payment_model.dart';
 import '../models/payment_transaction_model.dart';
 import '../models/payment_allocation_model.dart';
 import '../models/lot_model.dart';
+import '../models/lot_payment_model.dart';
 import '../models/document_model.dart';
 import '../models/staff_model.dart';
 import '../models/announcement_model.dart';
@@ -123,6 +124,8 @@ class FirestoreService {
 
   // Ledger: per-member snapshot of outstanding membership balance
   CollectionReference<Map<String, dynamic>> get _ledgers   => _db.collection('member_ledgers');
+  CollectionReference<Map<String, dynamic>> get _sales     => _db.collection('lot_sales');
+  CollectionReference<Map<String, dynamic>> get _lotPayments => _db.collection('lot_payments');
 
   // ════════════════════════════════════════════════════════════════════════════
   // COMPLAINTS
@@ -154,41 +157,6 @@ class FirestoreService {
     return _ledgers
         .snapshots()
         .map((snap) => snap.docs.map((d) => d.data()).toList());
-  }
-
-  Future<void> createOrUpdateLedger(String uid, double target, double balance, int year) async {
-    final docRef = _ledgers.doc(uid);
-    final doc = await docRef.get();
-    if (!doc.exists) {
-      await docRef.set({
-        'uid': uid,
-        'annualTarget': target,
-        'currentBalance': balance,
-        'year': year,
-        'createdAt': Timestamp.now(),
-        'updatedAt': Timestamp.now(),
-      });
-    } else {
-      await docRef.update({
-        'annualTarget': target,
-        'currentBalance': balance,
-        'year': year,
-        'updatedAt': Timestamp.now(),
-      });
-    }
-  }
-
-  Future<void> updateLedgerBalance(String uid, double amountDelta) async {
-    final docRef = _ledgers.doc(uid);
-    await _db.runTransaction((transaction) async {
-      final doc = await transaction.get(docRef);
-      if (!doc.exists) return; // Lazy init will handle it later if needed
-      final current = (doc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
-      transaction.update(docRef, {
-        'currentBalance': current + amountDelta,
-        'updatedAt': Timestamp.now(),
-      });
-    });
   }
 
   Stream<List<MemberModel>> streamMembers() {
@@ -419,41 +387,6 @@ class FirestoreService {
     }
   }
 
-  Future<void> deletePayment(String paymentId) async {
-    final ref = _payments.doc(paymentId);
-    final data = await ref.get();
-    if (!data.exists) return;
-    // Restore outstanding balance for membership-type payments
-    final type = PaymentTypeExt.fromString(data['type'] as String?);
-    final status = PaymentStatusExt.fromString(data['status'] as String?);
-    if (type == PaymentType.membershipFee ||
-        type == PaymentType.monthlyMembership) {
-      final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
-      // Inverse of addPayment logic:
-      // If addPayment did -amount (paid fee), restore by +amount
-      // If addPayment did +amount (monthly), restore by -amount
-      final delta = (type == PaymentType.monthlyMembership)
-          ? -amount
-          : (status == PaymentStatus.paid ? amount : 0.0);
-
-      final uid = data['uid'] as String?;
-      if (uid != null && delta != 0.0) {
-        await _db.runTransaction((transaction) async {
-          final ledgerRef = _ledgers.doc(uid);
-          final ledgerDoc = await transaction.get(ledgerRef);
-          if (ledgerDoc.exists) {
-            final current = (ledgerDoc.data()?['currentBalance'] as num?)?.toDouble() ?? 0.0;
-            transaction.update(ledgerRef, {
-              'currentBalance': current + delta,
-              'updatedAt': Timestamp.now(),
-            });
-          }
-        });
-      }
-    }
-    await ref.delete();
-  }
-
   /// Free-tier alternative to a scheduled Cloud Function (those require the
   /// paid Blaze plan). Call this from a screen's initState — each time an
   /// admin opens Payments, any `unpaid` record whose dueDate has passed
@@ -534,7 +467,22 @@ class FirestoreService {
           (status == PaymentStatus.unpaid || status == PaymentStatus.overdue);
     }).toList();
 
-    if (toPenalize.isEmpty) return 0;
+    // Lot installments (amortization schedule) past grace: apply the same
+    // penalty, tracked on the lot_payments doc itself.
+    final lotSnap = await _lotPayments
+        .where('status', whereIn: [
+          LotPaymentStatus.scheduled.name,
+          LotPaymentStatus.overdue.name,
+        ])
+        .where('dueDate', isLessThan: Timestamp.fromDate(cutoff))
+        .get();
+
+    final lotToPenalize = lotSnap.docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return !(data['penaltyApplied'] as bool? ?? false);
+    }).toList();
+
+    if (toPenalize.isEmpty && lotToPenalize.isEmpty) return 0;
 
     await _commitInChunks(toPenalize.length, (batch, i) {
       final doc    = toPenalize[i];
@@ -545,7 +493,16 @@ class FirestoreService {
         'penaltyApplied': true,
       });
     });
-    return toPenalize.length;
+
+    await _commitInChunks(lotToPenalize.length, (batch, i) {
+      final doc  = lotToPenalize[i];
+      batch.update(doc.reference, {
+        'penaltyAmount':  penaltyAmount,
+        'penaltyApplied': true,
+        'status':         LotPaymentStatus.overdue.name,
+      });
+    });
+    return toPenalize.length + lotToPenalize.length;
   }
 
   // ── Membership Fee (annual, org-wide — distinct from per-lot monthly dues) ─
@@ -1170,26 +1127,24 @@ class FirestoreService {
     required DateTime dueDate,
     String recordedBy = '',
     String notes = '',
+    String referenceNumber = '',
   }) async {
-    final transactionId =
-        TransactionIdService.paymentTransactionId(type, dueDate.year, 0);
-
     RecordPaymentOutcome? outcome;
 
     await _db.runTransaction((tx) async {
-      // 1. Fetch existing unapplied credit
+      // 1. Fetch existing unapplied credit (reads only here — cleared below).
       final txSnap = await _transactionsRef
           .where('memberUid', isEqualTo: memberUid)
           .where('unappliedCredit', isGreaterThan: 0)
           .get();
 
       double existingCredit = 0.0;
+      final creditRefsToClear = <DocumentReference<Map<String, dynamic>>>{};
       for (final doc in txSnap.docs) {
         final data = doc.data();
         final credit = (data['unappliedCredit'] as num?)?.toDouble() ?? 0.0;
         existingCredit += credit;
-        // Void/Clear old credit (set to 0)
-        tx.update(doc.reference, {'unappliedCredit': 0});
+        creditRefsToClear.add(doc.reference);
       }
 
       // 2. Fetch last transaction sequence for this type+year to generate unique ID.
@@ -1200,20 +1155,28 @@ class FirestoreService {
 
       int nextSeq = 1;
       if (lastTxSnap.docs.isNotEmpty) {
-          final lastData = lastTxSnap.docs.first.data();
-          if ((lastData['txnYear'] as num?)?.toInt() == dueDate.year) {
-              nextSeq = ((lastData['txnSeq'] as num?)?.toInt() ?? 0) + 1;
-          }
+        final lastData = lastTxSnap.docs.first.data();
+        if ((lastData['txnYear'] as num?)?.toInt() == dueDate.year) {
+          nextSeq = ((lastData['txnSeq'] as num?)?.toInt() ?? 0) + 1;
+        }
       }
       final transactionId = TransactionIdService.paymentTransactionId(type, dueDate.year, nextSeq);
 
-      // 3. Duplicate check
+      // 3. Duplicate guard: same member tendering the same amount within 30s
+      // is a double-submit (cashier double-tap / retry), not a new payment.
+      // ponytail: heuristic — a genuinely identical same-minute payment is
+      // rejected too; widen the window only if cashiers batch-enter receipts.
+      // Needs a composite index on payment_transactions(memberUid, amount,
+      // createdAt) in production.
+      final dupWindow = DateTime.now().subtract(const Duration(seconds: 30));
       final duplicateSnap = await _transactionsRef
-          .where('transactionId', isEqualTo: transactionId)
+          .where('memberUid', isEqualTo: memberUid)
+          .where('amount', isEqualTo: paymentAmount)
+          .where('createdAt', isGreaterThan: Timestamp.fromDate(dupWindow))
           .get();
       if (duplicateSnap.docs.isNotEmpty) {
         outcome = RecordPaymentOutcome(applied: false);
-        return; // Already submitted
+        return;
       }
 
       // 4. Read all outstanding payment docs for this member.
@@ -1230,9 +1193,34 @@ class FirestoreService {
               penaltyAmount: (data['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
               paidAmount:  (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
               dueDate:    (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              source:     'payments',
             );
           })
           .toList();
+
+      // 4b. Read all outstanding lot installments for this member's sales
+      // (amortization schedule rows that are unpaid/overdue).
+      final salesSnap = await _sales.where('buyerUid', isEqualTo: memberUid).get();
+      final saleIds = salesSnap.docs.map((d) => d.id).toSet();
+
+      for (final saleId in saleIds) {
+        final lotPaymentsSnap = await _lotPayments
+            .where('saleId', isEqualTo: saleId)
+            .where('status', whereIn: [LotPaymentStatus.scheduled.name, LotPaymentStatus.overdue.name])
+            .get();
+
+        for (final d in lotPaymentsSnap.docs) {
+          final data = d.data() as Map<String, dynamic>;
+          obligations.add(ObligationInput(
+            id:         d.id,
+            amount:     (data['amount'] as num?)?.toDouble() ?? 0.0,
+            penaltyAmount: (data['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
+            paidAmount:  (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
+            dueDate:    (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            source:     'lot_payments',
+          ));
+        }
+      }
 
       obligations.sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
@@ -1241,25 +1229,49 @@ class FirestoreService {
         paymentAmount: paymentAmount + existingCredit,
       );
 
-      // (rest of the logic remains same, result.unappliedCredit will include excess)
-
-
       if (result.hasExcess) {
         outcome = RecordPaymentOutcome(applied: false);
         return;
       }
 
+      // Read every obligation doc first (Firestore requires all reads before writes).
+      final obligationDocs = <String, Map<String, dynamic>>{};
       for (final alloc in result.allocations) {
-        final ref = _payments.doc(alloc.obligationId);
+        final ref = alloc.source == 'lot_payments'
+            ? _lotPayments.doc(alloc.obligationId)
+            : _payments.doc(alloc.obligationId);
         final d = await tx.get(ref);
-        final data = d.data() as Map<String, dynamic>;
+        obligationDocs[alloc.obligationId] = d.data() as Map<String, dynamic>;
+      }
+
+      // Now apply all writes.
+      for (final ref in creditRefsToClear) {
+        tx.update(ref, {'unappliedCredit': 0});
+      }
+
+      for (final alloc in result.allocations) {
+        final isLot = alloc.source == 'lot_payments';
+        final ref = isLot
+            ? _lotPayments.doc(alloc.obligationId)
+            : _payments.doc(alloc.obligationId);
+        final data = obligationDocs[alloc.obligationId]!;
         final updates = <String, dynamic>{
           'paidAmount':  ((data['paidAmount'] as num?)?.toDouble() ?? 0.0) + alloc.allocatedPrincipal,
-          'penaltyAmount': ((data['penaltyAmount'] as num?)?.toDouble() ?? 0.0) - alloc.allocatedPenalty,
+          'penaltyAmount':
+              ((data['penaltyAmount'] as num?)?.toDouble() ?? 0.0) - alloc.allocatedPenalty,
         };
         if (alloc.obligationPaid) {
-          updates['status'] = PaymentStatus.paid.name;
-          updates['paidDate'] = Timestamp.fromDate(DateTime.now());
+          if (isLot) {
+            updates['status'] = LotPaymentStatus.paid.name;
+            updates['paidAt'] = Timestamp.fromDate(DateTime.now());
+            updates['paidBy'] = recordedBy;
+            updates['payer'] = memberName;
+            updates['paymentMethod'] = 'cash';
+            updates['verifiedAt'] = Timestamp.fromDate(DateTime.now());
+          } else {
+            updates['status'] = PaymentStatus.paid.name;
+            updates['paidDate'] = Timestamp.fromDate(DateTime.now());
+          }
         }
         tx.update(ref, updates);
 
@@ -1284,6 +1296,7 @@ class FirestoreService {
         memberName:           memberName,
         amount:               paymentAmount, // New cash only
         paymentMethod:        'cash',
+        referenceNumber:      referenceNumber.isEmpty ? null : referenceNumber,
         paymentDate:          DateTime.now(),
         recordedBy:           recordedBy,
         notes:                '${notes.isNotEmpty ? '$notes | ' : ''}Consumed existing credit: ₱${existingCredit.toStringAsFixed(2)}',

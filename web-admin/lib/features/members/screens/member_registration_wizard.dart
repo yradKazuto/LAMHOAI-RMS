@@ -14,6 +14,7 @@ import '../../../core/models/phase_map_model.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/lot_service.dart';
 import '../../../core/services/phase_map_service.dart';
+import '../../../core/services/rate_service.dart';
 import '../../../core/services/sale_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/theme/design_tokens.dart';
@@ -56,6 +57,17 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
 
   // Which phase map is shown in the Step 2 Location Mapping view.
   String _wizardSelectedPhase = kPhaseOnePolygonMap;
+
+  /// Sales rate per sqm from `sales_rate/config` (null = use sample default).
+  double? _ratePerSqm;
+
+  @override
+  void initState() {
+    super.initState();
+    RateService().getSalesRate().then((r) {
+      if (mounted) setState(() => _ratePerSqm = r?.ratePerSqm);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -379,7 +391,7 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
       children: _selectedLots.values.map((lot) {
         final setup = _lotSetups[lot.id]!;
         final area = (lot.areaSqm ?? 0).toDouble();
-        final totalPrice = LotPricing.priceFor(lot);
+        final totalPrice = LotPricing.priceFor(lot, ratePerSqm: _ratePerSqm);
         final isInstallment = setup.saleType == SaleType.installment;
         final downPayment = isInstallment ? setup.downPayment : 0.0;
         final financedAmount = totalPrice - downPayment;
@@ -531,7 +543,7 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
         const SizedBox(height: AppSpacing.sectionGap),
         ..._selectedLots.values.map((lot) {
           final setup = _lotSetups[lot.id]!;
-          final totalPrice = LotPricing.priceFor(lot);
+          final totalPrice = LotPricing.priceFor(lot, ratePerSqm: _ratePerSqm);
           return Container(
             margin: const EdgeInsets.only(bottom: AppSpacing.sectionGap),
             padding: const EdgeInsets.all(AppSpacing.cardPadding),

@@ -18,7 +18,7 @@ class CollectionSummary {
   final double expected;
   final double actual;
   final double outstanding;
-  final double? rate;       null means zero denominator
+  final double? rate; // null means zero denominator
   final bool hasDenominator;
 
   const CollectionSummary({

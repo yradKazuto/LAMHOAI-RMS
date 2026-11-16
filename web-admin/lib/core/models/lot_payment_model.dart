@@ -47,6 +47,15 @@ class LotPaymentModel {
   final double interestPortion;
   final double remainingBalance; // balance owed after this period posts
   final LotPaymentStatus status; // scheduled | paid | overdue | waived | void
+  /// Cumulative principal already allocated toward this period across all
+  /// payments. Supports partial payments without mutating `amount`.
+  /// Defaults to 0 for backward compatibility.
+  final double paidAmount;
+  /// Late penalty added by applyOverduePenalties once the period passes its
+  /// grace window. 0 until then.
+  final double penaltyAmount;
+  /// Whether the penalty has already been applied to this period.
+  final bool penaltyApplied;
   final DateTime? paidAt;
   final String? paidBy;
   final String? payer;
@@ -65,6 +74,9 @@ class LotPaymentModel {
     required this.interestPortion,
     required this.remainingBalance,
     required this.status,
+    this.paidAmount = 0.0,
+    this.penaltyAmount = 0.0,
+    this.penaltyApplied = false,
     this.paidAt,
     this.paidBy,
     this.payer,
@@ -85,6 +97,9 @@ class LotPaymentModel {
       interestPortion:   (map['interestPortion'] as num?)?.toDouble() ?? 0.0,
       remainingBalance:  (map['remainingBalance'] as num?)?.toDouble() ?? 0.0,
       status:            LotPaymentStatusExt.fromString(map['status'] as String?),
+      paidAmount:        (map['paidAmount'] as num?)?.toDouble() ?? 0.0,
+      penaltyAmount:     (map['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
+      penaltyApplied:    map['penaltyApplied'] as bool? ?? false,
       paidAt:            (map['paidAt'] as Timestamp?)?.toDate(),
       paidBy:            map['paidBy'] as String?,
       payer:             map['payer'] as String?,
@@ -101,6 +116,9 @@ class LotPaymentModel {
         'transactionId': transactionId,
         'dueDate': Timestamp.fromDate(dueDate),
         'amount': amount,
+        'paidAmount': paidAmount,
+        'penaltyAmount': penaltyAmount,
+        'penaltyApplied': penaltyApplied,
         'principalPortion': principalPortion,
         'interestPortion': interestPortion,
         'remainingBalance': remainingBalance,
@@ -117,6 +135,9 @@ class LotPaymentModel {
     String? saleId, String? lotId, int? period, String? transactionId,
     DateTime? dueDate, double? amount, double? principalPortion,
     double? interestPortion, double? remainingBalance, LotPaymentStatus? status,
+    double? paidAmount,
+    double? penaltyAmount,
+    bool? penaltyApplied,
     DateTime? paidAt, String? paidBy, String? payer, PaymentMethod? paymentMethod,
     DateTime? verifiedAt, DateTime? createdAt,
   }) =>
@@ -131,6 +152,9 @@ class LotPaymentModel {
         interestPortion: interestPortion ?? this.interestPortion,
         remainingBalance: remainingBalance ?? this.remainingBalance,
         status: status ?? this.status,
+        paidAmount: paidAmount ?? this.paidAmount,
+        penaltyAmount: penaltyAmount ?? this.penaltyAmount,
+        penaltyApplied: penaltyApplied ?? this.penaltyApplied,
         paidAt: paidAt ?? this.paidAt,
         paidBy: paidBy ?? this.paidBy,
         payer: payer ?? this.payer,

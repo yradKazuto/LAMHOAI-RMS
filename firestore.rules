@@ -60,7 +60,7 @@ service cloud.firestore {
                     (resource != null && resource.data.uid == request.auth.uid)
                   );
       allow create, update: if isFinance();
-      allow delete: if isAdmin();
+      allow delete: if false; // money is never deleted, only voided
     }
 
     // ── lot_sales (lot purchase records — cash / installment) ────────────────
@@ -77,7 +77,7 @@ service cloud.firestore {
     match /lot_payments/{docId} {
       allow read: if isStaff();
       allow create, update: if isFinance();
-      allow delete: if isAdmin();
+      allow delete: if false; // schedule rows are never deleted
     }
 
     // ── lot_ownership_history (previous / current owners of a lot) ───────────
@@ -119,25 +119,7 @@ service cloud.firestore {
                     (resource != null && resource.data.uid == request.auth.uid)
                   );
       allow create, update: if isFinance();
-      allow delete: if isAdmin();
-    }
-
-    // ── general_ledger (running balance per chart-of-accounts id) ────────────
-    // Written by LedgerService.postJournalEntry via transaction (set with
-    // merge), so finance needs create + update. Staff can read.
-    match /general_ledger/{docId} {
-      allow read: if isStaff();
-      allow create, update: if isFinance();
-      allow delete: if false; // balances are never deleted, only adjusted
-    }
-
-    // ── journal_entries (immutable double-entry audit record) ────────────────
-    // Append-only, like audit_logs: corrections are posted as a new
-    // ADJUSTMENT / REVERSAL entry, never by editing or deleting.
-    match /journal_entries/{docId} {
-      allow read: if isStaff();
-      allow create: if isFinance();
-      allow update, delete: if false;
+      allow delete: if false; // running balance is never deleted
     }
 
     // ── documents ─────────────────────────────────────────────────────────────
@@ -221,6 +203,17 @@ service cloud.firestore {
     match /sales_rate/{docId} {
       allow read: if isStaff();
       allow create, update: if isAdmin(); // config doc (create = first save)
+    }
+
+    // ── sales_rates (dated per-sqm sale rate table) ─────────────────────────
+    // Read is open to any staff role — sale recording and the wizards resolve
+    // the rate in force on a date. Only admins write. A row that has not
+    // started yet can be removed (typo fixes); past rows are history, so the
+    // delete rule double-checks the effective date.
+    match /sales_rates/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() && request.time < resource.data.effectiveFrom;
     }
 
     // ── monthly_dues_rates (per-lot monthly rate history) ────────────────────

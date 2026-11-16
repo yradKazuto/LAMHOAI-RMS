@@ -9,10 +9,12 @@ import '../../../core/models/hoa_settings_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/monthly_rate_model.dart';
 import '../../../core/models/rate_schedule_model.dart';
+import '../../../core/models/sales_rate_model.dart';
 import '../../../core/services/rate_history_service.dart';
 import '../../../core/services/rate_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/utils/lot_pricing.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,7 +26,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _settingsSvc = SettingsService();
   final _rateHistSvc = RateHistoryService();
-  final _salesRateSvc = RateService();
 
   final _nameCtrl = TextEditingController();
   final _addrCtrl = TextEditingController();
@@ -143,20 +144,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: AppSpacing.sectionGap),
             const Divider(),
             const SizedBox(height: AppSpacing.sectionGap),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(AppRadius.xl),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: ListTile(
-                leading: const Icon(Icons.upload_file, color: AppColors.primary),
-                title: Text('Bulk Lot Area Update', style: AppTypography.cardTitle),
-                subtitle: Text('Import CSV file to update lot areas in bulk', style: AppTypography.caption),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () => context.push(AppRoutes.bulkUpdate),
-              ),
-            ),
+            // Hidden until the CSV import is ready for production (parked
+            // 2026-11-15). Route + screen stay; uncomment to bring it back.
+            // Container(
+            //   decoration: BoxDecoration(
+            //     color: AppColors.surface,
+            //     borderRadius: BorderRadius.circular(AppRadius.xl),
+            //     border: Border.all(color: AppColors.border),
+            //   ),
+            //   child: ListTile(
+            //     leading: const Icon(Icons.upload_file, color: AppColors.primary),
+            //     title: Text('Bulk Lot Area Update', style: AppTypography.cardTitle),
+            //     subtitle: Text('Import CSV file to update lot areas in bulk', style: AppTypography.caption),
+            //     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            //     onTap: () => context.push(AppRoutes.bulkUpdate),
+            //   ),
+            // ),
             const SizedBox(height: AppSpacing.sectionGap),
             Text('Sales Rate (Lot Sales)', style: AppTypography.sectionHeader),
             const SizedBox(height: 12),
@@ -587,6 +590,8 @@ class _DuesConfigurationDialogState extends State<_DuesConfigurationDialog> {
 // ---------------------------------------------------------------------------
 // Sales Rate (Current)
 // ---------------------------------------------------------------------------
+// The dated per-sqm rate table. A sale is priced at the row in force on its
+// sale date; rows already started are history and can only be viewed.
 class _CurrentSalesRateSection extends StatefulWidget {
   const _CurrentSalesRateSection();
 
@@ -597,6 +602,7 @@ class _CurrentSalesRateSection extends StatefulWidget {
 class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
   final _svc = RateService();
   final _rateCtrl = TextEditingController();
+  DateTime? _effective;
 
   @override
   void dispose() {
@@ -604,10 +610,50 @@ class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _effective ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _effective = picked);
+  }
+
+  Future<void> _add() async {
+    final rate = double.tryParse(_rateCtrl.text);
+    if (rate == null || _effective == null) return;
+    try {
+      await _svc.addSalesRate(
+        ratePerSqm: rate,
+        effectiveFrom: _effective!,
+        setBy: 'admin',
+      );
+      _rateCtrl.clear();
+      setState(() => _effective = null);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  Future<void> _remove(SalesRateEntry row) async {
+    try {
+      await _svc.deleteSalesRate(row.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
-      stream: _svc.streamSalesRate(),
+    return StreamBuilder<List<SalesRateEntry>>(
+      stream: _svc.streamSalesRates(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Text('Error: ${snapshot.error}', style: const TextStyle(color: AppColors.danger));
@@ -616,33 +662,57 @@ class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final rate = snapshot.data;
+        final rows = snapshot.data ?? [];
+        final now = DateTime.now();
+        final current = LotPricing.entryFor(now, rows);
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('Current Rate: ₱${rate?.ratePerSqm ?? 0}/sqm'),
-              subtitle: Text('Last updated by ${rate?.updatedBy ?? 'System'}'),
+              title: Text(current == null
+                  ? 'Current Rate: none set (sample ₱${LotPricing.sampleRatePerSqm}/sqm applies)'
+                  : 'Current Rate: ₱${current.ratePerSqm}/sqm'),
+              subtitle: Text(current == null
+                  ? 'Add a row below to set the rate in force today'
+                  : 'In force since ${_fmtDay(current.effectiveFrom)} · set by ${current.setBy}'),
             ),
+            ...rows.map((r) => ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('₱${r.ratePerSqm}/sqm from ${_fmtDay(r.effectiveFrom)}'),
+                  subtitle: Text('Set by ${r.setBy}'),
+                  trailing: r.effectiveFrom.isAfter(now)
+                      ? IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          onPressed: () => _remove(r),
+                        )
+                      : const Icon(Icons.lock_outline, size: 16),
+                )),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
+                  child: InkWell(
+                    onTap: _pickDate,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Effective date'),
+                      child: Text(_effective == null
+                          ? 'Pick a date'
+                          : _fmtDay(_effective!)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
                   child: TextField(
                     controller: _rateCtrl,
-                    decoration: const InputDecoration(labelText: 'New Rate (₱)'),
+                    decoration: const InputDecoration(labelText: 'Rate (₱/sqm)'),
                     keyboardType: TextInputType.number,
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () async {
-                    final val = double.tryParse(_rateCtrl.text);
-                    if (val == null) return;
-                    await _svc.setSalesRate(val, 'admin');
-                    _rateCtrl.clear();
-                  },
-                  child: const Text('Update'),
-                ),
+                ElevatedButton(onPressed: _add, child: const Text('Add')),
               ],
             ),
           ],
@@ -650,6 +720,9 @@ class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
       },
     );
   }
+
+  String _fmtDay(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
 // ---------------------------------------------------------------------------

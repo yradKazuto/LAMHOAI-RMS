@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:lamhoai_admin/core/services/rate_service.dart';
 import 'package:lamhoai_admin/core/models/rate_schedule_model.dart';
 
@@ -77,6 +78,107 @@ void main() {
       expect(data['year'], 2031);
       expect(data['isActive'], false);
       expect((data['tiers'] as List).first['rate'], 7000.0);
+    });
+  });
+
+  group('sales rate table (sales_rates)', () {
+    test('getSalesRateFor prices each date at the row in force on it', () async {
+      final today = DateTime.now();
+      final nextYear = DateTime(today.year + 1, today.month, today.day);
+      await service.addSalesRate(
+        ratePerSqm: 2000,
+        effectiveFrom: today,
+        setBy: 'admin',
+      );
+      await service.addSalesRate(
+        ratePerSqm: 2500,
+        effectiveFrom: nextYear,
+        setBy: 'admin',
+      );
+
+      expect(
+        (await service.getSalesRateFor(today))?.ratePerSqm,
+        2000.0,
+      );
+      expect(
+        (await service.getSalesRateFor(nextYear))?.ratePerSqm,
+        2500.0,
+      );
+      expect(
+        await service.getSalesRateFor(today.subtract(const Duration(days: 1))),
+        isNull,
+      );
+    });
+
+    test('getSalesRate resolves the row in force today', () async {
+      await service.addSalesRate(
+        ratePerSqm: 2000,
+        effectiveFrom: DateTime.now(),
+        setBy: 'admin',
+      );
+      expect((await service.getSalesRate())?.ratePerSqm, 2000.0);
+    });
+
+    test('legacy flat config stands in as the always-on row', () async {
+      await instance.collection('sales_rate').doc('config').set({
+        'ratePerSqm': 1800.0,
+        'updatedBy': 'admin',
+        'updatedAt': Timestamp.now(),
+      });
+
+      final rate = await service.getSalesRate();
+      expect(rate?.ratePerSqm, 1800.0);
+      expect(rate?.updatedBy, 'admin');
+    });
+
+    test('addSalesRate rejects a past date and a duplicate date', () async {
+      final when = DateTime.now().add(const Duration(days: 30));
+      await service.addSalesRate(
+        ratePerSqm: 2000,
+        effectiveFrom: when,
+        setBy: 'admin',
+      );
+
+      await expectLater(
+        service.addSalesRate(
+          ratePerSqm: 3000,
+          effectiveFrom: DateTime(2020, 1, 1),
+          setBy: 'admin',
+        ),
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        service.addSalesRate(
+          ratePerSqm: 3000,
+          effectiveFrom: when,
+          setBy: 'admin',
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('deleteSalesRate removes only a row that has not started', () async {
+      await service.addSalesRate(
+        ratePerSqm: 3000,
+        effectiveFrom: DateTime.now().add(const Duration(days: 30)),
+        setBy: 'admin',
+      );
+      final futureId = (await service.getSalesRates()).first.id;
+      await service.deleteSalesRate(futureId);
+      expect(await service.getSalesRates(), isEmpty);
+
+      await instance.collection('sales_rates').add({
+        'effectiveFrom': Timestamp.fromDate(DateTime(2026, 1, 1)),
+        'ratePerSqm': 1500.0,
+        'setBy': 'admin',
+        'createdAt': Timestamp.now(),
+      });
+      final pastId = (await service.getSalesRates()).first.id;
+      await expectLater(
+        service.deleteSalesRate(pastId),
+        throwsA(isA<Exception>()),
+      );
+      expect((await service.getSalesRates()).length, 1);
     });
   });
 }

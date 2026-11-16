@@ -14,8 +14,6 @@
 // UPDATED — statement tables now include a Transaction ID column.
 // FIXED — preview dialog now uses the public PdfPreview widget from the
 // `printing` package (PreviewScaffold is private to that package).
-// TEMP — the Payments / General Ledger toggle is hidden via _kShowLedgerToggle.
-// Set it to true to bring the General Ledger view back.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -33,19 +31,11 @@ import '../../../core/utils/payment_labels.dart';
 import '../../../core/models/member_model.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/firestore_service.dart';
-import '../../../core/services/ledger_service.dart';
 import '../../../core/services/sale_service.dart';
 import '../../../core/models/lot_payment_model.dart';
 import '../../../core/models/lot_sale_model.dart';
-import '../../../core/models/general_ledger_account_model.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/routing/app_router.dart';
-
-// Temporarily hides the Payments / General Ledger toggle.
-// Set to true to bring it back.
-const bool _kShowLedgerToggle = false;
-
-enum ReportView { payments, generalLedger }
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -56,10 +46,8 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   final _fs = FirestoreService();
-  final _ls = LedgerService(); // consolidated statement reads general_ledger
 
   DateTime?      _startDate;
-  ReportView     _view = ReportView.payments;
 
   DateTime?      _endDate;
   PaymentStatus? _statusFilter;
@@ -724,155 +712,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Uint8List.fromList(await pdf.save());
   }
 
-  Future<void> _exportLedgerCsv(List<GeneralLedgerAccount> accounts) async {
-    setState(() => _exporting = true);
-    try {
-      final rows = <List<dynamic>>[
-        ['Account', 'Balance', 'Last Updated'],
-        ...accounts.map((r) => [
-          r.id,
-          r.balance.toStringAsFixed(2),
-          r.lastUpdated == null ? '—' : _fmt(r.lastUpdated),
-        ]),
-      ];
-
-      final csv   = const ListToCsvConverter().convert(rows);
-      final bytes = Uint8List.fromList(utf8.encode('\uFEFF$csv'));
-      final name  = 'lamhoai_ledger_${DateTime.now().millisecondsSinceEpoch}.csv';
-
-      await Share.shareXFiles(
-        [XFile.fromData(bytes, mimeType: 'text/csv', name: name)],
-        text: 'LAMHOAI-RMS General Ledger (CSV)',
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Export failed: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _exporting = false);
-    }
-  }
-
-  Future<void> _exportLedgerPdf(List<GeneralLedgerAccount> accounts) async {
-    setState(() => _confirmingExport = true);
-    try {
-      final bytes = await _buildLedgerPdfBytes(accounts);
-      if (!mounted) return;
-
-      final confirmed = await _confirmPdfPreview(
-        title: 'Preview General Ledger',
-        bytes: bytes,
-      );
-
-      if (confirmed) {
-        await Printing.sharePdf(
-          bytes: bytes,
-          filename:
-              'lamhoai_ledger_${DateTime.now().millisecondsSinceEpoch}.pdf',
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('PDF export failed: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _confirmingExport = false);
-    }
-  }
-
-  Future<Uint8List> _buildLedgerPdfBytes(List<GeneralLedgerAccount> accounts) async {
-    final pdf   = pw.Document();
-    final font  = await PdfGoogleFonts.notoSansRegular();
-    final bold  = await PdfGoogleFonts.notoSansBold();
-    final total = accounts.fold<double>(0.0, (s, r) => s + r.balance);
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(28),
-        build: (pw.Context ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('LAMHOAI-RMS — General Ledger',
-                    style: pw.TextStyle(
-                        font: bold,
-                        fontSize: 16,
-                        color: PdfColors.indigo900)),
-                pw.Text('Generated: ${_fmt(DateTime.now())}',
-                    style: pw.TextStyle(
-                        font: font,
-                        fontSize: 10,
-                        color: PdfColors.grey600)),
-              ],
-            ),
-            pw.SizedBox(height: 6),
-            pw.Table(
-              border: pw.TableBorder.all(
-                  color: PdfColors.grey200, width: 0.5),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(3),
-                1: const pw.FlexColumnWidth(2),
-                2: const pw.FlexColumnWidth(2),
-              },
-              children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(
-                      color: PdfColors.indigo900),
-                  children: ['Account', 'Balance', 'Last Updated']
-                      .map((h) => pw.Padding(
-                            padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(h,
-                                style: pw.TextStyle(
-                                    font: bold,
-                                    fontSize: 9,
-                                    color: PdfColors.white)),
-                          ))
-                      .toList(),
-                ),
-                ...accounts.asMap().entries.map((e) {
-                  final r  = e.value;
-                  final bg = e.key.isEven
-                      ? PdfColors.white
-                      : PdfColors.grey50;
-                  return pw.TableRow(
-                    decoration: pw.BoxDecoration(color: bg),
-                    children: [
-                      r.id,
-                      '₱${r.balance.toStringAsFixed(2)}',
-                      r.lastUpdated == null ? '—' : _fmt(r.lastUpdated),
-                    ]
-                        .map((cell) => pw.Padding(
-                              padding: const pw.EdgeInsets.all(5),
-                              child: pw.Text(cell,
-                                  style: pw.TextStyle(
-                                      font: font,
-                                      fontSize: 8.5)),
-                            ))
-                        .toList(),
-                  );
-                }),
-              ],
-            ),
-            pw.SizedBox(height: 12),
-            pw.Text(
-                'Total balance: ₱${total.toStringAsFixed(2)}  |  ${accounts.length} accounts',
-                style: pw.TextStyle(
-                    font: bold,
-                    fontSize: 9,
-                    color: PdfColors.indigo900)),
-          ],
-        ),
-      ),
-    );
-
-    return Uint8List.fromList(await pdf.save());
-  }
-
   @override
   Widget build(BuildContext context) {
     final phoneScreen = MediaQuery.of(context).size.width < 560;
@@ -1013,33 +852,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ],
                       ),
                       SizedBox(height: phoneScreen ? 10 : 16),
-                      // Report view toggle — itemized payments or consolidated
-                      // statement. Hidden while _kShowLedgerToggle is false.
-                      if (_kShowLedgerToggle) ...[
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceAlt,
-                            borderRadius: AppRadius.buttonBorderRadius,
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: SegmentedButton<ReportView>(
-                            segments: const [
-                              ButtonSegment(
-                                value: ReportView.payments,
-                                label: Text('Payments'),
-                              ),
-                              ButtonSegment(
-                                value: ReportView.generalLedger,
-                                label: Text('General Ledger'),
-                              ),
-                            ],
-                            selected: {_view},
-                            onSelectionChanged: (set) =>
-                                setState(() => _view = set.first),
-                          ),
-                        ),
-                        SizedBox(height: phoneScreen ? 10 : 14),
-                      ],
                       Row(
                         children: [
                           Expanded(child: dateFilters[0]),
@@ -1069,12 +881,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // General Ledger view shows balances; otherwise itemized payments.
-            // The ledger panel is only reachable while the toggle is enabled.
-            if (_kShowLedgerToggle && _view == ReportView.generalLedger)
-              _buildLedgerPanel(context)
-            else
-              _buildPaymentsPanel(context),
+            _buildPaymentsPanel(context),
           ],
         ),
       ),
@@ -1227,160 +1034,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             );
           },
-        );
-      },
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Consolidated Statement — General Ledger balances
-  // (currently unreachable while _kShowLedgerToggle is false)
-  // ═══════════════════════════════════════════════════════════════════════════
-  Widget _buildLedgerPanel(BuildContext context) {
-    return FutureBuilder<List<GeneralLedgerAccount>>(
-      future: _ls.getLedgerRows(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snap.hasError) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-              child: Text(
-                'Failed to load ledgers: ${snap.error}',
-                style: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textMuted),
-              ),
-            ),
-          );
-        }
-        final rows = snap.data ?? [];
-        if (rows.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-              child: Text(
-                'No ledgers found.',
-                style: AppTypography.bodyMedium
-                    .copyWith(color: AppColors.textMuted),
-              ),
-            ),
-          );
-        }
-        final total   = rows.fold<double>(0.0, (s, r) => s + r.balance);
-        final compact = MediaQuery.of(context).size.width < 700;
-        final busy    = _exporting || _confirmingExport;
-
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.textInverted,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 14),
-                decoration: const BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(AppRadius.lg)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${rows.length} accounts  · Total balance: ₱${total.toStringAsFixed(2)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.cardTitle
-                            .copyWith(color: AppColors.textPrimary),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      onPressed: busy
-                          ? null
-                          : () => _exportLedgerCsv(rows),
-                      icon: const Icon(Icons.table_chart_outlined,
-                          size: 16),
-                      label: const Text('CSV'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textPrimary,
-                        side: const BorderSide(
-                            color: AppColors.borderStrong),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton.icon(
-                      onPressed: busy
-                          ? null
-                          : () => _exportLedgerPdf(rows),
-                      icon: busy
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white))
-                          : const Icon(Icons.picture_as_pdf_outlined,
-                              size: 16),
-                      label: Text(busy ? 'Working...' : 'PDF'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.textPrimary,
-                        foregroundColor: AppColors.surface,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!compact) ...[
-                const Divider(height: 1, color: AppColors.border),
-              ],
-              ...rows.map((r) => Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.cardPadding,
-                        vertical: AppSpacing.space3),
-                    child: Row(
-                      children: [
-                        Expanded(
-                            flex: 3,
-                            child: Text(r.id,
-                                style: AppTypography.bodyMedium.copyWith(
-                                    color: AppColors.textPrimary))),
-                        Expanded(
-                            flex: 2,
-                            child: Text(
-                                '₱${r.balance.toStringAsFixed(2)}',
-                                style: AppTypography.bodyMedium.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary))),
-                        Expanded(
-                            flex: 2,
-                            child: Text(
-                                r.lastUpdated == null
-                                    ? '—'
-                                    : _fmt(r.lastUpdated),
-                                style: AppTypography.bodyMedium.copyWith(
-                                    color: AppColors.textSecondary))),
-                      ],
-                    ),
-                  )),
-            ],
-          ),
         );
       },
     );

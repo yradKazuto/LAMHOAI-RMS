@@ -47,9 +47,6 @@ class AppShell extends StatelessWidget {
     AppRoutes.settings:      'Settings',
     AppRoutes.audit:         'Audit Log',
     AppRoutes.preview:       'Member Preview',
-    AppRoutes.chartOfAccounts: 'Chart of Accounts',
-    AppRoutes.generalLedger:   'General Ledger',
-    AppRoutes.tAccount:        'T-Account View',
     AppRoutes.arAging:         'AR Aging',
     // Note: AppRoutes.location is intentionally absent — it's a
     // standalone full-page route outside this shell (see app_router.dart).
