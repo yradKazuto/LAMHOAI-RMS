@@ -97,22 +97,23 @@ class _SummaryTilesRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<double>(
-      future: svc.getCollectedThisMonth(),
-      builder: (context, snap) {
-        final thisMonth = snap.data ?? 0.0;
-        return FutureBuilder(
-          future: Future.wait([
-            svc.getMemberStatusBreakdown(),
-            svc.getPaymentStatusBreakdown(),
-          ]),
-          builder: (context, AsyncSnapshot<List<dynamic>> snap2) {
-            final memberBreakdown =
-                snap2.data?[0] as MemberStatusBreakdown?;
-            final paymentBreakdown =
-                snap2.data?[1] as PaymentStatusBreakdown?;
+    // One Future.wait, not a nested FutureBuilder: nesting re-creates the
+    // inner futures every time the outer snapshot changes, re-running the
+    // breakdown queries and flickering the tiles.
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([
+        svc.getCollectedThisMonth(),
+        svc.getMemberStatusBreakdown(),
+        svc.getPaymentStatusBreakdown(),
+      ]),
+      builder: (context, AsyncSnapshot<List<dynamic>> snap) {
+        final thisMonth = (snap.data?[0] as num?)?.toDouble() ?? 0.0;
+        final memberBreakdown =
+            snap.data?[1] as MemberStatusBreakdown?;
+        final paymentBreakdown =
+            snap.data?[2] as PaymentStatusBreakdown?;
 
-            return LayoutBuilder(
+        return LayoutBuilder(
               builder: (context, constraints) {
                 final tiles = [
                   _SummaryTile(
@@ -129,9 +130,9 @@ class _SummaryTilesRow extends StatelessWidget {
                     valueColor: AppColors.danger,
                   ),
                   _SummaryTile(
-                    label: 'Compliance Rate',
-                    value: memberBreakdown != null
-                        ? '${memberBreakdown.complianceRate.toStringAsFixed(0)}%'
+                    label: 'Payment Compliance',
+                    value: paymentBreakdown != null
+                        ? '${paymentBreakdown.paidPercent.toStringAsFixed(0)}%'
                         : '—',
                   ),
                 ];
@@ -167,10 +168,8 @@ class _SummaryTilesRow extends StatelessWidget {
                 );
               },
             );
-          },
-        );
-      },
-    );
+        },
+      );
   }
 }
 
@@ -381,7 +380,7 @@ class _MonthlyBarChartState extends State<_MonthlyBarChart> {
                         getTooltipColor: (_) => AppColors.textPrimary,
                         getTooltipItem: (group, groupIndex, rod, rodIndex) =>
                             BarTooltipItem(
-                          '₱${rod.toY.toStringAsFixed(0)}',
+                          '${data[groupIndex].month}: ₱${rod.toY.toStringAsFixed(0)}',
                           const TextStyle(
                               color: AppColors.textInverted,
                               fontSize: 12,

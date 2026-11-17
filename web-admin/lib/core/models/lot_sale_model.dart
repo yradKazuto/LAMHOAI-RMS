@@ -61,6 +61,11 @@ class LotSaleModel {
   final String block;
   final String buyerUid;
   final String buyerName;
+  /// Co-owners of the lot (joint liability). Empty for sole owners.
+  final List<String> coOwnerUids;
+  /// Denormalized [buyerUid] + [coOwnerUids]; the query index every
+  /// "this member's lots" lookup hits.
+  final List<String> ownerUids;
   final SaleType saleType;   // 'cash' | 'installment'
   final double totalPrice;
   final double downPayment;
@@ -83,6 +88,8 @@ class LotSaleModel {
     required this.block,
     required this.buyerUid,
     required this.buyerName,
+    this.coOwnerUids = const [],
+    this.ownerUids = const [],
     required this.saleType,
     required this.totalPrice,
     required this.downPayment,
@@ -107,6 +114,8 @@ class LotSaleModel {
       block:              map['block'] as String? ?? '',
       buyerUid:           map['buyerUid'] as String? ?? '',
       buyerName:          map['buyerName'] as String? ?? '',
+      coOwnerUids:        List<String>.from(map['coOwnerUids'] as List? ?? const []),
+      ownerUids:          List<String>.from(map['ownerUids'] as List? ?? const []),
       saleType:           SaleTypeExt.fromString(map['saleType'] as String?),
       totalPrice:         (map['totalPrice'] as num?)?.toDouble() ?? 0.0,
       downPayment:        (map['downPayment'] as num?)?.toDouble() ?? 0.0,
@@ -130,6 +139,8 @@ class LotSaleModel {
         'block': block,
         'buyerUid': buyerUid,
         'buyerName': buyerName,
+        'coOwnerUids': coOwnerUids,
+        'ownerUids': ownerUids,
         'saleType': saleType.name,
         'totalPrice': totalPrice,
         'downPayment': downPayment,
@@ -150,6 +161,7 @@ class LotSaleModel {
     String? block, String? buyerUid, String? buyerName, SaleType? saleType,
     double? totalPrice, double? downPayment, double? financedAmount,
     int? termMonths, double? annualInterestRate, double? monthlyPayment,
+    List<String>? coOwnerUids, List<String>? ownerUids,
     LotSaleStatus? status, DateTime? soldDate, int? saleSeq,
     String? createdBy, DateTime? createdAt, DateTime? updatedAt,
   }) =>
@@ -161,6 +173,8 @@ class LotSaleModel {
         block: block ?? this.block,
         buyerUid: buyerUid ?? this.buyerUid,
         buyerName: buyerName ?? this.buyerName,
+        coOwnerUids: coOwnerUids ?? this.coOwnerUids,
+        ownerUids: ownerUids ?? this.ownerUids,
         saleType: saleType ?? this.saleType,
         totalPrice: totalPrice ?? this.totalPrice,
         downPayment: downPayment ?? this.downPayment,

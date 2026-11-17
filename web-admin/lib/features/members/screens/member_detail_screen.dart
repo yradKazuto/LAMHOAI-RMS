@@ -18,6 +18,9 @@ import '../../../core/services/cloudinary_service.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/lot_service.dart';
 import '../../../core/services/sale_service.dart';
+import '../../../core/services/ar_ledger_service.dart';
+import '../../../core/models/lot_payment_model.dart';
+import '../../../core/models/payment_allocation_model.dart';
 import '../../../core/utils/payment_labels.dart';
 import '../../payments/screens/add_payment_screen.dart';
 import '../../payments/screens/member_installments_section.dart';
@@ -1118,11 +1121,19 @@ class _PaymentsTabState extends State<_PaymentsTab> {
   // this single snapshot, so they can never disagree.
   late final Stream<List<PaymentModel>> _paymentsStream;
 
+  // The AR ledger needs the lot installment schedule and the receipt→charge
+  // splits alongside `payments`.
+  late final Stream<List<LotPaymentModel>> _lotPaymentsStream;
+  late final Stream<List<PaymentAllocationModel>> _allocStream;
+
   @override
   void initState() {
     super.initState();
-    _salesStream = SaleService().streamSalesForBuyer(widget.memberId);
+    _salesStream = SaleService().streamSalesForMember(widget.memberId);
     _paymentsStream = _fs.streamPaymentsForMember(widget.memberId);
+    _lotPaymentsStream =
+        SaleService().streamLotPaymentsForMember(widget.memberId);
+    _allocStream = _fs.streamAllocationsForMember(widget.memberId);
   }
 
   @override
@@ -1269,20 +1280,25 @@ class _PaymentsTabState extends State<_PaymentsTab> {
                 );
               }
               final payments = snap.data ?? [];
-              if (payments.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                      child: Text('No payment records found.',
-                          style: TextStyle(color: AppColors.textMuted))),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // T-account: charges (debit) vs payments (credit).
-                  MemberLedgerCard(
-                      payments: payments, memberName: memberName),
+              return StreamBuilder<List<LotPaymentModel>>(
+                stream: _lotPaymentsStream,
+                builder: (context, lotSnap) {
+                  return StreamBuilder<List<PaymentAllocationModel>>(
+                    stream: _allocStream,
+                    builder: (context, allocSnap) {
+                      // One accounting service feeds the T-account, the PDF
+                      // export and the statement footer — they can't disagree.
+                      final ledger = ArLedgerService().build(
+                        payments: payments,
+                        lotPayments: lotSnap.data ?? const [],
+                        allocations: allocSnap.data ?? const [],
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // T-account: charges (debit) vs payments (credit).
+                          MemberLedgerCard(
+                              ledger: ledger, memberName: memberName),
                   const SizedBox(height: 16),
                   LayoutBuilder(
                 builder: (context, c) {
@@ -1312,7 +1328,11 @@ class _PaymentsTabState extends State<_PaymentsTab> {
                   );
                 },
                   ),
-                ],
+                        ],
+                      );
+                    },
+                  );
+                },
               );
             },
           ),

@@ -37,6 +37,10 @@ extension LotPaymentStatusExt on LotPaymentStatus {
 
 // void is a reserved Dart keyword so the enum value is void_.
 class LotPaymentModel {
+  /// Firestore document id. Empty for rows synthesized in-memory (mirrors,
+  /// tests) — only populated when read from / written to `lot_payments`.
+  /// Allocation rows key their obligation by this id.
+  final String id;
   final String saleId;
   final String lotId;
   final int period;          // 0 = down payment / cash lump; 1..N = installments
@@ -64,6 +68,7 @@ class LotPaymentModel {
   final DateTime createdAt;
 
   const LotPaymentModel({
+    this.id = '',
     required this.saleId,
     required this.lotId,
     required this.period,
@@ -85,8 +90,9 @@ class LotPaymentModel {
     required this.createdAt,
   });
 
-  factory LotPaymentModel.fromMap(Map<String, dynamic> map) {
+  factory LotPaymentModel.fromMap(Map<String, dynamic> map, [String id = '']) {
     return LotPaymentModel(
+      id:                id,
       saleId:            map['saleId'] as String? ?? '',
       lotId:             map['lotId'] as String? ?? '',
       period:            (map['period'] as num?)?.toInt() ?? 0,

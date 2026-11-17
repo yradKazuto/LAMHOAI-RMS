@@ -37,6 +37,10 @@ class _MemberDetails {
   String address = '';
 }
 
+// Co-owner source in Step 1: pick an existing member, or enter a person
+// with no account yet (one is created at submit).
+enum _CoOwnerMode { existing, newAccount }
+
 class _LotSetup {
   final String lotId;
   SaleType saleType = SaleType.cash;
@@ -53,6 +57,11 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
   final _memberDetails = _MemberDetails();
   final Map<String, LotModel> _selectedLots = {};
   final Map<String, _LotSetup> _lotSetups = {};
+  final Set<String> _coOwnerUids = {};
+  String _coOwnerQuery = '';
+  _CoOwnerMode _coOwnerMode = _CoOwnerMode.existing;
+  // Co-owners with no account yet — created at submit, same as the buyer.
+  final List<_MemberDetails> _newCoOwners = [];
   bool _loading = false;
 
   // Which phase map is shown in the Step 2 Location Mapping view.
@@ -162,6 +171,9 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
   final _emailCtrl = TextEditingController();
   final _contactCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
+  final _ncNameCtrl = TextEditingController();
+  final _ncEmailCtrl = TextEditingController();
+  final _ncContactCtrl = TextEditingController();
 
   @override
   void dispose() {
@@ -169,6 +181,9 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
     _emailCtrl.dispose();
     _contactCtrl.dispose();
     _addressCtrl.dispose();
+    _ncNameCtrl.dispose();
+    _ncEmailCtrl.dispose();
+    _ncContactCtrl.dispose();
     super.dispose();
   }
 
@@ -183,6 +198,93 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
         TextField(controller: _contactCtrl, decoration: const InputDecoration(labelText: 'Mobile Number', hintText: '+63 9XX XXX XXXX', border: OutlineInputBorder(), floatingLabelBehavior: FloatingLabelBehavior.always, prefixIcon: Padding(padding: EdgeInsets.all(12), child: Text('🇵🇭', style: TextStyle(fontSize: 16))))),
         SizedBox(height: AppSpacing.cardGap),
         TextField(controller: _addressCtrl, decoration: const InputDecoration(labelText: 'Address', border: OutlineInputBorder(), floatingLabelBehavior: FloatingLabelBehavior.always)),
+        SizedBox(height: AppSpacing.cardGap),
+        Text('Co-Owners (Optional)', style: AppTypography.cardTitle),
+        Text('Joint owners of the lot — any co-owner can pay; the debt is shared.', style: AppTypography.caption),
+        SizedBox(height: AppSpacing.cardGap),
+        Row(
+          children: [
+            ChoiceChip(
+              label: const Text('Existing Member'),
+              selected: _coOwnerMode == _CoOwnerMode.existing,
+              onSelected: (_) => setState(
+                  () => _coOwnerMode = _CoOwnerMode.existing),
+            ),
+            const SizedBox(width: 8),
+            ChoiceChip(
+              label: const Text('New Account'),
+              selected: _coOwnerMode == _CoOwnerMode.newAccount,
+              onSelected: (_) => setState(
+                  () => _coOwnerMode = _CoOwnerMode.newAccount),
+            ),
+          ],
+        ),
+        SizedBox(height: AppSpacing.cardGap),
+        if (_coOwnerMode == _CoOwnerMode.existing) ...[
+          TextField(
+            decoration: const InputDecoration(labelText: 'Search members', border: OutlineInputBorder()),
+            onChanged: (v) => setState(() => _coOwnerQuery = v.toLowerCase()),
+          ),
+        SizedBox(height: AppSpacing.cardGap),
+        // ponytail: full member list, filtered client-side; swap for a
+        // server-side query when the member count passes ~1k.
+        FutureBuilder<List<MemberModel>>(
+          future: FirestoreService().streamMembers().first,
+          builder: (context, snap) {
+            if (!snap.hasData) return const SizedBox.shrink();
+            final q = _coOwnerQuery;
+            return Column(
+              children: snap.data!
+                  .where((m) =>
+                      m.role == 'member' &&
+                      (m.name.toLowerCase().contains(q) ||
+                          m.email.toLowerCase().contains(q)))
+                  .map((m) => CheckboxListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        title: Text(m.name, style: AppTypography.body),
+                        subtitle: Text(m.email, style: AppTypography.caption),
+                        value: _coOwnerUids.contains(m.uid),
+                        onChanged: (v) => setState(() => v == true
+                            ? _coOwnerUids.add(m.uid)
+                            : _coOwnerUids.remove(m.uid)),
+                      ))
+                  .toList(),
+            );
+          },
+        ),
+        ] else ...[
+          Text('New Co-Owner (No Account Yet)', style: AppTypography.cardTitle),
+        Text('No login yet? Add their details — they get an account at registration, same as the buyer.', style: AppTypography.caption),
+        SizedBox(height: AppSpacing.cardGap),
+        TextField(controller: _ncNameCtrl, decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder(), floatingLabelBehavior: FloatingLabelBehavior.always)),
+        SizedBox(height: AppSpacing.cardGap),
+        TextField(controller: _ncEmailCtrl, decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), floatingLabelBehavior: FloatingLabelBehavior.always)),
+        SizedBox(height: AppSpacing.cardGap),
+        TextField(controller: _ncContactCtrl, decoration: const InputDecoration(labelText: 'Mobile Number', border: OutlineInputBorder(), floatingLabelBehavior: FloatingLabelBehavior.always)),
+        SizedBox(height: AppSpacing.cardGap),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton(
+            onPressed: _addPendingCoOwner,
+            child: const Text('Add Co-Owner'),
+          ),
+        ),
+        ],
+        if (_newCoOwners.isNotEmpty) ...[
+          SizedBox(height: AppSpacing.cardGap),
+          for (final c in _newCoOwners)
+            ListTile(
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              title: Text(c.name, style: AppTypography.body),
+              subtitle: Text(c.email, style: AppTypography.caption),
+              trailing: IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => setState(() => _newCoOwners.remove(c)),
+              ),
+            ),
+        ],
       ],
     ),
   );
@@ -638,49 +740,35 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
 
       var failedAt = 'creating the login account';
       try {
-        // 1. Create member Auth account in secondary app. If an earlier
+        // 1. Create the buyer's login + member record. Co-owners without an
+        //    account get one created the same way right after. If an earlier
         //    attempt already created the login (partly failed registration),
         //    reuse that account instead of dead-ending on
         //    email-already-in-use.
-        String memberUid;
-        try {
-          final cred = await secondaryAuth
-              .createUserWithEmailAndPassword(
-            email: _memberDetails.email.trim(),
-            password: 'ChangeMe123!',
-          );
-          memberUid = cred.user!.uid;
-        } on FirebaseAuthException catch (e) {
-          if (e.code != 'email-already-in-use') rethrow;
-          final existing = await FirestoreService()
-              .findMemberByEmail(_memberDetails.email.trim());
-          if (existing == null) {
-            throw Exception(
-                'This email already has a login account but no member record. '
-                'Delete the account in Firebase Console → Authentication, or '
-                'register with a different email.');
-          }
-          memberUid = existing.uid;
-        }
-
-        // 2. Send email verification to the new member
-        // await cred.user!.sendEmailVerification(); // PONTYAIL: deferred, OTP/email-verification not yet required.
-
-        // 3. Save Firestore document — admin session untouched
-        failedAt = 'saving the member record';
-        final member = MemberModel(
-          uid: memberUid,
+        final lotNumbers =
+            _selectedLots.values.map((l) => l.lotNumber).join(', ');
+        final phases = _selectedLots.values.map((l) => l.phase).join(', ');
+        final memberUid = await _ensureMemberAccount(
+          secondaryAuth,
           name: _memberDetails.name,
           email: _memberDetails.email,
-          role: 'member',
-          lotNumber: _selectedLots.values.map((l) => l.lotNumber).join(', '),
-          phase: _selectedLots.values.map((l) => l.phase).join(', '),
-          status: MemberStatus.active,
-          contactNumber: _memberDetails.contact,
+          contact: _memberDetails.contact,
           address: _memberDetails.address,
-          createdAt: DateTime.now(),
+          lotNumber: lotNumbers,
+          phase: phases,
         );
-        await FirestoreService().addMember(member);
+        for (final c in _newCoOwners) {
+          failedAt = 'creating the co-owner account for ${c.email.trim()}';
+          _coOwnerUids.add(await _ensureMemberAccount(
+            secondaryAuth,
+            name: c.name,
+            email: c.email,
+            contact: c.contact,
+            address: c.address,
+            lotNumber: lotNumbers,
+            phase: phases,
+          ));
+        }
 
         // 4. Auto-charge the annual membership fee (amount from Settings) so
         //    Finance has a record and a ledger for the member right away.
@@ -709,6 +797,7 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
             lot: lot,
             buyerUid: memberUid,
             buyerName: _memberDetails.name,
+            coOwnerUids: _coOwnerUids.toList(),
             saleType: setup.saleType,
             downPayment: setup.downPayment,
             termMonths: setup.termMonths,
@@ -771,5 +860,78 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Creates the login account + member record for [email] and returns the
+  /// uid the sale record should reference. Reuses an existing account when a
+  /// partly-failed earlier attempt left one behind.
+  Future<String> _ensureMemberAccount(
+    FirebaseAuth auth, {
+    required String name,
+    required String email,
+    required String contact,
+    required String address,
+    required String lotNumber,
+    required String phase,
+  }) async {
+    email = email.trim();
+    String uid;
+    try {
+      final cred = await auth.createUserWithEmailAndPassword(
+        email: email,
+        password: 'ChangeMe123!',
+      );
+      uid = cred.user!.uid;
+    } on FirebaseAuthException catch (e) {
+      if (e.code != 'email-already-in-use') rethrow;
+      final existing = await FirestoreService().findMemberByEmail(email);
+      if (existing == null) {
+        throw Exception(
+            'This email already has a login account but no member record. '
+            'Delete the account in Firebase Console → Authentication, or '
+            'register with a different email.');
+      }
+      uid = existing.uid;
+    }
+
+    // ponytail: email verification deferred, same as the buyer path.
+    await FirestoreService().addMember(MemberModel(
+      uid: uid,
+      name: name,
+      email: email,
+      role: 'member',
+      lotNumber: lotNumber,
+      phase: phase,
+      status: MemberStatus.active,
+      contactNumber: contact,
+      address: address,
+      createdAt: DateTime.now(),
+    ));
+    return uid;
+  }
+
+  void _addPendingCoOwner() {
+    final name = _ncNameCtrl.text.trim();
+    final email = _ncEmailCtrl.text.trim();
+    if (name.isEmpty || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('A new co-owner needs at least a name and an email.')));
+      return;
+    }
+    if (_newCoOwners
+        .any((c) => c.email.trim().toLowerCase() == email.toLowerCase())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$email is already in the co-owner list.')));
+      return;
+    }
+    setState(() {
+      _newCoOwners.add(_MemberDetails()
+        ..name = name
+        ..email = email
+        ..contact = _ncContactCtrl.text.trim());
+      _ncNameCtrl.clear();
+      _ncEmailCtrl.clear();
+      _ncContactCtrl.clear();
+    });
   }
 }

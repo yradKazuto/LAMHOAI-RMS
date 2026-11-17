@@ -7,8 +7,11 @@
 
 import 'package:flutter/material.dart';
 import '../../../core/services/sale_service.dart';
+import '../../../core/services/firestore_service.dart';
+import '../../../core/services/ar_ledger_service.dart';
 import '../../../core/models/lot_sale_model.dart';
 import '../../../core/models/lot_payment_model.dart';
+import '../../../core/models/payment_allocation_model.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/utils/lot_pricing.dart';
 
@@ -38,7 +41,7 @@ Widget installmentStatementContent({
       // installment one, not whichever sale happens to be first.
       final sales = saleSnap.data!
           .where((s) =>
-              s.buyerUid == memberId &&
+              s.ownerUids.contains(memberId) &&
               s.saleType == SaleType.installment &&
               s.status != LotSaleStatus.cancelled)
           .toList();
@@ -71,9 +74,23 @@ Widget installmentStatementContent({
             return const Center(child: Text('No payments scheduled for this sale'));
           }
 
-          return ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: _StatementBody(sale: sale, payments: payments),
+          return StreamBuilder<List<PaymentAllocationModel>>(
+            stream: FirestoreService()
+                .streamAllocationsForMember(sale.buyerUid),
+            builder: (context, allocSnap) {
+              // Same accounting service as the AR ledger and its PDF —
+              // the statement footer can never disagree with either.
+              final ledger = ArLedgerService().build(
+                payments: const [],
+                lotPayments: payments,
+                allocations: allocSnap.data ?? const [],
+              );
+              return ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: _StatementBody(
+                    sale: sale, payments: payments, ledger: ledger),
+              );
+            },
           );
         },
       );
@@ -115,19 +132,24 @@ Color _paymentStatusBg(LotPaymentStatus s) {
 class _StatementBody extends StatelessWidget {
   final LotSaleModel sale;
   final List<LotPaymentModel> payments;
+  final ArLedger ledger;
 
-  const _StatementBody({required this.sale, required this.payments});
+  const _StatementBody({
+    required this.sale,
+    required this.payments,
+    required this.ledger,
+  });
 
   @override
   Widget build(BuildContext context) {
     final downPayment = payments.where((p) => p.period == 0).firstOrNull;
     final installments = payments.where((p) => p.period > 0).toList()..sort((a, b) => a.period.compareTo(b.period));
 
-    final totalDue = payments.fold<double>(0.0, (s, p) => s + p.amount);
-    final totalPaid = payments
-        .where((p) => p.status == LotPaymentStatus.paid)
-        .fold<double>(0.0, (s, p) => s + p.amount);
-    final outstanding = (totalDue - totalPaid).clamp(0.0, double.infinity);
+    // Charges assessed vs money actually received (incl. penalties +
+    // waivers) — same math as the member's AR T-account.
+    final totalDue = ledger.totalDebit;
+    final totalPaid = ledger.totalCredit;
+    final outstanding = ledger.balance.clamp(0.0, double.infinity);
     final statementRef = 'LSTM-${sale.saleSeq.toString().padLeft(3, '0')}';
     final now = DateTime.now();
 
@@ -454,10 +476,10 @@ class _StatementBody extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: _FooterLabel('Total Due', LotPricing.peso(totalDue))),
+                  Expanded(child: _FooterLabel('Total Charges', LotPricing.peso(totalDue))),
                   Expanded(child: _FooterLabel('Total Paid', LotPricing.peso(totalPaid))),
                   Expanded(child: _FooterLabel('Outstanding Balance', LotPricing.peso(outstanding),
-                      valueColor: outstanding == 0 ? AppColors.success : AppColors.danger)),
+                      valueColor: outstanding <= 0.005 ? AppColors.success : AppColors.danger)),
                 ],
               ),
               const SizedBox(height: AppSpacing.space4),

@@ -316,7 +316,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final result = <String, List<_SaleSchedule>>{};
     await Future.wait(uids.map((uid) async {
       try {
-        final sales = await svc.streamSalesForBuyer(uid).first;
+        final sales = await svc.streamSalesForMember(uid).first;
         final list = <_SaleSchedule>[];
         for (final s in sales.where(
             (s) => s.status == LotSaleStatus.active && s.termMonths > 0)) {

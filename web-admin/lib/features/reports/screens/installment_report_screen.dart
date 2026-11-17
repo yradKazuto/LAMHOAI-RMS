@@ -128,7 +128,9 @@ class _InstallmentReportScreenState extends State<InstallmentReportScreen> {
                     if (_startDate != null && d.isBefore(_startDate!)) return false;
                     if (_endDate != null && d.isAfter(_endDate!)) return false;
                   }
-                  final matchesMember = _memberFilter == null || row['buyerUid'] == _memberFilter;
+                  final matchesMember = _memberFilter == null ||
+                      (row['ownerUids'] as List?)?.contains(_memberFilter) ==
+                          true;
                   return matchesMember;
                 }).toList();
 

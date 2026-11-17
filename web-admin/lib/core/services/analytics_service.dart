@@ -31,7 +31,6 @@ class MemberStatusBreakdown {
   });
 
   double get activePercent  => total == 0 ? 0 : active  / total * 100;
-  double get complianceRate => total == 0 ? 0 : (active + inactive) / total * 100;
 }
 
 class PaymentStatusBreakdown {

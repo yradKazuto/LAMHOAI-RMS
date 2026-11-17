@@ -149,13 +149,20 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return result;
   }
 
-  // Summary totals
+  // Summary totals — partial-payment aware: a half-paid record counts its
+  // paid part as collected and only its REMAINING balance as pending/overdue.
   Map<String, double> _totals(List<PaymentModel> list) {
     double totalCollected = 0, totalPending = 0, totalOverdue = 0;
     for (final p in list) {
-      if (p.status == PaymentStatus.paid)          totalCollected += p.amount;
-      if (p.displayStatus == PaymentStatus.unpaid) totalPending   += p.amount;
-      if (p.displayStatus == PaymentStatus.overdue) totalOverdue  += p.amount;
+      if (p.status == PaymentStatus.paid) {
+        totalCollected += p.amount;
+      } else if (p.status != PaymentStatus.waived &&
+          p.status != PaymentStatus.voided &&
+          p.paidAmount > 0) {
+        totalCollected += p.paidAmount;
+      }
+      if (p.displayStatus == PaymentStatus.unpaid)  totalPending += p.remaining;
+      if (p.displayStatus == PaymentStatus.overdue) totalOverdue += p.remaining;
     }
     return {
       'collected': totalCollected,
@@ -1136,18 +1143,34 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
     }
   }
 
-  Widget _statusPill(PaymentModel payment) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space2_5, vertical: AppSpacing.space1),
-    decoration: BoxDecoration(
-      color: _bg(payment.displayStatus),
-      borderRadius: AppRadius.pillBorderRadius,
-    ),
-    child: Text(payment.displayStatus.label,
-        textAlign: TextAlign.center,
-        style: AppTypography.caption.copyWith(
-            fontWeight: FontWeight.w600,
-            color: _fg(payment.displayStatus))),
-  );
+  Widget _statusPill(PaymentModel payment) {
+    // A half-paid record shows "Partial" instead of plain Unpaid/Overdue.
+    final overdue = payment.displayStatus == PaymentStatus.overdue;
+    final label = payment.isPartial
+        ? (overdue ? 'Partial · Overdue' : 'Partial')
+        : payment.displayStatus.label;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space2_5, vertical: AppSpacing.space1),
+      decoration: BoxDecoration(
+        color: _bg(payment.displayStatus),
+        borderRadius: AppRadius.pillBorderRadius,
+      ),
+      child: Text(label,
+          textAlign: TextAlign.center,
+          style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w600,
+              color: _fg(payment.displayStatus))),
+    );
+  }
+
+  // Amount to show: what's STILL OWED for a partial record, the full
+  // amount otherwise.
+  double _shownAmount(PaymentModel p) => p.isPartial ? p.remaining : p.amount;
+
+  // "Paid ₱2,666.66 of ₱3,666.67" — only for partially-paid records.
+  String? _partialCaption(PaymentModel p) => p.isPartial
+      ? 'Paid ₱${p.paidAmount.toStringAsFixed(2)} of ₱${p.amount.toStringAsFixed(2)}'
+      : null;
 
   bool get _canMarkPaid =>
       widget.canRecord &&
@@ -1157,6 +1180,7 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
   @override
   Widget build(BuildContext context) {
     final payment = widget.payment;
+    final partialCaption = _partialCaption(payment);
 
     if (widget.compact) {
       // Stacked card — Member/Type/Amount/Due/Paid/Status plus an
@@ -1211,12 +1235,19 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                       style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted)),
                 ),
                 const SizedBox(width: AppSpacing.space1),
-                Text('₱${payment.amount.toStringAsFixed(2)}',
+                Text('₱${_shownAmount(payment).toStringAsFixed(2)}',
                     style: AppTypography.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary)),
               ],
             ),
+            if (partialCaption != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(partialCaption,
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.textMuted)),
+              ),
             const SizedBox(height: AppSpacing.space1),
             Text(
               'Due ${_fmt(payment.dueDate)}'
@@ -1301,11 +1332,22 @@ class _PaymentTableRowState extends State<_PaymentTableRow> {
                         color: AppColors.textMuted)),
             ],
           )),
-          Expanded(flex: 2, child: Text(
-              '₱${payment.amount.toStringAsFixed(2)}',
-              style: AppTypography.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary))),
+          Expanded(flex: 2, child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('₱${_shownAmount(payment).toStringAsFixed(2)}',
+                  style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
+              if (partialCaption != null)
+                Text(partialCaption,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.textMuted)),
+            ],
+          )),
           Expanded(flex: 2, child: Text(_fmt(payment.dueDate),
               style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary))),
           Expanded(flex: 2, child: Text(_fmt(payment.paidDate),
@@ -1761,15 +1803,22 @@ class _MemberPaymentsDialog extends StatelessWidget {
                       );
                     }
 
-                    final totalPaid = records
-                        .where((p) => p.status == PaymentStatus.paid)
-                        .fold<double>(0, (sum, p) => sum + p.amount);
+                    // Paid = fully paid records + the paid part of
+                    // half-paid ones. Outstanding = what is still owed.
+                    final totalPaid = records.fold<double>(0, (sum, p) {
+                      if (p.status == PaymentStatus.paid) return sum + p.amount;
+                      if (p.status == PaymentStatus.waived ||
+                          p.status == PaymentStatus.voided) {
+                        return sum;
+                      }
+                      return sum + p.paidAmount;
+                    });
                     final totalDue = records
                         .where((p) =>
                             p.status != PaymentStatus.paid &&
                             p.status != PaymentStatus.waived &&
                             p.status != PaymentStatus.voided)
-                        .fold<double>(0, (sum, p) => sum + p.amount);
+                        .fold<double>(0, (sum, p) => sum + p.remaining);
 
                     return Column(
                       mainAxisSize: MainAxisSize.min,

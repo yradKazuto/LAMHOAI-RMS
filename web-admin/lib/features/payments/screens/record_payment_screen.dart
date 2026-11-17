@@ -1,4 +1,6 @@
 import '../../../core/models/audit_log_model.dart';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -43,7 +45,6 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
   final _formKey = GlobalKey<FormState>();
   final _fs = FirestoreService();
   final _amountCtrl = TextEditingController();
-  final _referenceCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
   String? _memberId;
@@ -73,9 +74,20 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
   @override
   void dispose() {
     _amountCtrl.dispose();
-    _referenceCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  /// Generates a unique receipt reference for one transaction,
+  /// e.g. `RCPT-20261117-073512-K7QX`.
+  String _generateReference() {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no look-alikes (0/O, 1/I)
+    final rnd = Random.secure();
+    final suffix = List.generate(4, (_) => chars[rnd.nextInt(chars.length)]).join();
+    return 'RCPT-${now.year}${two(now.month)}${two(now.day)}-'
+        '${two(now.hour)}${two(now.minute)}${two(now.second)}-$suffix';
   }
 
   Future<void> _loadObligations(String uid) async {
@@ -90,7 +102,11 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
           .where('status', whereIn: ['unpaid', 'overdue'])
           .get();
 
+      // `lot_<id>` docs in `payments` are mirrors of lot_payments rows
+      // (loaded below from the real source) — skip them to avoid counting
+      // the same installment twice.
       final list = snap.docs
+          .where((d) => !d.id.startsWith('lot_'))
           .map((d) => PaymentModel.fromMap(d.data(), d.id))
           .toList();
 
@@ -98,7 +114,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
       // lot_payments, reached via the member's sales — not in `payments`.
       final salesSnap = await FirebaseFirestore.instance
           .collection('lot_sales')
-          .where('buyerUid', isEqualTo: uid)
+          .where('ownerUids', arrayContains: uid)
           .get();
 
       for (final sale in salesSnap.docs) {
@@ -134,7 +150,9 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
         _obligations = list;
         _loadingObligations = false;
       });
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('loadObligations failed: $e');
+      debugPrintStack(stackTrace: st);
       if (!mounted || _memberId != uid) return;
       setState(() => _loadingObligations = false);
     }
@@ -150,9 +168,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
   double get _totalOutstanding {
     double total = 0;
     for (final ob in _obligations) {
-      final principalRem = ob.amount - ob.penaltyAmount - ob.paidAmount;
-      final penaltyRem = ob.penaltyAmount;
-      total += (principalRem > 0 ? principalRem : 0) + (penaltyRem > 0 ? penaltyRem : 0);
+      total += ob.remaining;
     }
     return total;
   }
@@ -187,6 +203,9 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
       return;
     }
 
+    // One unique reference per transaction, generated at submit time.
+    final reference = _generateReference();
+
     setState(() => _loading = true);
     try {
       final auth = context.read<AuthProvider>();
@@ -198,7 +217,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
         dueDate: DateTime.now(),
         recordedBy: auth.userModel?.uid ?? '',
         notes: _notesCtrl.text.trim(),
-        referenceNumber: _referenceCtrl.text.trim(),
+        referenceNumber: reference,
       );
 
       if (!outcome.applied) {
@@ -218,7 +237,8 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
           action: AuditAction.created,
           targetCollection: 'payment_transactions',
           targetId: '',
-          description: 'Recorded cash payment of ₱${amt.toStringAsFixed(2)} for $_memberName',
+          description:
+              'Recorded cash payment of ₱${amt.toStringAsFixed(2)} for $_memberName (Ref: $reference)',
         );
       } catch (_) {}
 
@@ -227,13 +247,32 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
         _loading = false;
         _successResult = outcome;
         _savedAmount = amt;
-        _savedReference = _referenceCtrl.text.trim();
+        _savedReference = reference;
       });
-    } catch (e) {
+    } catch (e, st) {
+      // Surface the real Firestore error instead of the generic
+      // "Dart exception thrown from converted Future" wrapper.
+      // On web the real error is boxed inside the wrapper's `error` /
+      // `stack` properties, so dig it out.
+      String inner = '';
+      try {
+        inner = '${(e as dynamic).error}';
+      } catch (_) {}
+      try {
+        debugPrint('INNER STACK: ${(e as dynamic).stack}');
+      } catch (_) {}
+      debugPrint('recordPayment failed: $e');
+      debugPrint('INNER ERROR: $inner');
+      if (e is FirebaseException) {
+        debugPrint('FirebaseException code=${e.code} message=${e.message}');
+      }
+      debugPrintStack(stackTrace: st);
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _formError = 'Error recording payment: $e';
+        _formError = e is FirebaseException
+            ? 'Error recording payment [${e.code}]: ${e.message ?? ''}'
+            : 'Error recording payment: ${inner.isNotEmpty && inner != 'null' ? inner : e}';
       });
     }
   }
@@ -338,9 +377,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {
                       final ob = _obligations[i];
-                      final pRem = ob.amount - ob.penaltyAmount - ob.paidAmount;
-                      final penRem = ob.penaltyAmount;
-                      final totalRem = (pRem > 0 ? pRem : 0) + (penRem > 0 ? penRem : 0);
+                      final totalRem = ob.remaining;
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         child: Row(
@@ -403,7 +440,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
                             color: preview.hasExcess ? AppColors.danger : AppColors.primaryHeader)),
                     const SizedBox(height: 4),
                     if (preview.hasExcess)
-                      Text('Excess amount: ₱${preview.unappliedCredit.toStringAsFixed(2)} will be stored as unapplied credit.',
+                      Text('Excess amount: ₱${preview.unappliedCredit.toStringAsFixed(2)} exceeds total outstanding and will be rejected. Reduce the amount to continue.',
                           style: const TextStyle(fontSize: 12, color: AppColors.danger))
                     else
                       Text('Will allocate across ${preview.allocations.length} obligation(s).',
@@ -414,7 +451,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
               const SizedBox(height: 16),
             ],
 
-            // Payment method (Cash only) & Reference
+            // Payment method (Cash only) & auto-generated reference
             Row(
               children: [
                 Expanded(
@@ -424,6 +461,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
                       const _SectionLabel('Payment Method'),
                       const SizedBox(height: 6),
                       Container(
+                        width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                         decoration: BoxDecoration(
                           color: AppColors.background,
@@ -440,11 +478,18 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const _SectionLabel('Reference Number (Optional)'),
+                      const _SectionLabel('Reference Number'),
                       const SizedBox(height: 6),
-                      TextFormField(
-                        controller: _referenceCtrl,
-                        decoration: _fieldDec('e.g. Receipt / Ref #'),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.borderStrong),
+                        ),
+                        child: const Text('Auto-generated on confirm',
+                            style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
                       ),
                     ],
                   ),
@@ -481,7 +526,7 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: _loading ? null : () => Navigator.pop(context),
                   child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
                 ),
                 const SizedBox(width: 12),
@@ -538,10 +583,10 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _receiptRow('Reference #:', _savedReference),
               _receiptRow('Member:', _memberName ?? ''),
               _receiptRow('Amount Received:', '₱${_savedAmount.toStringAsFixed(2)}'),
               _receiptRow('Method:', 'Cash'),
-              if (_savedReference.isNotEmpty) _receiptRow('Reference #:', _savedReference),
               _receiptRow('Date:', _fmtDate(DateTime.now())),
               if (_successResult!.unappliedCredit > 0)
                 _receiptRow('Unapplied Credit:', '₱${_successResult!.unappliedCredit.toStringAsFixed(2)}', isHighlight: true),
@@ -559,12 +604,14 @@ class _RecordPaymentScreenState extends State<RecordPaymentScreen> {
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final alloc = _successResult!.allocations[i];
+              final id = alloc.obligationId;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Obligation ID: ${alloc.obligationId.substring(0, 8)}...', style: const TextStyle(fontSize: 12)),
+                    Text('Obligation ID: ${id.length > 8 ? '${id.substring(0, 8)}...' : id}',
+                        style: const TextStyle(fontSize: 12)),
                     Text('Principal: ₱${alloc.allocatedPrincipal.toStringAsFixed(2)} | Penalty: ₱${alloc.allocatedPenalty.toStringAsFixed(2)}',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   ],

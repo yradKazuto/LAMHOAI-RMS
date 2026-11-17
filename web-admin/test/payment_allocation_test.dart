@@ -31,6 +31,7 @@ void main() {
     await fakeDb.collection('lot_sales').doc(saleId).set({
       'buyerUid': uid,
       'buyerName': 'Member 1',
+      'ownerUids': [uid],
     });
     final ref = await fakeDb.collection('lot_payments').add({
       'saleId': saleId,

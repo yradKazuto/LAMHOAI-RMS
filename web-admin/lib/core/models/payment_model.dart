@@ -94,6 +94,7 @@ class PaymentModel {
   final int txnSeq;
 
   // penaltyAmount stored separately from principal (₱45 per overdue, once).
+  // `amount` is principal only — the penalty is NOT added into it.
   // Default 0 on existing records — backward compatible.
   final double penaltyAmount;
 
@@ -225,6 +226,30 @@ extension PaymentDisplayStatus on PaymentModel {
     }
     return status;
   }
+}
+
+/// Partial-payment aware balances. `amount` is principal only and never
+/// changes; `paidAmount` accumulates what cash payments were applied to
+/// principal, and `penaltyAmount` is the penalty still owed.
+extension PaymentBalance on PaymentModel {
+  /// Principal still owed (never negative).
+  double get principalRemaining {
+    final v = amount - paidAmount;
+    return v > 0 ? v : 0.0;
+  }
+
+  /// Penalty still owed (never negative).
+  double get penaltyRemaining => penaltyAmount > 0 ? penaltyAmount : 0.0;
+
+  /// Everything still owed on this record: principal + penalty.
+  double get remaining => principalRemaining + penaltyRemaining;
+
+  /// True when part of this record has been paid but it isn't settled yet.
+  bool get isPartial =>
+      paidAmount > 0.005 &&
+      status != PaymentStatus.paid &&
+      status != PaymentStatus.waived &&
+      status != PaymentStatus.voided;
 }
 
 /// Display text for a lot, e.g. "Phase 1 · Block 3 · Lot 12". Blocks are

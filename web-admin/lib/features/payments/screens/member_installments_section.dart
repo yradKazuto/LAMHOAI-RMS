@@ -51,7 +51,7 @@ class _MemberInstallmentsSectionState extends State<MemberInstallmentsSection> {
   @override
   void initState() {
     super.initState();
-    _salesStream = _saleService.streamSalesForBuyer(widget.uid);
+    _salesStream = _saleService.streamSalesForMember(widget.uid);
   }
 
   @override
@@ -448,6 +448,16 @@ class _SaleInstallmentsState extends State<_SaleInstallments> {
   Widget _periodRow(LotPaymentModel p) {
     final status = p.displayStatus;
     final busy = _busyPeriod == p.period;
+    // Partially paid: show what's still owed + a Paid X of Y caption, same
+    // convention as the Payments screen.
+    final partial = p.paidAmount > 0.005 &&
+        p.status != LotPaymentStatus.paid;
+    final shown = partial
+        ? (p.amount - p.paidAmount).clamp(0.0, double.infinity)
+        : p.amount;
+    final pillStatus = partial
+        ? LotPaymentStatus.scheduled
+        : status;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -462,13 +472,16 @@ class _SaleInstallmentsState extends State<_SaleInstallments> {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary)),
-                Text('Due ${_fmt(p.dueDate)}',
+                Text(
+                    partial
+                        ? 'Due ${_fmt(p.dueDate)} · Paid ${LotPricing.peso(p.paidAmount)} of ${LotPricing.peso(p.amount)}'
+                        : 'Due ${_fmt(p.dueDate)}',
                     style: const TextStyle(
                         fontSize: 11.5, color: AppColors.textMuted)),
               ],
             ),
           ),
-          Text(LotPricing.peso(p.amount),
+          Text(LotPricing.peso(shown),
               style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -478,14 +491,14 @@ class _SaleInstallmentsState extends State<_SaleInstallments> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: _bg(status),
+              color: _bg(pillStatus),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Text(status.label,
+            child: Text(partial ? 'Partial' : status.label,
                 style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w600,
-                    color: _fg(status))),
+                    color: _fg(pillStatus))),
           ),
           if (widget.canRecord) ...[
             const SizedBox(width: 6),

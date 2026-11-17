@@ -11,13 +11,14 @@
 //  - Excess payment beyond total outstanding is flagged for rejection.
 //
 // State model per obligation (see PaymentModel):
-//  - `amount` = total on the doc (may include penalty added by markOverduePenalties)
+//  - `amount` = principal only (the penalty is NOT added into it)
 //  - `penaltyAmount` = penalty still allocatable from THIS doc (45 for overdue,
 //                      0 otherwise; decreases as cash payments distribute penalty)
 //  - `paidAmount` = cumulative principal allocated to THIS doc (must stay
-//                    <= remaining principal)
+//                    <= amount)
 //
-// So: principalRemaining = amount - penaltyAmount; penaltyRemaining = penaltyAmount.
+// So: principalRemaining = amount - paidAmount;
+//     penaltyRemaining   = penaltyAmount.
 
 import '../models/payment_model.dart';
 
@@ -82,7 +83,7 @@ class AllocationInput {
 }
 
 /// Plain obligation snapshot for allocation computation.
-/// principalRemaining = amount - penaltyAmount
+/// principalRemaining = amount - paidAmount
 /// penaltyRemaining = penaltyAmount
 class ObligationInput {
   final String id;
@@ -106,6 +107,9 @@ class ObligationInput {
   });
 }
 
+/// Tolerance for floating-point money comparisons (half a centavo).
+const double _eps = 0.005;
+
 /// Capped allocation to remaining funds.
 double owedPenalty(double remainder, double owed) =>
     remainder < owed ? remainder : owed;
@@ -120,17 +124,17 @@ AllocationResult computeAllocation({
   var remaining = paymentAmount;
 
   for (final ob in obligations) {
-    if (remaining <= 0) break;
+    if (remaining <= _eps) break;
 
-    // Principal first (amount is now principal only for new records,
-    // or principal+penalty for legacy).
-    final principalOwed = ob.amount - ob.paidAmount;
+    // `amount` is principal only; the penalty is stored separately in
+    // `penaltyAmount` (see applyOverduePenalties), so it is NOT part of
+    // `amount` and must not be subtracted from it.
+    final rawPrincipalOwed = ob.amount - ob.paidAmount;
+    final principalOwed = rawPrincipalOwed > 0 ? rawPrincipalOwed : 0.0;
     final penaltyOwed = ob.penaltyAmount.clamp(0.0, double.infinity);
 
     // Principal first.
-    final applyPrincipal = remaining < principalOwed
-        ? remaining
-        : (principalOwed > 0 ? principalOwed : 0.0);
+    final applyPrincipal = owedPenalty(remaining, principalOwed);
     remaining -= applyPrincipal;
 
     // Then penalty.
@@ -142,7 +146,8 @@ AllocationResult computeAllocation({
       allocatedPrincipal: applyPrincipal,
       allocatedPenalty: applyPenalty,
       allocatedAmount: applyPrincipal + applyPenalty,
-      obligationPaid: (applyPrincipal == principalOwed && applyPenalty == penaltyOwed),
+      obligationPaid: (principalOwed - applyPrincipal).abs() < _eps &&
+          (penaltyOwed - applyPenalty).abs() < _eps,
       source: ob.source,
     ));
   }
@@ -151,14 +156,14 @@ AllocationResult computeAllocation({
     0,
     (sum, a) => sum + a.allocatedAmount,
   );
-  final unapplied = paymentAmount - totalApplied;
+  var unapplied = paymentAmount - totalApplied;
+  if (unapplied < _eps) unapplied = 0;
 
   return AllocationResult(
     allocations: allocs,
     unappliedCredit: unapplied,
-    rejectionReason:
-        unapplied > 0
-            ? 'Excess payment of ${unapplied.toStringAsFixed(2)} not allowed until policy approved'
-            : null,
+    rejectionReason: unapplied > 0
+        ? 'Excess payment of ${unapplied.toStringAsFixed(2)} not allowed until policy approved'
+        : null,
   );
 }

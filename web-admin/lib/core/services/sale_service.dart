@@ -59,7 +59,11 @@ class SaleService {
 
   static const String _mirrorSource = 'lot_payment';
 
-  String _mirrorId(String saleId, int period) => 'lot_${saleId}_$period';
+  /// Document id of the `payments` mirror for a lot payment row.
+  /// Deterministic, so the same period can never be mirrored twice. EVERY
+  /// writer of `payments/lot_*` docs must use this — FirestoreService
+  /// included — or "Mark Paid" can't parse the id back into saleId+period.
+  static String mirrorId(String saleId, int period) => 'lot_${saleId}_$period';
 
   /// Readable reference, e.g. LP-2026-0001-DP (down payment) or
   /// LP-2026-0001-P003 (period 3) — year + sale sequence + period.
@@ -88,7 +92,7 @@ class SaleService {
         : 'Lot installment · Period ${p.period}';
 
     final record = PaymentModel(
-      id: _mirrorId(sale.id, p.period),
+      id: mirrorId(sale.id, p.period),
       uid: sale.buyerUid,
       memberName: sale.buyerName,
       type: PaymentType.lotPayment,
@@ -148,7 +152,7 @@ class SaleService {
 
     if (sale != null && p.amount > 0) {
       batch.set(
-        _mainPayments.doc(_mirrorId(sale.id, p.period)),
+        _mainPayments.doc(mirrorId(sale.id, p.period)),
         _mirrorMap(
           sale: sale,
           p: p,
@@ -166,7 +170,7 @@ class SaleService {
   /// Use this from the Payments screen's "Mark Paid" for lot payment records.
   ///
   /// The `payments` document id encodes the sale and period
-  /// (lot_<saleId>_<period>), so this finds the matching lot_payments row and
+  /// (`lot_<saleId>_<period>`), so this finds the matching lot_payments row and
   /// marks BOTH sides paid together. Calling only the generic
   /// `markPaymentPaid` would leave `lot_payments` still pending.
   Future<void> markLotPaymentRecordPaid({
@@ -181,17 +185,40 @@ class SaleService {
     final body = paymentId.substring(4);
     final cut = body.lastIndexOf('_');
     final period = cut > 0 ? int.tryParse(body.substring(cut + 1)) : null;
-    if (cut <= 0 || period == null) {
+    if (cut > 0 && period != null) {
+      await markInstallmentPaid(
+        saleId: body.substring(0, cut),
+        period: period,
+        payer: payer,
+        paidBy: paidBy,
+        method: method,
+      );
+      return;
+    }
+
+    // Legacy mirror id `lot_<lotPaymentsDocId>` (random doc id, no period).
+    // Resolve through the lot_payments row itself.
+    final lp = await _payments.doc(body).get();
+    if (!lp.exists) {
+      throw Exception('Unrecognized lot payment record id: $paymentId');
+    }
+    final data = lp.data()!;
+    final legacySaleId = data['saleId'] as String? ?? '';
+    final legacyPeriod = (data['period'] as num?)?.toInt() ?? -1;
+    if (legacySaleId.isEmpty || legacyPeriod < 0) {
       throw Exception('Unrecognized lot payment record id: $paymentId');
     }
 
     await markInstallmentPaid(
-      saleId: body.substring(0, cut),
-      period: period,
+      saleId: legacySaleId,
+      period: legacyPeriod,
       payer: payer,
       paidBy: paidBy,
       method: method,
     );
+    // _markPeriodPaid writes the canonical mirror; drop the legacy one so
+    // the Payments screen doesn't list the same period twice.
+    await _mainPayments.doc(paymentId).delete();
   }
 
   /// ONE-TIME catch-up: creates the `payments` record for every lot payment
@@ -223,7 +250,7 @@ class SaleService {
       final sale = sales[p.saleId];
       if (sale == null || p.amount <= 0) continue;
 
-      final id = _mirrorId(sale.id, p.period);
+      final id = mirrorId(sale.id, p.period);
       if (existing.contains(id)) continue;
 
       pending.add(MapEntry(
@@ -277,6 +304,7 @@ class SaleService {
     required LotModel lot,
     required String buyerUid,
     required String buyerName,
+    List<String> coOwnerUids = const [],
     required SaleType saleType,
     required double downPayment,
     required int termMonths,
@@ -291,6 +319,7 @@ class SaleService {
       lot: lot,
       buyerUid: buyerUid,
       buyerName: buyerName,
+      coOwnerUids: coOwnerUids,
       downPayment: downPayment,
       termMonths: effectiveTermMonths,
       annualInterestRate: annualInterestRate,
@@ -320,6 +349,7 @@ class SaleService {
     required LotModel lot,
     required String buyerUid,
     required String buyerName,
+    List<String> coOwnerUids = const [],
     required double downPayment,
     required int termMonths,
     required double annualInterestRate,
@@ -356,6 +386,8 @@ class SaleService {
       block: lot.block,
       buyerUid: buyerUid,
       buyerName: buyerName,
+      coOwnerUids: coOwnerUids,
+      ownerUids: [buyerUid, ...coOwnerUids.toSet()],
       saleType:
           termMonths == 0 ? SaleType.cash : SaleType.installment,
       totalPrice: totalPrice,
@@ -404,7 +436,7 @@ class SaleService {
       // records right away so it shows up and can be marked paid on receipt.
       if ((isCash || isDown) && p.amount > 0) {
         batch.set(
-          _mainPayments.doc(_mirrorId(saleId, p.period)),
+          _mainPayments.doc(mirrorId(saleId, p.period)),
           _mirrorMap(
             sale: sale,
             p: p,
@@ -699,6 +731,9 @@ class SaleService {
       batch.update(_sales.doc(sale.id), {
         'buyerUid': newBuyerUid,
         'buyerName': newBuyerName,
+        // Transfer replaces the whole ownership: prior co-owners are out.
+        'coOwnerUids': [],
+        'ownerUids': [newBuyerUid],
         'updatedBy': updatedBy,
         'updatedAt': Timestamp.now(),
       });
@@ -727,6 +762,7 @@ class SaleService {
         'status': p.status.name,
         'buyerName': s?.buyerName ?? 'Unknown',
         'buyerUid': s?.buyerUid ?? '',
+        'ownerUids': s?.ownerUids ?? const <String>[],
         'lotNumber': s?.lotNumber ?? 'Unknown',
         'soldDate': s?.soldDate,
         'dueDate': p.dueDate,
@@ -782,18 +818,45 @@ class SaleService {
         .toList();
   }
 
-  /// Streams sales belonging to a specific buyer/member.
-  Stream<List<LotSaleModel>> streamSalesForBuyer(String buyerUid) {
-    if (buyerUid.isEmpty) {
+  /// Streams sales where [memberUid] is the buyer or a co-owner.
+  Stream<List<LotSaleModel>> streamSalesForMember(String memberUid) {
+    if (memberUid.isEmpty) {
       return Stream.value(<LotSaleModel>[]);
     }
 
     return _sales
-        .where('buyerUid', isEqualTo: buyerUid)
+        .where('ownerUids', arrayContains: memberUid)
         .snapshots()
         .map((snap) => snap.docs
             .map((d) => LotSaleModel.fromMap(d.data(), d.id))
             .toList());
+  }
+
+  /// Streams every `lot_payments` schedule row for sales where [memberUid]
+  /// is buyer or co-owner — the member's assessed installment obligations.
+  /// Doc id is attached so `payment_allocations` rows can be matched back.
+  Stream<List<LotPaymentModel>> streamLotPaymentsForMember(String memberUid) {
+    if (memberUid.isEmpty) {
+      return Stream.value(const <LotPaymentModel>[]);
+    }
+
+    return streamSalesForMember(memberUid).asyncMap((sales) async {
+      final ids = sales.map((s) => s.id).toList();
+      if (ids.isEmpty) return const <LotPaymentModel>[];
+      // whereIn caps at 30; a member with 30+ financed lots is unrealistic
+      // today, so fall back to a full scan filtered client-side.
+      // ponytail: revisit if a member can ever hold that many sales.
+      final snap = ids.length <= 30
+          ? await _payments
+              .where('saleId', whereIn: ids)
+              .get()
+          : await _payments.get();
+      return snap.docs
+          .map((d) => LotPaymentModel.fromMap(d.data(), d.id))
+          .where((p) => ids.contains(p.saleId))
+          .toList()
+        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    });
   }
 
   /// Marks ONE specific installment period as paid.

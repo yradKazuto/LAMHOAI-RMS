@@ -2,6 +2,7 @@
 // UPDATED Phase 4 — adds staff, announcements, complaints
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/member_model.dart';
 import '../models/payment_model.dart';
 import '../models/payment_transaction_model.dart';
@@ -16,6 +17,7 @@ import '../models/feedback_model.dart';
 import '../models/user_model.dart';
 import 'transaction_id_service.dart';
 import 'allocation_calculator.dart';
+import 'sale_service.dart';
 
 /// Outcome of a generateMembershipFees() / generateMonthlyDues() call, for
 /// showing a confirmation summary to the admin ("Created 42, skipped 8 who
@@ -62,6 +64,19 @@ class _LotBill {
   final MemberModel member;
   final LotModel lot;
   const _LotBill(this.member, this.lot);
+}
+
+/// One allocation's pre-built write payload, prepared before the Firestore
+/// transaction starts (see recordPaymentWithAllocations).
+class _AllocWrite {
+  final Allocation alloc;
+  final DocumentReference<Map<String, dynamic>> allocRef;
+  final Map<String, dynamic> allocMap;
+  const _AllocWrite({
+    required this.alloc,
+    required this.allocRef,
+    required this.allocMap,
+  });
 }
 
 /// Outcome of a cash-payment-with-allocation attempt.
@@ -286,6 +301,20 @@ class FirestoreService {
         .snapshots()
         .map((snap) => snap.docs
             .map((d) => PaymentModel.fromMap(
+                d.data() as Map<String, dynamic>, d.id))
+            .toList());
+  }
+
+  /// Streams the confirmed receipt→obligation splits for [memberUid], used
+  /// by the AR ledger to post each payment as a credit against the specific
+  /// charge it was applied to.
+  Stream<List<PaymentAllocationModel>> streamAllocationsForMember(
+      String memberUid) {
+    return _allocationsRef
+        .where('memberUid', isEqualTo: memberUid)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => PaymentAllocationModel.fromMap(
                 d.data() as Map<String, dynamic>, d.id))
             .toList());
   }
@@ -1129,45 +1158,50 @@ class FirestoreService {
     String notes = '',
     String referenceNumber = '',
   }) async {
-    RecordPaymentOutcome? outcome;
-
-    await _db.runTransaction((tx) async {
-      // 1. Fetch existing unapplied credit (reads only here — cleared below).
+    // Label of the step in progress, so a failure says WHERE it failed.
+    // (On web, exceptions thrown INSIDE runTransaction lose their message,
+    // so everything that isn't a transactional read/write runs outside it.)
+    var step = 'start';
+    try {
+      // ── 1. Existing unapplied credit ──────────────────────────────────
+      step = 'query unapplied credit (payment_transactions: memberUid + unappliedCredit)';
       final txSnap = await _transactionsRef
           .where('memberUid', isEqualTo: memberUid)
           .where('unappliedCredit', isGreaterThan: 0)
           .get();
 
       double existingCredit = 0.0;
-      final creditRefsToClear = <DocumentReference<Map<String, dynamic>>>{};
+      final creditRefsToClear = <DocumentReference<Map<String, dynamic>>>[];
       for (final doc in txSnap.docs) {
-        final data = doc.data();
-        final credit = (data['unappliedCredit'] as num?)?.toDouble() ?? 0.0;
-        existingCredit += credit;
+        existingCredit +=
+            (doc.data()['unappliedCredit'] as num?)?.toDouble() ?? 0.0;
         creditRefsToClear.add(doc.reference);
       }
 
-      // 2. Fetch last transaction sequence for this type+year to generate unique ID.
+      // ── 2. Transaction ID ─────────────────────────────────────────────
+      step = 'query last transaction (payment_transactions: orderBy createdAt)';
       final lastTxSnap = await _transactionsRef
           .orderBy('createdAt', descending: true)
           .limit(1)
           .get();
 
-      int nextSeq = 1;
+      step = 'build transaction id';
+      var nextSeq = 1;
       if (lastTxSnap.docs.isNotEmpty) {
         final lastData = lastTxSnap.docs.first.data();
         if ((lastData['txnYear'] as num?)?.toInt() == dueDate.year) {
           nextSeq = ((lastData['txnSeq'] as num?)?.toInt() ?? 0) + 1;
         }
       }
-      final transactionId = TransactionIdService.paymentTransactionId(type, dueDate.year, nextSeq);
+      final transactionId =
+          TransactionIdService.paymentTransactionId(type, dueDate.year, nextSeq);
 
-      // 3. Duplicate guard: same member tendering the same amount within 30s
-      // is a double-submit (cashier double-tap / retry), not a new payment.
-      // ponytail: heuristic — a genuinely identical same-minute payment is
-      // rejected too; widen the window only if cashiers batch-enter receipts.
+      // ── 3. Duplicate guard (same member + amount within 30s) ──────────
+      // Same member tendering the same amount within 30s is a double-submit
+      // (cashier double-tap / retry), not a new payment.
       // Needs a composite index on payment_transactions(memberUid, amount,
       // createdAt) in production.
+      step = 'query duplicate guard (payment_transactions: memberUid + amount + createdAt)';
       final dupWindow = DateTime.now().subtract(const Duration(seconds: 30));
       final duplicateSnap = await _transactionsRef
           .where('memberUid', isEqualTo: memberUid)
@@ -1175,147 +1209,250 @@ class FirestoreService {
           .where('createdAt', isGreaterThan: Timestamp.fromDate(dupWindow))
           .get();
       if (duplicateSnap.docs.isNotEmpty) {
-        outcome = RecordPaymentOutcome(applied: false);
-        return;
+        return const RecordPaymentOutcome(applied: false);
       }
 
-      // 4. Read all outstanding payment docs for this member.
+      // ── 4. Outstanding obligations ────────────────────────────────────
+      step = 'load outstanding dues (payments)';
       final snap = await _payments
           .where('uid', isEqualTo: memberUid)
-          .where('status', whereIn: [PaymentStatus.unpaid.name, PaymentStatus.overdue.name])
+          .where('status', whereIn: [
+            PaymentStatus.unpaid.name,
+            PaymentStatus.overdue.name,
+          ])
           .get();
+      // `lot_<id>` docs in `payments` are display mirrors of lot_payments
+      // rows (loaded below from the real source). Skip them, otherwise the
+      // same installment would be allocated against twice.
       final obligations = snap.docs
+          .where((d) => !d.id.startsWith('lot_'))
           .map((d) {
-            final data = d.data() as Map<String, dynamic>;
-            return ObligationInput(
-              id:         d.id,
-              amount:     (data['amount'] as num?)?.toDouble() ?? 0.0,
-              penaltyAmount: (data['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
-              paidAmount:  (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
-              dueDate:    (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-              source:     'payments',
-            );
-          })
-          .toList();
+        final data = d.data();
+        return ObligationInput(
+          id: d.id,
+          amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
+          penaltyAmount: (data['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
+          paidAmount: (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
+          dueDate: (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          source: 'payments',
+        );
+      }).toList();
 
-      // 4b. Read all outstanding lot installments for this member's sales
-      // (amortization schedule rows that are unpaid/overdue).
-      final salesSnap = await _sales.where('buyerUid', isEqualTo: memberUid).get();
-      final saleIds = salesSnap.docs.map((d) => d.id).toSet();
-
-      for (final saleId in saleIds) {
+      step = 'load lot installments (lot_sales / lot_payments)';
+      final salesSnap =
+          await _sales.where('ownerUids', arrayContains: memberUid).get();
+      for (final sale in salesSnap.docs) {
         final lotPaymentsSnap = await _lotPayments
-            .where('saleId', isEqualTo: saleId)
-            .where('status', whereIn: [LotPaymentStatus.scheduled.name, LotPaymentStatus.overdue.name])
+            .where('saleId', isEqualTo: sale.id)
+            .where('status', whereIn: [
+              LotPaymentStatus.scheduled.name,
+              LotPaymentStatus.overdue.name,
+            ])
             .get();
-
         for (final d in lotPaymentsSnap.docs) {
-          final data = d.data() as Map<String, dynamic>;
+          final data = d.data();
           obligations.add(ObligationInput(
-            id:         d.id,
-            amount:     (data['amount'] as num?)?.toDouble() ?? 0.0,
+            id: d.id,
+            amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
             penaltyAmount: (data['penaltyAmount'] as num?)?.toDouble() ?? 0.0,
-            paidAmount:  (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
-            dueDate:    (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            source:     'lot_payments',
+            paidAmount: (data['paidAmount'] as num?)?.toDouble() ?? 0.0,
+            dueDate:
+                (data['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            source: 'lot_payments',
           ));
         }
       }
-
       obligations.sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
+      // ── 5. Allocation math (pure) ─────────────────────────────────────
+      step = 'compute allocation';
       final result = computeAllocation(
         obligations: obligations,
         paymentAmount: paymentAmount + existingCredit,
       );
-
       if (result.hasExcess) {
-        outcome = RecordPaymentOutcome(applied: false);
-        return;
+        return const RecordPaymentOutcome(applied: false);
       }
 
-      // Read every obligation doc first (Firestore requires all reads before writes).
-      final obligationDocs = <String, Map<String, dynamic>>{};
+      // ── 6. Build the model maps BEFORE the transaction, so a bad
+      //       toMap() fails here with a readable message. ────────────────
+      step = 'build allocation docs';
+      final allocWrites = <_AllocWrite>[];
       for (final alloc in result.allocations) {
-        final ref = alloc.source == 'lot_payments'
-            ? _lotPayments.doc(alloc.obligationId)
-            : _payments.doc(alloc.obligationId);
-        final d = await tx.get(ref);
-        obligationDocs[alloc.obligationId] = d.data() as Map<String, dynamic>;
+        final allocRef = _allocationsRef.doc();
+        allocWrites.add(_AllocWrite(
+          alloc: alloc,
+          allocRef: allocRef,
+          allocMap: PaymentAllocationModel(
+            id: allocRef.id,
+            transactionId: transactionId,
+            memberUid: memberUid,
+            obligationId: alloc.obligationId,
+            allocatedPrincipal: alloc.allocatedPrincipal,
+            allocatedPenalty: alloc.allocatedPenalty,
+            allocatedAmount: alloc.allocatedAmount,
+            allocatedAt: DateTime.now(),
+          ).toMap(),
+        ));
       }
 
-      // Now apply all writes.
-      for (final ref in creditRefsToClear) {
-        tx.update(ref, {'unappliedCredit': 0});
-      }
+      step = 'build transaction doc';
+      final txRef = _transactionsRef.doc();
+      final txMap = PaymentTransactionModel(
+        id: txRef.id,
+        memberUid: memberUid,
+        memberName: memberName,
+        amount: paymentAmount, // new cash only
+        paymentMethod: 'cash',
+        referenceNumber: referenceNumber.isEmpty ? null : referenceNumber,
+        paymentDate: DateTime.now(),
+        recordedBy: recordedBy,
+        notes:
+            '${notes.isNotEmpty ? '$notes | ' : ''}Consumed existing credit: ₱${existingCredit.toStringAsFixed(2)}',
+        createdAt: DateTime.now(),
+        status: TransactionStatus.posted,
+        unappliedCredit: result.unappliedCredit,
+        transactionId: transactionId,
+        txnYear: dueDate.year,
+        txnSeq: nextSeq,
+      ).toMap();
 
-      for (final alloc in result.allocations) {
-        final isLot = alloc.source == 'lot_payments';
-        final ref = isLot
-            ? _lotPayments.doc(alloc.obligationId)
-            : _payments.doc(alloc.obligationId);
-        final data = obligationDocs[alloc.obligationId]!;
-        final updates = <String, dynamic>{
-          'paidAmount':  ((data['paidAmount'] as num?)?.toDouble() ?? 0.0) + alloc.allocatedPrincipal,
-          'penaltyAmount':
-              ((data['penaltyAmount'] as num?)?.toDouble() ?? 0.0) - alloc.allocatedPenalty,
-        };
-        if (alloc.obligationPaid) {
-          if (isLot) {
-            updates['status'] = LotPaymentStatus.paid.name;
-            updates['paidAt'] = Timestamp.fromDate(DateTime.now());
-            updates['paidBy'] = recordedBy;
-            updates['payer'] = memberName;
-            updates['paymentMethod'] = 'cash';
-            updates['verifiedAt'] = Timestamp.fromDate(DateTime.now());
-          } else {
-            updates['status'] = PaymentStatus.paid.name;
-            updates['paidDate'] = Timestamp.fromDate(DateTime.now());
+      // ── 7. Atomic write: only tx.get / tx.update / tx.set in here ─────
+      step = 'commit transaction (reads/writes)';
+      await _db.runTransaction((tx) async {
+        // All reads first.
+        final obligationDocs = <String, Map<String, dynamic>>{};
+        final mirrorRefs = <String, DocumentReference<Map<String, dynamic>>>{};
+        for (final w in allocWrites) {
+          final ref = w.alloc.source == 'lot_payments'
+              ? _lotPayments.doc(w.alloc.obligationId)
+              : _payments.doc(w.alloc.obligationId);
+          final d = await tx.get(ref);
+          final data = d.data() ?? <String, dynamic>{};
+          obligationDocs[w.alloc.obligationId] = data;
+          // Same canonical mirror id SaleService uses (lot_<saleId>_<period>),
+          // so the two writers can never create duplicate mirrors.
+          if (w.alloc.source == 'lot_payments') {
+            mirrorRefs[w.alloc.obligationId] = _payments.doc(SaleService.mirrorId(
+              data['saleId']?.toString() ?? '',
+              (data['period'] as num?)?.toInt() ?? 0,
+            ));
           }
         }
-        tx.update(ref, updates);
 
-        final allocRef = _allocationsRef.doc();
-        tx.set(allocRef, PaymentAllocationModel(
-          id:                    allocRef.id,
-          transactionId:         transactionId,
-          memberUid:             memberUid,
-          obligationId:         alloc.obligationId,
-          allocatedPrincipal:    alloc.allocatedPrincipal,
-          allocatedPenalty:      alloc.allocatedPenalty,
-          allocatedAmount:       alloc.allocatedAmount,
-          allocatedAt:          DateTime.now(),
-        ).toMap());
-      }
+        // Does a `payments/lot_<id>` display mirror already exist for each
+        // lot installment? (The Payments screen only lists `payments`.)
+        final mirrorExists = <String, bool>{};
+        for (final w in allocWrites) {
+          if (w.alloc.source != 'lot_payments') continue;
+          final m = await tx.get(mirrorRefs[w.alloc.obligationId]!);
+          mirrorExists[w.alloc.obligationId] = m.exists;
+        }
 
-      // Create the transaction record.
-      final txRef = _transactionsRef.doc();
-      tx.set(txRef, PaymentTransactionModel(
-        id:                   txRef.id,
-        memberUid:            memberUid,
-        memberName:           memberName,
-        amount:               paymentAmount, // New cash only
-        paymentMethod:        'cash',
-        referenceNumber:      referenceNumber.isEmpty ? null : referenceNumber,
-        paymentDate:          DateTime.now(),
-        recordedBy:           recordedBy,
-        notes:                '${notes.isNotEmpty ? '$notes | ' : ''}Consumed existing credit: ₱${existingCredit.toStringAsFixed(2)}',
-        createdAt:            DateTime.now(),
-        status:               TransactionStatus.posted,
-        unappliedCredit:      result.unappliedCredit,
-        transactionId:        transactionId,
-        txnYear:              dueDate.year,
-        txnSeq:               nextSeq,
-      ).toMap());
+        // Then writes.
+        for (final ref in creditRefsToClear) {
+          tx.update(ref, {'unappliedCredit': 0});
+        }
 
-      outcome = RecordPaymentOutcome(
+        for (final w in allocWrites) {
+          final alloc = w.alloc;
+          final isLot = alloc.source == 'lot_payments';
+          final ref = isLot
+              ? _lotPayments.doc(alloc.obligationId)
+              : _payments.doc(alloc.obligationId);
+          final data = obligationDocs[alloc.obligationId]!;
+          final updates = <String, dynamic>{
+            'paidAmount':
+                ((data['paidAmount'] as num?)?.toDouble() ?? 0.0) +
+                    alloc.allocatedPrincipal,
+            'penaltyAmount':
+                ((data['penaltyAmount'] as num?)?.toDouble() ?? 0.0) -
+                    alloc.allocatedPenalty,
+          };
+          if (alloc.obligationPaid) {
+            final now = Timestamp.fromDate(DateTime.now());
+            if (isLot) {
+              updates['status'] = LotPaymentStatus.paid.name;
+              updates['paidAt'] = now;
+              updates['paidBy'] = recordedBy;
+              updates['payer'] = memberName;
+              updates['paymentMethod'] = 'cash';
+              updates['verifiedAt'] = now;
+            } else {
+              updates['status'] = PaymentStatus.paid.name;
+              updates['paidDate'] = now;
+            }
+          }
+          tx.update(ref, updates);
+          tx.set(w.allocRef, w.allocMap);
+
+          // Keep the Payments-screen mirror of this lot installment in
+          // sync (shows partial / paid state there).
+          if (isLot) {
+            final newPaid = (updates['paidAmount'] as num).toDouble();
+            final rawPen = (updates['penaltyAmount'] as num).toDouble();
+            final newPen = rawPen < 0 ? 0.0 : rawPen;
+            final lotStatus = data['status']?.toString() ?? '';
+            final mirrorStatus = alloc.obligationPaid
+                ? PaymentStatus.paid.name
+                : (lotStatus == LotPaymentStatus.overdue.name
+                    ? PaymentStatus.overdue.name
+                    : PaymentStatus.unpaid.name);
+            final nowTs = Timestamp.fromDate(DateTime.now());
+            final mirrorRef = mirrorRefs[alloc.obligationId]!;
+
+            if (mirrorExists[alloc.obligationId] == true) {
+              tx.update(mirrorRef, {
+                'paidAmount': newPaid,
+                'penaltyAmount': newPen,
+                'status': mirrorStatus,
+                if (alloc.obligationPaid) 'paidDate': nowTs,
+              });
+            } else {
+              tx.set(mirrorRef, {
+                'uid': memberUid,
+                'memberName': memberName,
+                'type': PaymentType.lotPayment.name,
+                'amount': (data['amount'] as num?)?.toDouble() ?? 0.0,
+                'status': mirrorStatus,
+                'dueDate': data['dueDate'] ?? nowTs,
+                'paidDate': alloc.obligationPaid ? nowTs : null,
+                'recordedBy': recordedBy,
+                'notes': 'Lot installment',
+                'createdAt': nowTs,
+                'lotId': data['lotId']?.toString() ?? '',
+                'lotLabel': data['lotLabel']?.toString() ?? '',
+                'transactionId': data['transactionId']?.toString() ?? '',
+                'txnYear': (data['txnYear'] as num?)?.toInt() ?? 0,
+                'txnSeq': (data['txnSeq'] as num?)?.toInt() ?? 0,
+                'penaltyAmount': newPen,
+                'paidAmount': newPaid,
+                'paymentMethod': 'cash',
+                // Same trace keys SaleService's mirror carries, so the two
+                // mirror writers produce identical documents.
+                'source': 'lot_payment',
+                'saleId': data['saleId'] ?? '',
+                'period': data['period'] ?? 0,
+              });
+            }
+          }
+        }
+
+        tx.set(txRef, txMap);
+      });
+
+      return RecordPaymentOutcome(
         applied: true,
         unappliedCredit: result.unappliedCredit,
         allocations: result.allocations,
       );
-    });
-
-    return outcome ?? const RecordPaymentOutcome(applied: false);
+    } catch (e, st) {
+      debugPrint('recordPayment failed at step [$step]: $e');
+      debugPrintStack(stackTrace: st);
+      // Rethrow as a plain Exception carrying the step + message, so the
+      // screen shows it instead of the generic web wrapper text.
+      throw Exception('Failed at [$step]: $e');
+    }
   }
 
   CollectionReference<Map<String, dynamic>> get _transactionsRef =>
