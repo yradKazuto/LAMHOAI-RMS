@@ -666,18 +666,11 @@ class _VacantLotDialogState
   late final TextEditingController
       _notesController;
 
-  late final TextEditingController
-      _priceControllerOverride;
+  /// Whether this lot is a corner lot (adds 2% to sqm rate).
+  bool _isCornerLot = false;
 
-  /// Manual price override. Defaults to null (derive from rate).
-  /// Only shown in the dialog when no default rate has been configured
-  /// yet — once one exists, admin can skip the field and let pricing
-  /// flow automatically.
-  String? _manualPriceText;
-  bool _manualPriceSet = false;
-  double? _currentRate;
   bool _loading = true;
-  bool  _saving = false;
+  bool _saving = false;
 
   @override
   void initState() {
