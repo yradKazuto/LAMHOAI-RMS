@@ -67,14 +67,22 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
   // Which phase map is shown in the Step 2 Location Mapping view.
   String _wizardSelectedPhase = kPhaseOnePolygonMap;
 
-  /// Sales rate per sqm from `sales_rate/config` (null = use sample default).
+  /// Sales rate per sqm in force today (null = use sample default).
   double? _ratePerSqm;
+
+  /// Corner-lot rate on the same row (null = corner lots use the normal rate).
+  double? _cornerRatePerSqm;
 
   @override
   void initState() {
     super.initState();
     RateService().getSalesRate().then((r) {
-      if (mounted) setState(() => _ratePerSqm = r?.ratePerSqm);
+      if (mounted) {
+        setState(() {
+          _ratePerSqm = r?.ratePerSqm;
+          _cornerRatePerSqm = r?.cornerRatePerSqm;
+        });
+      }
     });
   }
 
@@ -493,7 +501,11 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
       children: _selectedLots.values.map((lot) {
         final setup = _lotSetups[lot.id]!;
         final area = (lot.areaSqm ?? 0).toDouble();
-        final totalPrice = LotPricing.priceFor(lot, ratePerSqm: _ratePerSqm);
+        final totalPrice = LotPricing.priceFor(
+          lot,
+          ratePerSqm: _ratePerSqm,
+          cornerRatePerSqm: _cornerRatePerSqm,
+        );
         final isInstallment = setup.saleType == SaleType.installment;
         final downPayment = isInstallment ? setup.downPayment : 0.0;
         final financedAmount = totalPrice - downPayment;
@@ -585,6 +597,10 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
                       'Lot Area',
                       area > 0 ? '${area.toStringAsFixed(0)} sqm' : 'Not set',
                     ),
+                    _previewRow(
+                      'Lot Position',
+                      lot.isCorner ? 'Corner lot' : 'Default lot',
+                    ),
                     if (!isInstallment) ...[
                       _previewRow('Total Price', LotPricing.peso(totalPrice)),
                       const Divider(),
@@ -645,7 +661,11 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
         const SizedBox(height: AppSpacing.sectionGap),
         ..._selectedLots.values.map((lot) {
           final setup = _lotSetups[lot.id]!;
-          final totalPrice = LotPricing.priceFor(lot, ratePerSqm: _ratePerSqm);
+          final totalPrice = LotPricing.priceFor(
+            lot,
+            ratePerSqm: _ratePerSqm,
+            cornerRatePerSqm: _cornerRatePerSqm,
+          );
           return Container(
             margin: const EdgeInsets.only(bottom: AppSpacing.sectionGap),
             padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -673,6 +693,8 @@ class _MemberRegistrationWizardState extends State<MemberRegistrationWizard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (lot.isCorner)
+                        Text('Lot Position: Corner lot', style: AppTypography.body),
                       Text('Total Price: ${LotPricing.peso(totalPrice)}', style: AppTypography.body),
                       if (setup.saleType == SaleType.installment) ...[
                         Text('Down Payment: ${LotPricing.peso(setup.downPayment)}', style: AppTypography.body),

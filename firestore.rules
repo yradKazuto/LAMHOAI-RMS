@@ -95,10 +95,20 @@ service cloud.firestore {
       allow delete: if false; // schedule rows are never deleted
     }
 
+    // ── lot_ownership (one doc per ownership period) ─────────────────────────
+    // LotService.ownershipCollection. Written by LotService.assignOwner /
+    // unassignOwner (admin) and by SaleService.recordSale / changeLotOwner
+    // (finance). Read by the Lot Ownership History screen (staff).
+    match /lot_ownership/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isFinance();
+      allow delete: if false; // ownership periods are closed, never deleted
+    }
+
     // ── lot_ownership_history (previous / current owners of a lot) ───────────
-    // One doc per ownership period, written by SaleService.recordSale (first
-    // owner) and SaleService.changeLotOwner (closes the old row, opens the new
-    // one). Admin + accountant can write; staff can read.
+    // One doc per ownership event, written by SaleService.recordSale (first
+    // owner), SaleService.changeLotOwner, and LotService.assignOwner /
+    // unassignOwner. Admin + accountant can write; staff can read.
     match /lot_ownership_history/{docId} {
       allow read: if isStaff();
       allow create, update: if isFinance();

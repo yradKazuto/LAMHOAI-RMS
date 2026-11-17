@@ -12,15 +12,29 @@ class LotPricing {
 
   static int get totalMonths => years * 12;
 
-  /// Price used for a sale: area x rate. [ratePerSqm] is the row in force
-  /// on the sale date (LotPricing.rateFor); null/zero falls back to the
-  /// DEMO sample rate.
+  /// Price used for a sale: area x rate. [ratePerSqm] and [cornerRatePerSqm]
+  /// are from the row in force on the sale date (LotPricing.rateFor). A
+  /// corner lot uses the corner rate when one is set (> 0), otherwise the
+  /// normal rate; a null/zero normal rate falls back to the DEMO sample rate.
+  /// [isCorner] overrides lot.isCorner (for previewing an unsaved choice).
   /// Falls back to the lot's saved price when the area is not set.
-  static double priceFor(LotModel lot, {double? ratePerSqm}) {
+  static double priceFor(
+    LotModel lot, {
+    double? ratePerSqm,
+    double? cornerRatePerSqm,
+    bool? isCorner,
+  }) {
     final area = (lot.areaSqm ?? 0).toDouble();
     if (area <= 0) return (lot.price ?? 0).toDouble();
-    final rate =
-        (ratePerSqm != null && ratePerSqm > 0) ? ratePerSqm : sampleRatePerSqm;
+    final corner = isCorner ?? lot.isCorner;
+    final double rate;
+    if (corner && cornerRatePerSqm != null && cornerRatePerSqm > 0) {
+      rate = cornerRatePerSqm;
+    } else if (ratePerSqm != null && ratePerSqm > 0) {
+      rate = ratePerSqm;
+    } else {
+      rate = sampleRatePerSqm;
+    }
     return area * rate;
   }
 

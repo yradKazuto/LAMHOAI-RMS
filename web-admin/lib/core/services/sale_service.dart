@@ -276,8 +276,12 @@ class SaleService {
     return pending.length;
   }
 
-  Future<void> _verifyLotAvailable({required String lotId}) async {
-    if (lotId.isEmpty) return;
+  /// Throws [LotNotAvailableException] unless the lot can be sold. Returns
+  /// the lot's CURRENT `isCorner` flag from Firestore (null when [lotId] is
+  /// empty), so the sale is priced from the fresh doc rather than a stale
+  /// in-memory LotModel.
+  Future<bool?> _verifyLotAvailable({required String lotId}) async {
+    if (lotId.isEmpty) return null;
 
     final snap = await _db.collection('lots').doc(lotId).get();
 
@@ -297,6 +301,8 @@ class SaleService {
     if ((uid as String?)?.isNotEmpty == true) {
       throw LotNotAvailableException(lotId);
     }
+
+    return data['isCorner'] as bool? ?? false;
   }
 
   /// Alias or method for registering a sale matching member registration wizard.
@@ -345,6 +351,9 @@ class SaleService {
   /// - Period 0 down payment (when downPayment > 0) is pending too, with a
   ///   pending record in the payment records.
   /// - Lot status occupied.
+  ///
+  /// Corner lots are priced at the corner rate in force on [soldDate]
+  /// (falling back to the normal rate when the row has no corner rate).
   Future<void> recordSale({
     required LotModel lot,
     required String buyerUid,
@@ -356,7 +365,8 @@ class SaleService {
     required DateTime soldDate,
     required String recordedBy,
   }) async {
-    await _verifyLotAvailable(lotId: lot.id);
+    final freshIsCorner = await _verifyLotAvailable(lotId: lot.id);
+    final isCorner = freshIsCorner ?? lot.isCorner;
 
     // Fetch the rate in force on the sale date (sample rate if none).
     final rateSvc = RateService(db: _db);
@@ -364,7 +374,12 @@ class SaleService {
     final ratePerSqm = salesRate?.ratePerSqm;
 
     // Price comes from lot area (see LotPricing).
-    final totalPrice = LotPricing.priceFor(lot, ratePerSqm: ratePerSqm);
+    final totalPrice = LotPricing.priceFor(
+      lot,
+      ratePerSqm: ratePerSqm,
+      cornerRatePerSqm: salesRate?.cornerRatePerSqm,
+      isCorner: isCorner,
+    );
     final financedAmount = totalPrice - downPayment;
 
     final monthlyPayment = termMonths > 0

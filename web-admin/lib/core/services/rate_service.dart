@@ -3,7 +3,8 @@
 // Manages the sales rate per square metre: a table of DATED rows in
 // `sales_rates` (per-year / seasonal pricing). A sale is priced at the row
 // in force on its sale date; the wizards and lot dialog resolve today's
-// row. Collection `rate_schedules` (year + area tiers) is an older shell —
+// row. Each row may also carry a corner-lot rate. Collection
+// `rate_schedules` (year + area tiers) is an older shell —
 // kept untouched, nothing prices from it yet.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -73,6 +74,7 @@ class RateService {
     if (entry == null) return null;
     return SalesRateModel(
       ratePerSqm: entry.ratePerSqm,
+      cornerRatePerSqm: entry.cornerRatePerSqm,
       updatedBy: entry.setBy,
       updatedAt: entry.createdAt,
     );
@@ -81,13 +83,22 @@ class RateService {
   /// Adds a dated rate row. [effectiveFrom] may be today or later — never
   /// the past, since days already priced keep their rate — and no two rows
   /// may share a date, which would make the lookup ambiguous.
+  /// [cornerRatePerSqm] is optional; null means corner lots use the normal
+  /// rate for this row.
   Future<void> addSalesRate({
     required double ratePerSqm,
+    double? cornerRatePerSqm,
     required DateTime effectiveFrom,
     required String setBy,
   }) async {
     if (ratePerSqm.isNaN || ratePerSqm.isInfinite || ratePerSqm <= 0) {
       throw Exception('Rate must be greater than zero.');
+    }
+    if (cornerRatePerSqm != null &&
+        (cornerRatePerSqm.isNaN ||
+            cornerRatePerSqm.isInfinite ||
+            cornerRatePerSqm <= 0)) {
+      throw Exception('Corner rate must be greater than zero, or left blank.');
     }
     final day = _dayOnly(effectiveFrom);
     if (day.isBefore(_dayOnly(DateTime.now()))) {
@@ -105,6 +116,7 @@ class RateService {
           id: '',
           effectiveFrom: day,
           ratePerSqm: ratePerSqm,
+          cornerRatePerSqm: cornerRatePerSqm,
           setBy: setBy,
           createdAt: DateTime.now(),
         ).toMap());

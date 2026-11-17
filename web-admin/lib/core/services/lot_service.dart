@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/lot_model.dart';
+import '../models/lot_ownership_model.dart';
 
 /// Handles all Firestore reads/writes for the `lots` collection.
 class LotService {
@@ -8,6 +9,11 @@ class LotService {
   LotService({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
 
   CollectionReference get _lots => _db.collection('lots');
+
+  /// Collection that holds one LotOwnershipRecord per ownership period.
+  /// IMPORTANT: this must be the SAME collection name that
+  /// SaleService.recordSale / SaleService.changeLotOwner write to.
+  static const String ownershipCollection = 'lot_ownership';
 
   // ================================================================
   // LOT STREAMS
@@ -109,6 +115,9 @@ class LotService {
       'updatedAt': Timestamp.now(),
       'mapX': mapX,
       'mapY': mapY,
+      // Corner status is set later, from the lot dialog's Lot Position
+      // dropdown only.
+      'isCorner': false,
     });
   }
 
@@ -134,6 +143,8 @@ class LotService {
   // GENERAL LOT UPDATE
   // ================================================================
 
+  /// Writes whatever fields are in [data] (including `isCorner` when the
+  /// caller supplies it) and stamps `updatedAt`.
   Future<void> updateLot(
     String lotId,
     Map<String, dynamic> data,
@@ -166,6 +177,14 @@ class LotService {
     final memberSnap = await memberRef.get();
     if (!memberSnap.exists) throw Exception('The selected member could not be found.');
 
+    // Open ownership periods for this lot (endedAt == null). Read BEFORE the
+    // batch because queries cannot run inside a batch.
+    final openOwnershipSnap = await _db
+        .collection(ownershipCollection)
+        .where('lotId', isEqualTo: lotId)
+        .where('endedAt', isNull: true)
+        .get();
+
     final batch = _db.batch();
     final currentOwnerUid = uid;
     final currentOwnerName = ownerName;
@@ -191,6 +210,36 @@ class LotService {
     });
 
     batch.update(memberRef, {'phase': phase, 'lotNumber': lotNumber});
+
+    // ---- Ownership periods: close the old one(s), open a new one ----
+    final now = DateTime.now();
+    var alreadyCurrentForUid = false;
+    var closedAny = false;
+    var carriedSaleId = '';
+    for (final d in openOwnershipSnap.docs) {
+      final m = d.data();
+      final ownerUid = m['ownerUid'] as String? ?? '';
+      if (ownerUid == uid && !alreadyCurrentForUid) {
+        // Same person is already the current owner -> keep that record open.
+        alreadyCurrentForUid = true;
+        continue;
+      }
+      if (carriedSaleId.isEmpty) carriedSaleId = m['saleId'] as String? ?? '';
+      batch.update(d.reference, {'endedAt': Timestamp.fromDate(now)});
+      closedAny = true;
+    }
+    if (!alreadyCurrentForUid) {
+      final record = LotOwnershipRecord(
+        lotId: lotId,
+        saleId: carriedSaleId,
+        ownerUid: uid,
+        ownerName: ownerName,
+        startedAt: now,
+        acquiredBy: closedAny ? 'transfer' : 'assignment',
+        transferredBy: updatedBy,
+      );
+      batch.set(_db.collection(ownershipCollection).doc(), record.toMap());
+    }
 
     final historyType = previousUid != null && previousUid.isNotEmpty && previousUid != uid
         ? 'transfer'
@@ -230,6 +279,12 @@ class LotService {
     final uid = lotData['uid'] as String?;
     final ownerName = lotData['ownerName'] as String?;
 
+    final openOwnershipSnap = await _db
+        .collection(ownershipCollection)
+        .where('lotId', isEqualTo: lotId)
+        .where('endedAt', isNull: true)
+        .get();
+
     final batch = _db.batch();
     batch.update(lotRef, {
       'status': LotStatus.vacant.name,
@@ -245,6 +300,12 @@ class LotService {
       if (memberSnap.exists) {
         batch.update(memberRef, {'phase': '', 'lotNumber': ''});
       }
+    }
+
+    // Close the current ownership period(s) so nobody shows as "current".
+    final endedAt = Timestamp.now();
+    for (final d in openOwnershipSnap.docs) {
+      batch.update(d.reference, {'endedAt': endedAt});
     }
 
     final historyRef = _db.collection('lot_ownership_history').doc();
@@ -270,12 +331,15 @@ class LotService {
   // MARK FOR SALE
   // ================================================================
 
+  /// [isCorner] is only written when supplied, so callers that don't know
+  /// the flag (e.g. the For Sale dialog) never reset it.
   Future<void> markForSale({
     required String lotId,
     required double price,
     required String contactNumber,
     required String updatedBy,
     String? notes,
+    bool? isCorner,
   }) async {
     await _lots.doc(lotId).update({
       'status': LotStatus.forSale.name,
@@ -284,6 +348,7 @@ class LotService {
       'notes': notes,
       'updatedBy': updatedBy,
       'updatedAt': Timestamp.now(),
+      if (isCorner != null) 'isCorner': isCorner,
     });
   }
 
@@ -416,6 +481,9 @@ class LotService {
   // BULK IMPORT / UPDATES
   // ================================================================
 
+  /// Imports polygon boundaries. New lots are created with
+  /// `isCorner: false`; updates to existing lots deliberately do NOT touch
+  /// `isCorner`, so re-importing never wipes a flag an admin set.
   Future<int> importPolygonLots({
     required String phase,
     required Map<String, List<LotPoint>> lotsData,
@@ -503,6 +571,7 @@ class LotService {
           'mapX': cx,
           'mapY': cy,
           'polygonPoints': polygonMaps,
+          'isCorner': false,
         });
       }
       count++;
@@ -555,6 +624,8 @@ class LotService {
     return count;
   }
 
+  /// Like [importPolygonLots], new lots get `isCorner: false` and updates
+  /// to existing lots leave `isCorner` untouched.
   Future<Phase1MigrationResult> migratePhase1FromHardcodedShapes({
     required String phaseName,
     required List<HardcodedLotShape> shapes,
@@ -624,6 +695,7 @@ class LotService {
             'mapX': cx,
             'mapY': cy,
             'polygonPoints': polygonMaps,
+            'isCorner': false,
           });
           created++;
         }

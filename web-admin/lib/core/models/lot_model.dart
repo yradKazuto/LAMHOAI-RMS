@@ -74,6 +74,10 @@ class LotModel {
   /// precise boundary digitized).
   final List<LotPoint>? polygonPoints;
 
+  /// Corner lots can be priced at a separate corner rate
+  /// (see SalesRateEntry.cornerRatePerSqm). Defaults to false.
+  final bool isCorner;
+
   LotModel({
     required this.id,
     required this.phase,
@@ -91,6 +95,7 @@ class LotModel {
     this.mapX,
     this.mapY,
     this.polygonPoints,
+    this.isCorner = false,
   });
 
   bool get hasPolygon => polygonPoints != null && polygonPoints!.length >= 3;
@@ -118,6 +123,7 @@ class LotModel {
           : rawPoints
               .map((p) => LotPoint.fromMap(p as Map<String, dynamic>))
               .toList(),
+      isCorner: map['isCorner'] as bool? ?? false,
     );
   }
 
@@ -138,6 +144,7 @@ class LotModel {
       'mapX': mapX,
       'mapY': mapY,
       'polygonPoints': polygonPoints?.map((p) => p.toMap()).toList(),
+      'isCorner': isCorner,
     };
   }
 
@@ -157,6 +164,7 @@ class LotModel {
     double? mapX,
     double? mapY,
     List<LotPoint>? polygonPoints,
+    bool? isCorner,
   }) {
     return LotModel(
       id: id,
@@ -175,6 +183,7 @@ class LotModel {
       mapX: mapX ?? this.mapX,
       mapY: mapY ?? this.mapY,
       polygonPoints: polygonPoints ?? this.polygonPoints,
+      isCorner: isCorner ?? this.isCorner,
     );
   }
 

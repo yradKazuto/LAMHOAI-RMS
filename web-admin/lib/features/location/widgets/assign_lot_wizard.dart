@@ -82,15 +82,23 @@ class _AssignLotWizardState extends State<AssignLotWizard> {
   final _rateCtrl = TextEditingController(text: '0');
 
   // ── Derived values ────────────────────────────────────────────────────────
-  /// Sales rate per sqm from `sales_rate/config` (null = use sample default).
+  /// Sales rate per sqm in force today (null = use sample default).
   double? _ratePerSqm;
+
+  /// Corner-lot rate on the same row (null = corner lots use the normal rate).
+  double? _cornerRatePerSqm;
 
   @override
   void initState() {
     super.initState();
     _membersFuture = widget.loadMembers();
     RateService().getSalesRate().then((r) {
-      if (mounted) setState(() => _ratePerSqm = r?.ratePerSqm);
+      if (mounted) {
+        setState(() {
+          _ratePerSqm = r?.ratePerSqm;
+          _cornerRatePerSqm = r?.cornerRatePerSqm;
+        });
+      }
     });
   }
 
@@ -103,8 +111,11 @@ class _AssignLotWizardState extends State<AssignLotWizard> {
     super.dispose();
   }
 
-  double get _price =>
-      LotPricing.priceFor(widget.lot, ratePerSqm: _ratePerSqm);
+  double get _price => LotPricing.priceFor(
+        widget.lot,
+        ratePerSqm: _ratePerSqm,
+        cornerRatePerSqm: _cornerRatePerSqm,
+      );
   bool get _isInstallment => _saleType == SaleType.installment;
   double get _down =>
       _isInstallment ? (double.tryParse(_downCtrl.text.trim()) ?? 0.0) : 0.0;
@@ -418,6 +429,7 @@ class _AssignLotWizardState extends State<AssignLotWizard> {
               area > 0
                   ? '${area == area.roundToDouble() ? area.toInt().toString() : area.toStringAsFixed(2)} sqm'
                   : 'Not set'),
+          _row('Position', widget.lot.isCorner ? 'Corner lot' : 'Default lot'),
           _row('Price', _price > 0 ? LotPricing.peso(_price) : 'Not available',
               bold: true),
         ],
@@ -624,6 +636,7 @@ class _AssignLotWizardState extends State<AssignLotWizard> {
       children: [
         if (includeMember) _row('Member', _memberName ?? '—', bold: true),
         _row('Lot', _lotLabel),
+        _row('Position', widget.lot.isCorner ? 'Corner lot' : 'Default lot'),
         _row('Sale type', _saleType.label),
         _row('Lot price', LotPricing.peso(_price)),
         if (_isInstallment) ...[

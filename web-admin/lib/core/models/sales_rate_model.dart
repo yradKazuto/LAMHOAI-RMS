@@ -8,6 +8,9 @@
 // single-doc `sales_rate/config` is no longer written; it is read only as
 // a first-row fallback until a dated row exists (see RateService).
 //
+// Each row can also carry an optional corner-lot rate; null means corner
+// lots use the normal rate.
+//
 // Collection: `sales_rates` (one doc per dated rate).
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,6 +21,9 @@ class SalesRateEntry {
   final String id;
   final DateTime effectiveFrom;
   final double ratePerSqm;   // ₱ per square metre
+  /// Optional ₱/sqm for corner lots on the same dated row.
+  /// Null = corner lots use [ratePerSqm].
+  final double? cornerRatePerSqm;
   final String setBy;        // uid of the staff who set it
   final DateTime createdAt;
 
@@ -25,6 +31,7 @@ class SalesRateEntry {
     required this.id,
     required this.effectiveFrom,
     required this.ratePerSqm,
+    this.cornerRatePerSqm,
     required this.setBy,
     required this.createdAt,
   });
@@ -32,6 +39,7 @@ class SalesRateEntry {
   Map<String, dynamic> toMap() => {
         'effectiveFrom': Timestamp.fromDate(effectiveFrom),
         'ratePerSqm': ratePerSqm,
+        'cornerRatePerSqm': cornerRatePerSqm,
         'setBy': setBy,
         'createdAt': Timestamp.fromDate(createdAt),
       };
@@ -42,6 +50,7 @@ class SalesRateEntry {
         effectiveFrom:
             (map['effectiveFrom'] as dynamic)?.toDate() ?? DateTime(2000),
         ratePerSqm: (map['ratePerSqm'] as num?)?.toDouble() ?? 0.0,
+        cornerRatePerSqm: (map['cornerRatePerSqm'] as num?)?.toDouble(),
         setBy: map['setBy'] as String? ?? '',
         createdAt:
             (map['createdAt'] as dynamic)?.toDate() ?? DateTime(2000),
@@ -52,11 +61,14 @@ class SalesRateEntry {
 /// (wizards, lot dialog, sale recorder) already reads.
 class SalesRateModel {
   final double ratePerSqm;   // ₱ per square metre
+  /// Corner-lot rate in force; null = corner lots use [ratePerSqm].
+  final double? cornerRatePerSqm;
   final String updatedBy;    // uid of the staff who set it
   final DateTime updatedAt;
 
   const SalesRateModel({
     required this.ratePerSqm,
+    this.cornerRatePerSqm,
     required this.updatedBy,
     required this.updatedAt,
   });

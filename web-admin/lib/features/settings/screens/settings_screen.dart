@@ -592,6 +592,7 @@ class _DuesConfigurationDialogState extends State<_DuesConfigurationDialog> {
 // ---------------------------------------------------------------------------
 // The dated per-sqm rate table. A sale is priced at the row in force on its
 // sale date; rows already started are history and can only be viewed.
+// Each row can carry an optional corner-lot rate.
 class _CurrentSalesRateSection extends StatefulWidget {
   const _CurrentSalesRateSection();
 
@@ -602,11 +603,13 @@ class _CurrentSalesRateSection extends StatefulWidget {
 class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
   final _svc = RateService();
   final _rateCtrl = TextEditingController();
+  final _cornerCtrl = TextEditingController();
   DateTime? _effective;
 
   @override
   void dispose() {
     _rateCtrl.dispose();
+    _cornerCtrl.dispose();
     super.dispose();
   }
 
@@ -623,13 +626,31 @@ class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
   Future<void> _add() async {
     final rate = double.tryParse(_rateCtrl.text);
     if (rate == null || _effective == null) return;
+
+    // Corner rate is optional: blank = corner lots use the normal rate.
+    double? corner;
+    final cornerText = _cornerCtrl.text.trim();
+    if (cornerText.isNotEmpty) {
+      corner = double.tryParse(cornerText);
+      if (corner == null || corner <= 0) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+              content: Text(
+                  'Corner rate must be a number above zero, or left blank.')));
+        return;
+      }
+    }
+
     try {
       await _svc.addSalesRate(
         ratePerSqm: rate,
+        cornerRatePerSqm: corner,
         effectiveFrom: _effective!,
         setBy: 'admin',
       );
       _rateCtrl.clear();
+      _cornerCtrl.clear();
       setState(() => _effective = null);
     } catch (e) {
       if (!mounted) return;
@@ -675,13 +696,15 @@ class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
                   : 'Current Rate: ₱${current.ratePerSqm}/sqm'),
               subtitle: Text(current == null
                   ? 'Add a row below to set the rate in force today'
-                  : 'In force since ${_fmtDay(current.effectiveFrom)} · set by ${current.setBy}'),
+                  : 'In force since ${_fmtDay(current.effectiveFrom)} · set by ${current.setBy}'
+                      '${current.cornerRatePerSqm != null ? ' · corner lots ₱${current.cornerRatePerSqm}/sqm' : ''}'),
             ),
             ...rows.map((r) => ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   title: Text('₱${r.ratePerSqm}/sqm from ${_fmtDay(r.effectiveFrom)}'),
-                  subtitle: Text('Set by ${r.setBy}'),
+                  subtitle: Text('Set by ${r.setBy}'
+                      '${r.cornerRatePerSqm != null ? ' · Corner rate ₱${r.cornerRatePerSqm}/sqm' : ''}'),
                   trailing: r.effectiveFrom.isAfter(now)
                       ? IconButton(
                           icon: const Icon(Icons.delete_outline, size: 18),
@@ -708,6 +731,17 @@ class _CurrentSalesRateSectionState extends State<_CurrentSalesRateSection> {
                   child: TextField(
                     controller: _rateCtrl,
                     decoration: const InputDecoration(labelText: 'Rate (₱/sqm)'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _cornerCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Corner rate (₱/sqm)',
+                      hintText: 'Optional',
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                 ),

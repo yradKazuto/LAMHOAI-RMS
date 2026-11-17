@@ -180,6 +180,12 @@ class OccupiedLotDialog extends StatelessWidget {
                   '${_formatNumber(lot.areaSqm!)} sqm',
                 ),
 
+              _infoRow(
+                Icons.turn_right_outlined,
+                'Position',
+                lot.isCorner ? 'Corner Lot' : 'Default Lot',
+              ),
+
               const SizedBox(height: 18),
 
               _sectionTitle(
@@ -676,8 +682,26 @@ class _VacantLotDialogState
   String? _manualPriceText;
   bool _manualPriceSet = false;
   double? _currentRate;
+
+  /// Corner-lot rate on the row in force today (null = none set).
+  double? _currentCornerRate;
+
+  /// Current "Lot Position" dropdown choice, preselected from the lot.
+  late bool _isCorner = widget.lot.isCorner;
+
   bool _loading = true;
   bool  _saving = false;
+
+  /// The ₱/sqm that applies to the current Lot Position choice. Null when
+  /// no rate is in force at all (the manual price override then applies).
+  double? get _effectiveRate {
+    if (_currentRate == null) return null;
+    if (_isCorner && (_currentCornerRate ?? 0) > 0) return _currentCornerRate;
+    return _currentRate;
+  }
+
+  bool get _cornerRateApplied =>
+      _currentRate != null && _isCorner && (_currentCornerRate ?? 0) > 0;
 
   @override
   void initState() {
@@ -726,6 +750,7 @@ class _VacantLotDialogState
     if (mounted) {
       setState(() {
         _currentRate = rate?.ratePerSqm;
+        _currentCornerRate = rate?.cornerRatePerSqm;
         _loading = false;
       });
     }
@@ -893,6 +918,14 @@ class _VacantLotDialogState
                   ),
                 ),
 
+                const SizedBox(height: 12),
+
+                _lotPositionField(
+                  isCorner: _isCorner,
+                  enabled: widget.canEdit,
+                  onChanged: (v) => setState(() => _isCorner = v),
+                ),
+
                 const SizedBox(height: 18),
 
                 _sectionTitle(
@@ -953,11 +986,17 @@ class _VacantLotDialogState
 
                 // Derived price preview — always shown when a default
                 // rate exists so admins see where the number comes from.
-                if (_currentRate != null) ...[
+                // Uses the corner rate when Corner Lot is selected and a
+                // corner rate is set on the row in force.
+                if (_effectiveRate != null) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      '₱${_currentRate!.toStringAsFixed(2)} × ${widget.lot.areaSqm ?? 0} sqm = ₱${(_currentRate! * (widget.lot.areaSqm ?? 0)).toStringAsFixed(2)}',
+                      '₱${_effectiveRate!.toStringAsFixed(2)}'
+                      '${_cornerRateApplied ? ' (corner rate)' : ''}'
+                      ' × ${widget.lot.areaSqm ?? 0} sqm = '
+                      '₱${(_effectiveRate! * (widget.lot.areaSqm ?? 0)).toStringAsFixed(2)}'
+                      '${_isCorner && !_cornerRateApplied ? '\nNo corner rate is set — the normal rate applies.' : ''}',
                       style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                     ),
                   ),
@@ -1134,8 +1173,8 @@ class _VacantLotDialogState
 
     double? price;
 
-    if (_currentRate != null) {
-      price = _currentRate! * (area ?? 0);
+    if (_effectiveRate != null) {
+      price = _effectiveRate! * (area ?? 0);
     } else {
       final priceText = _priceControllerOverride.text.trim();
       if (priceText.isNotEmpty) {
@@ -1166,6 +1205,8 @@ class _VacantLotDialogState
             _lotController.text.trim(),
 
         'areaSqm': area,
+
+        'isCorner': _isCorner,
 
         'price': price,
 
@@ -1244,8 +1285,8 @@ class _VacantLotDialogState
   Future<void> _markForSale() async {
     final area = double.tryParse(_areaController.text.trim()) ?? widget.lot.areaSqm ?? 0;
 
-    final price = _currentRate != null
-        ? (_currentRate! * area)
+    final price = _effectiveRate != null
+        ? (_effectiveRate! * area)
         : (double.tryParse(_priceControllerOverride.text.trim()) ?? 0.0);
 
     setState(() {
@@ -1261,6 +1302,7 @@ class _VacantLotDialogState
                 .trim(),
         updatedBy:
             widget.currentUserId,
+        isCorner: _isCorner,
       );
 
       if (!mounted) return;
@@ -1471,6 +1513,12 @@ class _ForSaleLotDialogState
                   'Lot Area',
                   '${_formatNumber(widget.lot.areaSqm!)} sqm',
                 ),
+
+              _infoRow(
+                Icons.turn_right_outlined,
+                'Position',
+                widget.lot.isCorner ? 'Corner Lot' : 'Default Lot',
+              ),
 
               const SizedBox(height: 18),
 
@@ -2238,6 +2286,72 @@ Widget _textField({
         vertical: 13,
       ),
     ),
+  );
+}
+
+/// "Lot Position" dropdown: Default Lot / Corner Lot. Read-only (greyed,
+/// not tappable) when [enabled] is false.
+Widget _lotPositionField({
+  required bool isCorner,
+  required bool enabled,
+  required ValueChanged<bool> onChanged,
+}) {
+  return DropdownButtonFormField<bool>(
+    value: isCorner,
+    isExpanded: true,
+    decoration: InputDecoration(
+      labelText: 'Lot Position',
+      prefixIcon: const Icon(
+        Icons.turn_right_outlined,
+        size: 19,
+      ),
+      filled: true,
+      fillColor: enabled
+          ? AppColors.background
+          : AppColors.borderSubtle,
+      border: OutlineInputBorder(
+        borderRadius:
+            BorderRadius.circular(10),
+        borderSide: const BorderSide(
+          color: AppColors.border,
+        ),
+      ),
+      enabledBorder:
+          OutlineInputBorder(
+        borderRadius:
+            BorderRadius.circular(10),
+        borderSide: const BorderSide(
+          color: AppColors.border,
+        ),
+      ),
+      focusedBorder:
+          OutlineInputBorder(
+        borderRadius:
+            BorderRadius.circular(10),
+        borderSide:
+            const BorderSide(
+          color: _blue,
+          width: 1.5,
+        ),
+      ),
+      contentPadding:
+          const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 13,
+      ),
+    ),
+    items: const [
+      DropdownMenuItem<bool>(
+        value: false,
+        child: Text('Default Lot'),
+      ),
+      DropdownMenuItem<bool>(
+        value: true,
+        child: Text('Corner Lot'),
+      ),
+    ],
+    // A null onChanged disables the dropdown (view-only users).
+    onChanged: enabled ? (v) => onChanged(v ?? false) : null,
   );
 }
 
