@@ -7,8 +7,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/models/payment_model.dart';
+import '../../core/models/lot_sale_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/routing/app_router.dart';
+import '../../core/services/firestore_service.dart';
 import '../../core/theme/design_tokens.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -24,18 +26,28 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildTopBar(context, displayName),
-              _buildHeroCard(uid),
-              _buildQuickAccess(context),
-              _buildNotificationsPreview(context, uid),
-              _buildAnnouncementsPreview(context),
-              const SizedBox(height: 24),
-            ],
-          ),
+        child: StreamBuilder<List<LotSaleModel>>(
+          // Co-owner aware: 'ownerUids' matches buyer AND co-owner members,
+          // so the balance and lots sections below cover joint lots.
+          stream: FirestoreService().salesForMemberStream(uid),
+          builder: (context, salesSnap) {
+            final sales = salesSnap.data ?? <LotSaleModel>[];
+            final saleIds = sales.map((s) => s.id).toList();
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTopBar(context, displayName),
+                  _buildHeroCard(uid, saleIds),
+                  _buildMyLots(context, sales),
+                  _buildQuickAccess(context),
+                  _buildNotificationsPreview(context, uid),
+                  _buildAnnouncementsPreview(context),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -94,110 +106,198 @@ class HomeScreen extends StatelessWidget {
 
   // ── Hero card ─────────────────────────────────────────────────────────────
 
-  Widget _buildHeroCard(String uid) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('payments')
-          .where('uid', isEqualTo: uid)
-          .where('status', whereIn: ['unpaid', 'overdue'])
-          .snapshots(),
-      builder: (context, snap) {
-        double totalDue    = 0;
-        int    overdueCount = 0;
+  Widget _buildHeroCard(String uid, List<String> saleIds) {
+    return StreamBuilder<List<PaymentModel>>(
+      // Own obligations (dues, fees, penalties…)
+      stream: FirestoreService().paymentsStream(uid),
+      builder: (context, ownSnap) {
+        return StreamBuilder<List<PaymentModel>>(
+          // Lot mirrors for lots the member owns as buyer OR co-owner. A
+          // buyer's mirror rows match both queries; mergePaymentsById dedupes.
+          stream: FirestoreService().paymentsForSalesStream(saleIds),
+          builder: (context, saleSnap) {
+            final all = mergePaymentsById(
+                ownSnap.data ?? const <PaymentModel>[],
+                saleSnap.data ?? const <PaymentModel>[]);
+            double totalDue    = 0;
+            int    overdueCount = 0;
 
-        if (snap.hasData) {
-          for (final doc in snap.data!.docs) {
-            // effectiveStatus (not the raw Firestore `status`), same as
-            // PaymentsScreen — nothing flips a record's stored status to
-            // 'overdue' server-side when its dueDate passes (that only
-            // happens when an admin opens Payments/Reports on
-            // web-admin), so trusting the raw field here under-reports
-            // overdue payments and shows a false "up to date" pill.
-            final payment = PaymentModel.fromFirestore(doc);
-            totalDue += payment.amount;
-            if (payment.effectiveStatus == PaymentStatus.overdue) {
-              overdueCount++;
+            for (final payment in all) {
+              // effectiveStatus (not the raw Firestore `status`), same as
+              // PaymentsScreen — nothing flips a record's stored status to
+              // 'overdue' server-side when its dueDate passes.
+              final status = payment.effectiveStatus;
+              if (status != PaymentStatus.unpaid &&
+                  status != PaymentStatus.overdue) {
+                continue;
+              }
+              totalDue += payment.amount;
+              if (status == PaymentStatus.overdue) {
+                overdueCount++;
+              }
             }
-          }
-        }
 
-        final fmt        = NumberFormat('#,##0.00', 'en_PH');
-        final hasOverdue = overdueCount > 0;
+            final fmt        = NumberFormat('#,##0.00', 'en_PH');
+            final hasOverdue = overdueCount > 0;
+            final waiting = ownSnap.connectionState == ConnectionState.waiting &&
+                saleSnap.connectionState == ConnectionState.waiting;
 
-        return Container(
-          margin: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.primaryHeader,
-            borderRadius: AppRadius.cardBorderRadius,
-            border: Border.all(color: AppColors.primary),
-          ),
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Total balance due',
-                style: AppTypography.caption.copyWith(
-                  color: AppPrimitiveColors.blue200,
-                ),
+            return Container(
+              margin: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.primaryHeader,
+                borderRadius: AppRadius.cardBorderRadius,
+                border: Border.all(color: AppColors.primary),
               ),
-              const SizedBox(height: 4),
-              snap.connectionState == ConnectionState.waiting
-                  ? const SizedBox(
-                      height: 36,
-                      child: Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(color: AppColors.textInverted, strokeWidth: 2),
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total balance due',
+                    style: AppTypography.caption.copyWith(
+                      color: AppPrimitiveColors.blue200,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  waiting
+                      ? const SizedBox(
+                          height: 36,
+                          child: Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: AppColors.textInverted, strokeWidth: 2),
+                            ),
+                          ),
+                        )
+                      : Text(
+                          '₱${fmt.format(totalDue)}',
+                          style: const TextStyle(
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: 28,
+                            color: AppColors.textInverted,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                    )
-                  : Text(
-                      '₱${fmt.format(totalDue)}',
-                      style: const TextStyle(
-                        fontFamily: AppTypography.fontFamily,
-                        fontSize: 28,
-                        color: AppColors.textInverted,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: hasOverdue ? AppColors.errorBg : AppColors.successBg,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
                     ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: hasOverdue ? AppColors.errorBg : AppColors.successBg,
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: hasOverdue ? AppColors.error : AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: hasOverdue ? AppColors.error : AppColors.success,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          totalDue == 0
+                              ? 'All payments settled'
+                              : hasOverdue
+                                  ? '$overdueCount overdue payment${overdueCount > 1 ? 's' : ''}'
+                                  : 'Payments pending',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 5),
-                    Text(
-                      totalDue == 0
-                          ? 'All payments settled'
-                          : hasOverdue
-                              ? '$overdueCount overdue payment${overdueCount > 1 ? 's' : ''}'
-                              : 'Payments pending',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ── Your lots ─────────────────────────────────────────────────────────────
+
+  /// One row per lot the member owns (buyer or co-owner) — tap opens the
+  /// My Lots screen with the per-lot balance and installment schedule.
+  Widget _buildMyLots(BuildContext context, List<LotSaleModel> sales) {
+    if (sales.isEmpty) return const SizedBox.shrink();
+    final uid = context.read<AuthProvider>().user?.uid ?? '';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Your lots', style: AppTypography.sectionHeader),
+              GestureDetector(
+                onTap: () => context.go(Routes.lots),
+                child: Text(
+                  'See all',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 6),
+          for (final s in sales)
+            GestureDetector(
+              onTap: () => context.go(Routes.lots),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: AppComponents.iconBoxDecoration(AppColors.primary),
+                      child: const Center(
+                        child: Icon(Icons.landscape_outlined, size: 17, color: AppColors.primary),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            buildLotLabel(
+                                block: s.block,
+                                lotNumber: s.lotNumber,
+                                phase: s.phase),
+                            style: AppTypography.bodyMedium,
+                          ),
+                          Text(
+                            '${s.saleType.label} · ${s.status.label} · '
+                            '${s.buyerUid == uid ? 'Buyer' : 'Co-owner'}',
+                            style: AppTypography.caption,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, size: 14, color: AppColors.textMuted),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

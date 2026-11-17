@@ -2,13 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 import '../models/user_model.dart';
 import '../providers/auth_provider.dart' as ap;
 import '../../features/home/home_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
+import '../../features/lots/mylots_screen.dart';
 import '../../features/payments/payments_screen.dart';
 import '../../features/payments/payment_detail_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
@@ -28,6 +28,7 @@ class Routes {
   static const forgotPassword  = '/forgot-password';
   static const memberHome      = '/home';
   static const payments        = '/home/payments';
+  static const lots            = '/home/lots';
   static const notifications   = '/home/notifications';
   static const announcements   = '/home/announcements';
   static const complaints      = '/home/complaints';
@@ -122,6 +123,19 @@ class AppRouter {
                   GoRoute(
                     path: 'feedback',
                     builder: (_, __) => const FeedbackScreen(),
+                  ),
+                  // My Lots + per-lot installment schedule
+                  GoRoute(
+                    path: 'lots',
+                    builder: (_, __) => const MyLotsScreen(),
+                    routes: [
+                      GoRoute(
+                        path: ':saleId',
+                        builder: (_, state) => LotDetailScreen(
+                          saleId: state.pathParameters['saleId']!,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

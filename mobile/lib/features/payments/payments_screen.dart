@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/models/payment_model.dart';
 import '../../core/models/ledger_model.dart';
+import '../../core/models/lot_sale_model.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/theme/design_tokens.dart';
@@ -39,23 +40,43 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             onBack: () =>
                 context.canPop() ? context.pop() : context.go('/home'),
           ),
-          StreamBuilder<LedgerModel?>(
-            stream: FirestoreService().ledgerStream(uid),
-            builder: (context, ledgerSnap) {
-              final balance = ledgerSnap.data?.currentBalance;
-              return Expanded(
-                child: StreamBuilder<List<PaymentModel>>(
-                  stream: FirestoreService().paymentsStream(uid),
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snap.hasError) {
-                      return _buildError(snap.error.toString());
-                    }
-                    return _buildBody(snap.data ?? [], balance);
-                  },
-                ),
+          StreamBuilder<List<LotSaleModel>>(
+            // Co-owner aware: lots where this member is buyer OR co-owner.
+            stream: FirestoreService().salesForMemberStream(uid),
+            builder: (context, salesSnap) {
+              final saleIds = (salesSnap.data ?? const <LotSaleModel>[])
+                  .map((s) => s.id)
+                  .toList();
+              return StreamBuilder<LedgerModel?>(
+                stream: FirestoreService().ledgerStream(uid),
+                builder: (context, ledgerSnap) {
+                  final balance = ledgerSnap.data?.currentBalance;
+                  return Expanded(
+                    child: StreamBuilder<List<PaymentModel>>(
+                      stream: FirestoreService().paymentsStream(uid),
+                      builder: (context, ownSnap) {
+                        return StreamBuilder<List<PaymentModel>>(
+                          stream: FirestoreService().paymentsForSalesStream(saleIds),
+                          builder: (context, saleSnap) {
+                            if (ownSnap.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (ownSnap.hasError) {
+                              return _buildError(ownSnap.error.toString());
+                            }
+                            final all = mergePaymentsById(
+                                ownSnap.data ?? const <PaymentModel>[],
+                                saleSnap.data ?? const <PaymentModel>[])
+                              // Lot mirrors duplicate lot_payments and are
+                              // shown on the My Lots screen, not here.
+                              ..removeWhere((p) => p.type == PaymentType.lotPayment);
+                            return _buildBody(all, balance);
+                          },
+                        );
+                      },
+                    ),
+                  );
+                },
               );
             },
           ),

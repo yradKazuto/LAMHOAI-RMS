@@ -126,3 +126,19 @@ class PaymentModel {
 
   // ── Serialization ─────────────────────────────────────────────────────────
 }
+
+/// Display text for a lot, e.g. "Phase 1 · Block 3 · Lot 12". Same helper as
+/// web-admin's payment_model.dart — blocks are stored as a bare identifier
+/// ("3"), so the word "Block" is added here.
+String buildLotLabel({
+  required String block,
+  required String lotNumber,
+  String phase = '',
+}) {
+  final parts = <String>[
+    if (phase.trim().isNotEmpty) phase.trim(),
+    if (block.trim().isNotEmpty) 'Block ${block.trim()}',
+    if (lotNumber.trim().isNotEmpty) 'Lot ${lotNumber.trim()}',
+  ];
+  return parts.join(' · ');
+}

@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../models/payment_model.dart';
 import '../models/ledger_model.dart';
+import '../models/lot_sale_model.dart';
+import '../models/lot_payment_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db;
@@ -61,4 +63,62 @@ class FirestoreService {
     if (!doc.exists) throw Exception('Payment record not found.');
     return PaymentModel.fromFirestore(doc);
   }
+
+  // ── Lots ──────────────────────────────────────────────────────────────────
+
+  /// Real-time stream of lots the member owns as buyer OR co-owner.
+  /// `ownerUids` is the denormalized [buyerUid, ...coOwnerUids] index — the
+  /// same field web-admin's SaleService.streamSalesForMember queries. Sorted
+  /// client-side so no composite index is needed.
+  Stream<List<LotSaleModel>> salesForMemberStream(String uid) {
+    if (uid.isEmpty) return Stream.value(<LotSaleModel>[]);
+    return _db
+        .collection('lot_sales')
+        .where('ownerUids', arrayContains: uid)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => LotSaleModel.fromMap(d.data(), d.id))
+            .toList()
+          ..sort((a, b) => b.soldDate.compareTo(a.soldDate)));
+  }
+
+  /// Real-time stream of every schedule row across the given sales — one
+  /// query for all of them. `whereIn` caps at 10; a member with more than 10
+  /// lots has never existed in this data.
+  Stream<List<LotPaymentModel>> lotPaymentsForSalesStream(
+      List<String> saleIds) {
+    if (saleIds.isEmpty) return Stream.value(<LotPaymentModel>[]);
+    return _db
+        .collection('lot_payments')
+        .where('saleId', whereIn: saleIds.take(10).toList())
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => LotPaymentModel.fromMap(d.data(), d.id))
+            .toList());
+  }
+
+  /// Real-time stream of `payments` rows attached to the given sales — the
+  /// lot-payment mirrors web-admin writes (they carry `saleId` as an extra
+  /// key). Members can read a mirror row when they own the sale, see the
+  /// `payments` rule's lotPayment exception.
+  Stream<List<PaymentModel>> paymentsForSalesStream(List<String> saleIds) {
+    if (saleIds.isEmpty) return Stream.value(<PaymentModel>[]);
+    return _db
+        .collection('payments')
+        .where('saleId', whereIn: saleIds.take(10).toList())
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => PaymentModel.fromFirestore(d)).toList());
+  }
+}
+
+/// Merges two payment lists, deduping by document id — a buyer's own mirror
+/// rows match both the `uid` query and the `saleId` query.
+List<PaymentModel> mergePaymentsById(
+    Iterable<PaymentModel> a, Iterable<PaymentModel> b) {
+  final byId = <String, PaymentModel>{};
+  for (final p in [...a, ...b]) {
+    byId.putIfAbsent(p.id, () => p);
+  }
+  return byId.values.toList();
 }
