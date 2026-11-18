@@ -672,9 +672,10 @@ class _VacantLotDialogState
   late final TextEditingController
       _notesController;
 
-  late final TextEditingController
-      _priceControllerOverride;
+  /// Whether this lot is a corner lot (adds 2% to sqm rate).
+  bool _isCornerLot = false;
 
+<<<<<<< HEAD
   /// Manual price override. Defaults to null (derive from rate).
   /// Only shown in the dialog when no default rate has been configured
   /// yet — once one exists, admin can skip the field and let pricing
@@ -689,8 +690,10 @@ class _VacantLotDialogState
   /// Current "Lot Position" dropdown choice, preselected from the lot.
   late bool _isCorner = widget.lot.isCorner;
 
+=======
+>>>>>>> origin/dev
   bool _loading = true;
-  bool  _saving = false;
+  bool _saving = false;
 
   /// The ₱/sqm that applies to the current Lot Position choice. Null when
   /// no rate is in force at all (the manual price override then applies).
